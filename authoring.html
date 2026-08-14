@@ -97,10 +97,10 @@
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                 <span class="hide-on-collapse">검색</span>
             </button>
-            <button id="sidebarBellBtn" class="nav-link sidebar-action-btn" data-tooltip="업데이트">
+            <button id="sidebarBellBtn" class="nav-link sidebar-action-btn" data-tooltip="업데이트 내역">
                 <div class="nav-link-indicator" style="display:none;"></div>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                <span class="hide-on-collapse">업데이트</span>
+                <span class="hide-on-collapse">업데이트 내역</span>
             </button>
             <button id="sidebarHelpBtn" class="nav-link sidebar-action-btn" data-tooltip="도움말" type="button" aria-haspopup="dialog" aria-controls="helpModal">
                 <div class="nav-link-indicator" style="display:none;"></div>
@@ -891,9 +891,9 @@
                             <h5>메인 메뉴 영역</h5><p>메뉴를 클릭하면 해당 메뉴의 카드 목록으로 이동합니다. Viewer와 Editor 모두 카드 내용을 열람할 수 있습니다.</p>
                             <h5>서브 메뉴 영역</h5>
                             <ul>
-                                <li><strong>메뉴 관리</strong>: 메뉴를 추가·수정·삭제·정렬합니다.
+                                <li><span class="help-editor-tag">Editor</span> <strong>메뉴 관리</strong>: 메뉴를 추가·수정·삭제·정렬합니다.
                                     <ul class="help-sublist">
-                                        <li><span class="help-editor-tag">Editor</span> <strong>콘텐츠 JSON</strong>
+                                        <li><strong>콘텐츠 JSON</strong>
                                             <ul class="help-sublist">
                                                 <li><strong>내보내기</strong>: 현재 메뉴와 카드 초안을 JSON 파일로 내려받습니다.</li>
                                                 <li><strong>가져오기</strong>: 내려받은 JSON 파일을 선택해 현재 브라우저의 메뉴·카드 초안에 적용합니다.</li>
@@ -904,7 +904,7 @@
                                     </ul>
                                 </li>
                                 <li><strong>검색</strong>: 현재 표시 가능한 메뉴와 카드 내용을 검색하고, 결과를 클릭해 이동합니다.</li>
-                                <li><strong>업데이트</strong>: 등록된 변경 내역을 확인합니다.
+                                <li><strong>업데이트 내역</strong>: 등록된 변경 내역을 확인합니다.
                                     <ul class="help-sublist">
                                         <li><span class="help-editor-tag">Editor</span> 텍스트를 드래그해 선택하면 <strong>업데이트 등록</strong> 버튼이 나타납니다. 버튼을 누르면 선택한 내용이 업데이트 목록에 새 항목으로 등록됩니다.</li>
                                     </ul>

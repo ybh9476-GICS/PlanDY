@@ -136,7 +136,7 @@
     let notifStartX = 0, notifStartY = 0, notifInitLeft = 0, notifInitTop = 0;
 
     function positionNotificationModalNearButton() {
-        const bellBtn = document.getElementById('sidebarBellBtn') || document.querySelector('[data-tooltip="업데이트"]');
+        const bellBtn = document.getElementById('sidebarBellBtn') || document.querySelector('[data-tooltip="업데이트 내역"]');
         if (bellBtn) {
             const btnRect = bellBtn.getBoundingClientRect();
             notificationModalContainer.style.transform = 'none';
