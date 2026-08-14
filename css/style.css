@@ -343,6 +343,8 @@ body[data-authenticated="false"] #helpModal { display: none !important; }
 .help-level2-panel { padding: 0 0.85rem 0.75rem 1.95rem; color: #475569; font-size: 12px; }
 .help-level2-panel h5 { margin-top: 0.65rem; }
 .help-level2-panel ul { margin-top: 0.4rem; }
+.help-level2-panel .help-sublist { display: grid; gap: 0.28rem; margin: 0.38rem 0 0.1rem; padding-left: 1.1rem; }
+.help-level2-panel .help-sublist .help-sublist { margin-top: 0.32rem; }
 
 .overview-card-shell {
     padding-top: 0;
