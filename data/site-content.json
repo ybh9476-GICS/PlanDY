@@ -1,0 +1,736 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-14T07:19:31.089Z",
+  "storage": {
+    "menus": {
+      "menus": [
+        {
+          "id": "custom-1786691916656",
+          "label": "TEST",
+          "tooltip": "TEST",
+          "icon": "<svg class=\"nav-icon\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path><polyline points=\"14 2 14 8 20 8\"></polyline><line x1=\"8\" y1=\"13\" x2=\"16\" y2=\"13\"></line><line x1=\"8\" y1=\"17\" x2=\"16\" y2=\"17\"></line></svg>",
+          "iconAuto": true,
+          "builtin": false,
+          "visible": true,
+          "order": 0
+        }
+      ],
+      "deletedBuiltinIds": [
+        "overview",
+        "floor",
+        "zone",
+        "rack",
+        "editor",
+        "route",
+        "settings",
+        "test"
+      ]
+    },
+    "customCards": {
+      "custom-1785991970632": [],
+      "custom-1786691916656": [
+        {
+          "type": "single",
+          "columnWidths": null,
+          "cards": [
+            {
+              "title": "",
+              "description": "",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": false,
+              "contentBlocks": []
+            }
+          ]
+        },
+        {
+          "type": "double",
+          "columnWidths": [
+            50,
+            50
+          ],
+          "cards": [
+            {
+              "title": "",
+              "description": "",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": false,
+              "contentBlocks": []
+            },
+            {
+              "title": "",
+              "description": "",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": false,
+              "contentBlocks": []
+            }
+          ]
+        },
+        {
+          "type": "triple",
+          "columnWidths": [
+            33.3333,
+            33.3333,
+            33.3333
+          ],
+          "cards": [
+            {
+              "title": "",
+              "description": "",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": false,
+              "contentBlocks": []
+            },
+            {
+              "title": "",
+              "description": "",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": false,
+              "contentBlocks": []
+            },
+            {
+              "title": "",
+              "description": "",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": false,
+              "contentBlocks": []
+            }
+          ]
+        }
+      ]
+    },
+    "overviewCards": [
+      {
+        "type": "single",
+        "columnWidths": null,
+        "cards": [
+          {
+            "title": "WMS 기획 개요 및 프로세스 흐름",
+            "description": "유풍 창고 관리 시스템(WMS)의 공간 관리와 작업 안내를 위한 기획 콘텐츠입니다.",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "editLocked": false,
+            "contentBlocks": [
+              {
+                "type": "text",
+                "text": "1. 출발지와 입고지 검색 조건 입력\n2. 자재·자원 분류와 품목 유형 선택\n3. 선택 층의 재고·가용 공간 확인\n4. 최적 Location ID 산출\n5. E/V를 포함한 3D 이동 경로 안내\n6. 작업 가이드 제공",
+                "html": ""
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "double",
+        "columnWidths": [
+          50,
+          50
+        ],
+        "cards": [
+          {
+            "title": "1F 선택층 현황 및 재고 인디케이터",
+            "description": "국가, 공장, 건물, 층 선택과 재고·가용 공간 정보를 확인합니다.",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "editLocked": false,
+            "contentBlocks": []
+          },
+          {
+            "title": "3D 층간 E/V 경유 최적 경로 가이드",
+            "description": "출입구부터 목적지까지의 수평·수직 이동 동선을 3D로 안내합니다.",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "editLocked": false,
+            "contentBlocks": []
+          }
+        ]
+      },
+      {
+        "type": "single",
+        "columnWidths": null,
+        "cards": [
+          {
+            "title": "WMS 핵심 용어 및 구조 명세",
+            "description": "",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "editLocked": false,
+            "contentBlocks": [
+              {
+                "type": "table",
+                "table": {
+                  "title": "핵심 용어",
+                  "hasHeader": true,
+                  "hasFirstColumnHeader": false,
+                  "columnWidths": [
+                    22,
+                    24,
+                    54
+                  ],
+                  "rows": [
+                    [
+                      "용어 (Term)",
+                      "기능 명칭",
+                      "설명"
+                    ],
+                    [
+                      "층 (Floor)",
+                      "층 편집",
+                      "건물 단위의 층별 창고 현황을 관리합니다."
+                    ],
+                    [
+                      "범위 (Zone)",
+                      "범위 편집",
+                      "자재와 자원별로 구분하는 작업 영역입니다."
+                    ],
+                    [
+                      "구역 (Area)",
+                      "구역 편집",
+                      "Rack 집합과 작업 동선을 관리합니다."
+                    ],
+                    [
+                      "레벨 (Level)",
+                      "레벨 (ID)",
+                      "Rack의 수직 단위와 Location ID를 관리합니다."
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "routeCards": [
+      {
+        "type": "single",
+        "columnWidths": null,
+        "cards": [
+          {
+            "title": "5단계 경로 탐색 흐름",
+            "description": "출발지와 입고지 조건을 기반으로 3D 최적 이동 경로를 생성합니다.",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "editLocked": true,
+            "contentBlocks": [
+              {
+                "type": "diagram",
+                "source": "sequenceDiagram\nautonumber\nparticipant Worker\nparticipant UI as WMS 3D UI\nparticipant System as WMS Route Engine\nWorker->>UI: Select floor and start point\nWorker->>UI: Check inventory status\nWorker->>UI: Select destination and material\nSystem->>UI: Find available optimal location\nSystem->>UI: Generate 3D route via elevators"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "double",
+        "columnWidths": [
+          50,
+          50
+        ],
+        "cards": [
+          {
+            "title": "실시간 3D 경로 탐색 결과 뷰어",
+            "description": "출발지부터 목적지까지의 최적 경로를 3D 화면에서 확인합니다.",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "editLocked": false,
+            "contentBlocks": []
+          },
+          {
+            "title": "경로 기점 및 Location 명세",
+            "description": "",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "editLocked": false,
+            "contentBlocks": [
+              {
+                "type": "table",
+                "table": {
+                  "title": "경로 경유지",
+                  "hasHeader": true,
+                  "hasFirstColumnHeader": false,
+                  "columnWidths": [
+                    18,
+                    25,
+                    37,
+                    20
+                  ],
+                  "rows": [
+                    [
+                      "구분",
+                      "기점 명칭",
+                      "상세 위치 정보",
+                      "3D 비고"
+                    ],
+                    [
+                      "출발지",
+                      "1F 출입구",
+                      "1F > EAST 구역 출입구",
+                      "1F 출입구"
+                    ],
+                    [
+                      "경유지",
+                      "1F E/V / 2F E/V",
+                      "층간 수직 이송 동선",
+                      "1F E/V / 2F E/V"
+                    ],
+                    [
+                      "입고지",
+                      "G2D / B2C",
+                      "2F > 부자재 창고 > G2D",
+                      "G2D"
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "authoringCards": [
+      {
+        "type": "single",
+        "columnWidths": null,
+        "cards": [
+          {
+            "title": "3D Canvas Viewport",
+            "description": "선택한 창고 모델과 랙 배치 상태를 3D 화면에서 확인합니다.",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "editLocked": false,
+            "contentBlocks": []
+          }
+        ]
+      },
+      {
+        "type": "double",
+        "columnWidths": [
+          50,
+          50
+        ],
+        "cards": [
+          {
+            "title": "랙 타입 및 규격 설정",
+            "description": "랙 타입과 행·열, 너비·깊이·높이 값을 관리합니다.",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "editLocked": false,
+            "contentBlocks": [
+              {
+                "type": "text",
+                "text": "• 랙 타입: Single, Double, Pallet, High-Bay\n• 기본 행·열: 4 × 10\n• 기본 규격: 12.0m × 1.0m × 4.5m",
+                "html": ""
+              }
+            ]
+          },
+          {
+            "title": "프리팹 및 변환 제어",
+            "description": "설정한 랙을 재사용하고 3D 공간에서 배치·회전·복제합니다.",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "editLocked": false,
+            "contentBlocks": [
+              {
+                "type": "text",
+                "text": "• 프리팹: Standard_Pallet_Rack_V2\n• 저장 및 불러오기\n• Move, Snap Place, Rotate, Duplicate, Delete",
+                "html": ""
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "single",
+        "columnWidths": null,
+        "cards": [
+          {
+            "title": "저작도구 워크플로 및 편집 명세",
+            "description": "",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "editLocked": false,
+            "contentBlocks": [
+              {
+                "type": "table",
+                "table": {
+                  "title": "저작도구 핵심 기능",
+                  "hasHeader": true,
+                  "hasFirstColumnHeader": false,
+                  "columnWidths": [
+                    20,
+                    27,
+                    53
+                  ],
+                  "rows": [
+                    [
+                      "구분",
+                      "편집 요소",
+                      "기능 및 옵션"
+                    ],
+                    [
+                      "1. 랙 타입",
+                      "Rack Type Selector",
+                      "Single, Double, Pallet, High-Bay 랙 유형 선택"
+                    ],
+                    [
+                      "2. 규격 설정",
+                      "Dimension Editor",
+                      "행·열과 Width × Depth × Height 값을 설정"
+                    ],
+                    [
+                      "3. 프리팹",
+                      "Prefab Manager",
+                      "설정한 랙을 저장하고 다른 창고에 불러오기"
+                    ],
+                    [
+                      "4. 변환 제어",
+                      "3D Transform Gizmo",
+                      "이동, 스냅 배치, 회전, 복제, 삭제"
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "testCards": [
+      {
+        "type": "single",
+        "cards": [
+          {
+            "title": "",
+            "description": "",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "contentBlocks": []
+          }
+        ]
+      },
+      {
+        "type": "single",
+        "cards": [
+          {
+            "title": "",
+            "description": "",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "contentBlocks": []
+          }
+        ]
+      },
+      {
+        "type": "single",
+        "cards": [
+          {
+            "title": "",
+            "description": "",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "contentBlocks": []
+          }
+        ]
+      },
+      {
+        "type": "single",
+        "cards": [
+          {
+            "title": "555555555555555555555555555555555",
+            "description": "55555555555555555",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "contentBlocks": [
+              {
+                "type": "image",
+                "imageId": "d229df59-25f6-4432-b2be-69d8e960d101"
+              },
+              {
+                "type": "table",
+                "table": {
+                  "title": "",
+                  "hasHeader": true,
+                  "hasFirstColumnHeader": false,
+                  "rows": [
+                    [
+                      "111",
+                      "11",
+                      "11"
+                    ],
+                    [
+                      "",
+                      "",
+                      ""
+                    ],
+                    [
+                      "",
+                      "",
+                      ""
+                    ]
+                  ],
+                  "columnWidths": [
+                    33.333333333333336,
+                    33.333333333333336,
+                    33.333333333333336
+                  ],
+                  "rowHeights": [
+                    36,
+                    36,
+                    36
+                  ]
+                }
+              },
+              {
+                "type": "image",
+                "imageId": "e0001100-ca21-4a48-a529-666f00950568"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "single",
+        "cards": [
+          {
+            "title": "순서 검증 B",
+            "description": "",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "contentBlocks": []
+          }
+        ]
+      },
+      {
+        "type": "double",
+        "cards": [
+          {
+            "title": "11111123123123",
+            "description": "12121231",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "contentBlocks": [
+              {
+                "type": "text",
+                "text": "1. ㅇ림ㄴ어림ㄴ어림;ㄴㅇ라ㅓㅓㅁㄴ;ㅣㅇ러ㅣㅁㄴㅇ러미;ㄴㅇ러민;ㅇ럼니;ㅇ러민;ㅇ럼니;ㅇ럼니;ㅇ럼니;ㅇ럼ㄴ;ㅣㅇ러미;ㄴㅇ러\n2. 어림ㄴㅇ러ㅣㅁㄴㅇ러ㅣㅁㄴㅇ러ㅣㅁㄴㅇㄹㄴㅇ마ㅣ러ㅣㅁㄴㅇ러ㅣㅁㄴㅇ러ㅣㅁㄴㅇ러ㅣㅁㄴㅇ러ㅣㅁㄴㅇ\n    1. 어ㅣ런이마러민ㅇ러민ㅇ러ㅣㅁㄴㅇ러민ㅇ러민ㅇ럼닝럼닝럼닝럼닝럼닝러ㅣㄴㅁㅇ러ㅣㄴㅁ어림ㄴ\n    • ㅇ러이런밍ㄹ\n    • ㄹㅇ너림ㄴ어린ㅇ러ㅣㅁㄴㅇ러ㅣㅏㅓㄻ닝러ㅣㅁㄴ어림ㄴㅇ럼닝러민ㅇ럼닝러민ㅇ럼닝럼닝러민ㅇ럼닝ㄹ",
+                "html": "1. ㅇ림ㄴ어림ㄴ어림;ㄴㅇ라ㅓㅓㅁㄴ;ㅣㅇ러ㅣㅁㄴㅇ러미;ㄴㅇ러민;ㅇ럼니;ㅇ러민;ㅇ럼니;ㅇ럼니;ㅇ럼니;ㅇ럼ㄴ;ㅣㅇ러미;ㄴㅇ러\n2. 어림ㄴㅇ러ㅣㅁㄴㅇ러ㅣㅁㄴㅇ러ㅣㅁㄴㅇㄹㄴㅇ마ㅣ러ㅣㅁㄴㅇ러ㅣㅁㄴㅇ러ㅣㅁㄴㅇ러ㅣㅁㄴㅇ러ㅣㅁㄴㅇ\n    1. 어ㅣ런이마러민ㅇ러민ㅇ러ㅣㅁㄴㅇ러민ㅇ러민ㅇ럼닝럼닝럼닝럼닝럼닝러ㅣㄴㅁㅇ러ㅣㄴㅁ어림ㄴ\n    • ㅇ러이런밍ㄹ\n    • ㄹㅇ너림ㄴ어린ㅇ러ㅣㅁㄴㅇ러ㅣㅏㅓㄻ닝러ㅣㅁㄴ어림ㄴㅇ럼닝러민ㅇ럼닝러민ㅇ럼닝럼닝러민ㅇ럼닝ㄹ<br>"
+              },
+              {
+                "type": "image",
+                "imageId": "8a07a34f-7877-484e-a575-9efa62ab1eb0"
+              },
+              {
+                "type": "image",
+                "imageId": "8c4e8059-2bfb-4f85-96e3-969c27326f76"
+              }
+            ]
+          },
+          {
+            "title": "",
+            "description": "",
+            "body": "",
+            "bodyHtml": "",
+            "bodyType": "text",
+            "table": null,
+            "body2Type": "text",
+            "table2": null,
+            "body2": "",
+            "body2Html": "",
+            "imageId": "",
+            "image": "",
+            "contentBlocks": []
+          }
+        ]
+      }
+    ]
+  }
+}

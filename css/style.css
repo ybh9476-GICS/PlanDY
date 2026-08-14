@@ -382,6 +382,12 @@ body[data-authenticated="false"] #helpModal { display: none !important; }
 .menu-row-action.delete { color: #fff; background: #dc2626; }
 .menu-row-action.save { background: var(--color-primary); color: #fff; }
 .menu-row-action:disabled { opacity: 0.35; cursor: not-allowed; }
+.content-sync-actions { margin-top: 1rem; padding: 0.85rem; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; }
+.content-sync-actions strong { color: #1e3a8a; }
+.content-sync-actions p { margin: 0.45rem 0 0.7rem; color: #475569; font-size: 12px; line-height: 1.5; }
+.content-sync-buttons { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.content-sync-buttons button { border: 1px solid #2563eb; border-radius: 5px; padding: 0.42rem 0.62rem; background: #fff; color: #1d4ed8; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.content-sync-buttons button:hover { background: #dbeafe; }
 
 
 .user-profile {
