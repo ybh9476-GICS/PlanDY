@@ -1,0 +1,12 @@
+{
+  "name": "yupoong-wms-digital-twin",
+  "private": true,
+  "scripts": {
+    "sync:pages": "node scripts/sync-pages.js",
+    "test:structure": "node tests/structure.test.js",
+    "test": "npm run test:structure"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^6.2.108"
+  }
+}
