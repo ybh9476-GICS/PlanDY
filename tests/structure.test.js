@@ -185,7 +185,9 @@ assert.ok(testEditor.includes('test-add-google-drive-block'), 'Google Drive docu
 assert.ok(testEditor.includes('parseGoogleDriveDocumentUrl'), 'Google Drive URL validation was removed.');
 assert.ok(testEditor.includes('openGoogleDriveDocument'), 'Google Drive document viewer was removed.');
 assert.ok(testEditorCss.includes('.test-card-google-drive-frame'), 'Google Drive card preview styles are missing.');
-assert.ok(testEditor.includes('data-body-type="text2">텍스트 2'), 'The Text 2 body type option is missing.');
+assert.ok(testEditor.includes('data-body-type="text" hidden>텍스트'), 'The original Text body type button must remain hidden instead of being removed.');
+assert.ok(testEditor.includes('data-body-type="text2">Text'), 'The Text 2 body type option must be displayed as Text.');
+assert.ok(testEditor.includes('data-body-type="table">Table'), 'The Table body type option must be displayed as Table.');
 assert.ok(!source.includes('js/text2-editor.js'), 'Text 2 must use the existing Text engine without a separate editor runtime.');
 assert.ok(!testEditor.includes('window.Text2Editor'), 'Text 2 must not use a reimplemented editor.');
 assert.ok(testEditor.includes("block.type === 'text' || block.type === 'text2'"), 'Text 2 must use the existing Text renderer.');

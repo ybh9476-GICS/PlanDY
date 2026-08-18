@@ -1530,7 +1530,7 @@
                     title.textContent = bodySlots.length > 1 ? `본문 ${index + 1}` : '본문';
                     const typeSection = document.createElement('section');
                     typeSection.className = 'test-body-type-section';
-                    typeSection.innerHTML = `<div class="test-body-type-options"><button type="button" data-body-type="text">텍스트</button><button type="button" data-body-type="text2">텍스트 2</button><button type="button" data-body-type="table">테이블</button></div><p>최초 등록 후 본문 타입은 변경할 수 없습니다.</p>`;
+                    typeSection.innerHTML = `<div class="test-body-type-options"><button type="button" data-body-type="text" hidden>텍스트</button><button type="button" data-body-type="text2">Text</button><button type="button" data-body-type="table">Table</button></div><p>최초 등록 후 본문 타입은 변경할 수 없습니다.</p>`;
                     const slotTableEditor = document.createElement('section');
                     slotTableEditor.className = 'test-table-editor-section';
                     contentArea.appendChild(panel);
