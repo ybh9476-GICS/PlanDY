@@ -120,7 +120,7 @@
                 const blocks = [];
                 const addBodyBlock = (body, html, bodyType, table) => {
                     if (bodyType === 'table' && table) blocks.push({ type: 'table', table });
-                    else if (body || html) blocks.push({ type: 'text', text: body || '', html: html || '' });
+                    else if (body || html) blocks.push({ type: bodyType === 'text2' ? 'text2' : 'text', text: body || '', html: html || '' });
                 };
                 addBodyBlock(card.body, card.bodyHtml, card.bodyType, card.table);
                 addBodyBlock(card.body2, card.body2Html, card.body2Type, card.table2);
@@ -164,7 +164,7 @@
             typeof clipboard.title === 'string' &&
             typeof clipboard.description === 'string' &&
             Array.isArray(clipboard.contentBlocks) &&
-            clipboard.contentBlocks.every((block) => ['text', 'table', 'image', 'pdf', 'googleDrive'].includes(block?.type)) &&
+            clipboard.contentBlocks.every((block) => ['text', 'text2', 'table', 'image', 'pdf', 'googleDrive'].includes(block?.type)) &&
             Number(clipboard.expiresAt) > Date.now()
         );
         let cardClipboard = null;
@@ -205,7 +205,7 @@
         const hasUnsupportedCardContent = (card) => {
             try {
                 const contentBlocks = card.dataset.contentBlocks ? JSON.parse(card.dataset.contentBlocks) : [];
-                return Array.isArray(contentBlocks) && contentBlocks.some((block) => !['text', 'table', 'image', 'pdf', 'googleDrive'].includes(block?.type));
+                return Array.isArray(contentBlocks) && contentBlocks.some((block) => !['text', 'text2', 'table', 'image', 'pdf', 'googleDrive'].includes(block?.type));
             } catch (error) {
                 return true;
             }
@@ -704,8 +704,8 @@
                         blockElement.appendChild(driveFrame);
                     } else if (block.type === 'table') {
                         renderTestTable(blockElement, block.table);
-                    } else if (block.type === 'text') {
-                        renderTestListBody(blockElement, block.html, block.text || '');
+                    } else if (block.type === 'text' || block.type === 'text2') {
+                        renderTestListBody(blockElement, block.html, block.text || '', block.type);
                     } else if (block.type === 'diagram') {
                         const diagram = document.createElement('div');
                         diagram.className = 'mermaid test-card-diagram';
@@ -880,7 +880,7 @@
 
         // 입력 데이터는 그대로 유지하고, 카드 표시에서만 목록 줄을 기호/본문 영역으로 나눈다.
         // 따라서 좁은 카드에서도 자동 줄바꿈이 번호 또는 글머리 기호 아래로 내려가지 않는다.
-        function renderTestListBody(container, html, text) {
+        function renderTestListBody(container, html, text, bodyType = 'text') {
             const source = document.createElement('span');
             if (html) renderTestBody(source, html);
             else renderTestText(source, text || '');
@@ -929,7 +929,9 @@
             container.replaceChildren();
             lines.forEach((segments) => {
                 const plainText = segments.map((segment) => segment.text).join('');
-                const listMatch = /^(\s*)((?:\d+\.)|[•◦-])\s+/.exec(plainText);
+                const numberMarker = bodyType === 'text2' ? '(?:\\d+|[a-z]+|[ivxlcdm]+)\\.' : '\\d+\\.';
+                const bulletMarker = bodyType === 'text2' ? '[•◦▪-]' : '[•◦-]';
+                const listMatch = new RegExp(`^(\\s*)(${numberMarker}|${bulletMarker})\\s+`, bodyType === 'text2' ? 'i' : '').exec(plainText);
                 const line = document.createElement('div');
                 line.className = 'test-card-body-line';
                 if (!listMatch) {
@@ -1308,14 +1310,14 @@
             if (Array.isArray(storedContentBlocks)) {
                 let bodyIndex = 0;
                 storedContentBlocks.forEach((block, blockOrder) => {
-                    if (block.type !== 'text' && block.type !== 'table') return;
+                    if (block.type !== 'text' && block.type !== 'text2' && block.type !== 'table') return;
                     const slot = bodySlots[bodyIndex++];
                     if (!slot) return;
                     slot.type = block.type;
                     slot.tableData = block.type === 'table' ? (block.table || slot.tableData) : slot.tableData;
                     slot.typeLocked = true;
-                    slot.field.innerHTML = block.type === 'text' ? (block.html || '') : '';
-                    if (block.type === 'text' && !slot.field.innerHTML) slot.field.textContent = block.text || '';
+                    slot.field.innerHTML = (block.type === 'text' || block.type === 'text2') ? (block.html || '') : '';
+                    if ((block.type === 'text' || block.type === 'text2') && !slot.field.innerHTML) slot.field.textContent = block.text || '';
                     slot.active = true;
                     slot.blockOrder = blockOrder;
                 });
@@ -1496,7 +1498,7 @@
             const renderBodyType = () => {
                 if (!supportsTableBody) return;
                 bodySlots.forEach((slot) => {
-                    slot.field.style.display = slot.type === 'text' ? '' : 'none';
+                    slot.field.style.display = (slot.type === 'text' || slot.type === 'text2') ? '' : 'none';
                     slot.tableEditor.style.display = slot.type === 'table' ? 'block' : 'none';
                     slot.typeSection.querySelectorAll('[data-body-type]').forEach((button) => button.classList.toggle('selected', button.dataset.bodyType === slot.type));
                     if (slot.type === 'table') {
@@ -1528,7 +1530,7 @@
                     title.textContent = bodySlots.length > 1 ? `본문 ${index + 1}` : '본문';
                     const typeSection = document.createElement('section');
                     typeSection.className = 'test-body-type-section';
-                    typeSection.innerHTML = `<div class="test-body-type-options"><button type="button" data-body-type="text">텍스트</button><button type="button" data-body-type="table">테이블</button></div><p>최초 등록 후 본문 타입은 변경할 수 없습니다.</p>`;
+                    typeSection.innerHTML = `<div class="test-body-type-options"><button type="button" data-body-type="text">텍스트</button><button type="button" data-body-type="text2">텍스트 2</button><button type="button" data-body-type="table">테이블</button></div><p>최초 등록 후 본문 타입은 변경할 수 없습니다.</p>`;
                     const slotTableEditor = document.createElement('section');
                     slotTableEditor.className = 'test-table-editor-section';
                     contentArea.appendChild(panel);
@@ -1834,7 +1836,7 @@
                             if (slot?.active) {
                                 clipboardBlocks.push(slot.type === 'table'
                                     ? { type: 'table', table: copyPlainValue(slot.tableData) }
-                                    : { type: 'text', text: slot.field.textContent.replace(/\r/g, ''), html: getStoredBodyHtml(slot.field) });
+                                    : { type: slot.type, text: slot.field.textContent.replace(/\r/g, ''), html: getStoredBodyHtml(slot.field) });
                                 continue;
                             }
                             const imageState = contentImageBlocks.find((item) => item.panel === element);
@@ -1897,14 +1899,14 @@
                     headerField.textContent = cardClipboard.title;
                     descriptionField.textContent = cardClipboard.description;
                     cardClipboard.contentBlocks.forEach((block) => {
-                        if (block.type === 'text' || block.type === 'table') {
+                        if (block.type === 'text' || block.type === 'text2' || block.type === 'table') {
                             const slot = bodySlots.find((item) => !item.active);
                             if (!slot) return;
                             slot.active = true;
                             slot.type = block.type;
                             slot.typeLocked = false;
                             slot.field.replaceChildren();
-                            if (block.type === 'text') {
+                            if (block.type === 'text' || block.type === 'text2') {
                                 slot.field.innerHTML = block.html || '';
                                 if (!slot.field.innerHTML) slot.field.textContent = block.text || '';
                             } else {
@@ -1927,7 +1929,7 @@
                     renderBodyType();
                     refreshBodyLabels();
                     resizeField(descriptionField);
-                    bodySlots.filter((slot) => slot.active && slot.type === 'text').forEach((slot) => resizeField(slot.field));
+                    bodySlots.filter((slot) => slot.active && (slot.type === 'text' || slot.type === 'text2')).forEach((slot) => resizeField(slot.field));
                     editTouched = true;
                     refreshClipboardActions();
                     showCardNotice('복사한 내용을 불러왔습니다. 등록을 눌러 저장하세요.');
@@ -1959,6 +1961,211 @@
                 bulletCommandStart = null;
                 bulletCommandEnd = null;
                 bodyField = field;
+            };
+            const isText2BodyField = () => bodySlots.some((slot) => slot.field === bodyField && slot.type === 'text2');
+            const getText2IndentLevel = (indentation) => (
+                (indentation.match(/\t/g)?.length || 0) + Math.floor(indentation.replace(/\t/g, '').length / 4)
+            );
+            const toText2Alphabetic = (value) => {
+                let number = Math.max(1, value);
+                let result = '';
+                while (number > 0) {
+                    number -= 1;
+                    result = String.fromCharCode(97 + (number % 26)) + result;
+                    number = Math.floor(number / 26);
+                }
+                return result;
+            };
+            const toText2Roman = (value) => {
+                const symbols = [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
+                let number = Math.max(1, value);
+                let result = '';
+                symbols.forEach(([amount, symbol]) => {
+                    while (number >= amount) {
+                        result += symbol;
+                        number -= amount;
+                    }
+                });
+                return result;
+            };
+            const getText2NumberMarker = (level, sequence) => {
+                if (level === 0) return `${sequence}.`;
+                if (level === 1) return `${toText2Alphabetic(sequence)}.`;
+                return `${toText2Roman(sequence)}.`;
+            };
+            const getText2NumberedLine = (line) => /^(\s*)((?:\d+|[a-z]+|[ivxlcdm]+)\.)\s(.*)$/i.exec(line);
+            const getText2BulletMarker = (level) => ['•', '◦', '-'][Math.min(2, Math.max(0, level))];
+            const getText2BulletLine = (line) => /^(\s*)([•◦▪-])\s(.*)$/.exec(line);
+            const getText2NumberSequence = (value, lineStart, level) => {
+                const precedingLines = value.slice(0, lineStart).split('\n');
+                let sequence = 0;
+                for (let index = precedingLines.length - 1; index >= 0; index -= 1) {
+                    const candidate = precedingLines[index];
+                    const candidateIndentation = (candidate.match(/^\s*/) || [''])[0];
+                    const candidateLevel = getText2IndentLevel(candidateIndentation);
+                    if (candidateLevel < level) break;
+                    if (candidateLevel > level) continue;
+                    if (!getText2NumberedLine(candidate)) break;
+                    sequence += 1;
+                }
+                return sequence;
+            };
+            const renumberText2NumberedLines = (selectionStart, selectionEnd = selectionStart) => {
+                const value = getBodyValue();
+                const edits = [];
+                const counters = new Map();
+                const parentIds = [];
+                let lineStart = 0;
+                value.split('\n').forEach((line, lineIndex) => {
+                    const indentation = (line.match(/^\s*/) || [''])[0];
+                    const level = getText2IndentLevel(indentation);
+                    const numbered = getText2NumberedLine(line);
+                    if (!numbered || level > 2) {
+                        if (level === 0) counters.delete('root');
+                        else if (parentIds[level - 1]) counters.delete(parentIds[level - 1]);
+                        parentIds.length = Math.min(parentIds.length, level);
+                        lineStart += line.length + 1;
+                        return;
+                    }
+                    const parentId = level === 0 ? 'root' : (parentIds[level - 1] || `orphan-${level}`);
+                    const sequence = (counters.get(parentId) || 0) + 1;
+                    counters.set(parentId, sequence);
+                    const marker = getText2NumberMarker(level, sequence);
+                    const markerStart = lineStart + numbered[1].length;
+                    const markerEnd = markerStart + numbered[2].length;
+                    if (numbered[2] !== marker) edits.push({ start: markerStart, end: markerEnd, value: marker });
+                    parentIds[level] = `line-${lineIndex}`;
+                    parentIds.length = level + 1;
+                    lineStart += line.length + 1;
+                });
+                if (!edits.length) return { start: selectionStart, end: selectionEnd };
+                const adjustOffset = (offset) => edits.reduce((adjusted, edit) => (
+                    edit.start < offset ? adjusted + edit.value.length - (edit.end - edit.start) : adjusted
+                ), offset);
+                [...edits].sort((first, second) => second.start - first.start).forEach((edit) => replaceBodyRange(edit.start, edit.end, edit.value));
+                const nextSelection = { start: adjustOffset(selectionStart), end: adjustOffset(selectionEnd) };
+                setBodySelection(nextSelection.start, nextSelection.end);
+                return nextSelection;
+            };
+            const insertText2NumberedLineBreak = () => {
+                const value = getBodyValue();
+                const selection = getBodySelection();
+                const lineStart = value.lastIndexOf('\n', selection.start - 1) + 1;
+                const currentLine = value.slice(lineStart, selection.start);
+                const numbered = getText2NumberedLine(currentLine);
+                if (!numbered) return false;
+                const level = getText2IndentLevel(numbered[1]);
+                if (level > 2) return false;
+                const sequence = getText2NumberSequence(value, lineStart, level);
+                const nextLine = `\n${numbered[1]}${getText2NumberMarker(level, sequence + 1)} `;
+                replaceBodyRange(selection.start, selection.end, nextLine);
+                const caret = selection.start + nextLine.length;
+                renumberText2NumberedLines(caret);
+                return true;
+            };
+            const insertText2BulletLineBreak = () => {
+                const value = getBodyValue();
+                const selection = getBodySelection();
+                const lineStart = value.lastIndexOf('\n', selection.start - 1) + 1;
+                const currentLine = value.slice(lineStart, selection.start);
+                const bullet = getText2BulletLine(currentLine);
+                if (!bullet) return false;
+                const level = getText2IndentLevel(bullet[1]);
+                if (level > 2) return false;
+                const nextLine = `\n${bullet[1]}${getText2BulletMarker(level)} `;
+                replaceBodyRange(selection.start, selection.end, nextLine);
+                return true;
+            };
+            const handleText2NumberIndent = (value, start, end, lineStart, lineEnd, shiftKey) => {
+                const selected = value.slice(lineStart, lineEnd);
+                const selectedLines = selected.split('\n');
+                if (!selectedLines.some((line) => getText2NumberedLine(line))) return false;
+                if (start === end) {
+                    const line = selectedLines[0];
+                    const numbered = getText2NumberedLine(line);
+                    if (!numbered) return false;
+                    const level = getText2IndentLevel(numbered[1]);
+                    if (!shiftKey && level >= 2) return true;
+                    if (!shiftKey) {
+                        replaceBodyRange(lineStart, lineStart, '    ');
+                        renumberText2NumberedLines(start + 4);
+                        return true;
+                    }
+                    if (level > 0) {
+                        const removeLength = line.startsWith('\t') ? 1 : 4;
+                        replaceBodyRange(lineStart, lineStart + removeLength, '');
+                        renumberText2NumberedLines(Math.max(lineStart, start - removeLength));
+                        return true;
+                    }
+                    const prefixLength = numbered[1].length + numbered[2].length + 1;
+                    replaceBodyRange(lineStart, lineStart + prefixLength, '');
+                    renumberText2NumberedLines(Math.max(lineStart, start - prefixLength));
+                    return true;
+                }
+                const changed = selectedLines.map((line) => {
+                    const numbered = getText2NumberedLine(line);
+                    if (!shiftKey) {
+                        if (numbered && getText2IndentLevel(numbered[1]) >= 2) return line;
+                        return `    ${line}`;
+                    }
+                    if (/^(    |\t)/.test(line)) return line.replace(/^(    |\t)/, '');
+                    if (numbered) return line.slice(numbered[1].length + numbered[2].length + 1);
+                    return line.replace(/^([•◦-])\s/, '');
+                }).join('\n');
+                replaceBodyRange(lineStart, lineEnd, changed);
+                renumberText2NumberedLines(lineStart + changed.length);
+                return true;
+            };
+            const handleText2BulletIndent = (value, start, end, lineStart, lineEnd, shiftKey) => {
+                const selectedLines = value.slice(lineStart, lineEnd).split('\n');
+                if (!selectedLines.some((line) => getText2BulletLine(line))) return false;
+                const edits = [];
+                let currentLineStart = lineStart;
+                selectedLines.forEach((line) => {
+                    const bullet = getText2BulletLine(line);
+                    if (!shiftKey) {
+                        if (bullet && getText2IndentLevel(bullet[1]) >= 2) {
+                            currentLineStart += line.length + 1;
+                            return;
+                        }
+                        edits.push({ start: currentLineStart, end: currentLineStart, value: '    ' });
+                        if (bullet) {
+                            const markerStart = currentLineStart + bullet[1].length;
+                            edits.push({
+                                start: markerStart,
+                                end: markerStart + bullet[2].length,
+                                value: getText2BulletMarker(getText2IndentLevel(bullet[1]) + 1)
+                            });
+                        }
+                    } else if (/^(    |\t)/.test(line)) {
+                        const remove = /^(    |\t)/.exec(line)[0];
+                        if (bullet) {
+                            const markerStart = currentLineStart + bullet[1].length;
+                            edits.push({
+                                start: markerStart,
+                                end: markerStart + bullet[2].length,
+                                value: getText2BulletMarker(getText2IndentLevel(bullet[1]) - 1)
+                            });
+                        }
+                        edits.push({ start: currentLineStart, end: currentLineStart + remove.length, value: '' });
+                    } else if (bullet) {
+                        edits.push({
+                            start: currentLineStart + bullet[1].length,
+                            end: currentLineStart + bullet[1].length + bullet[2].length + 1,
+                            value: ''
+                        });
+                    }
+                    currentLineStart += line.length + 1;
+                });
+                if (!edits.length) return true;
+                const adjustOffset = (offset) => edits.reduce((adjusted, edit) => (
+                    edit.start < offset ? adjusted + edit.value.length - (edit.end - edit.start) : adjusted
+                ), offset);
+                [...edits].sort((first, second) => (
+                    second.start - first.start || (second.end - second.start) - (first.end - first.start)
+                )).forEach((edit) => replaceBodyRange(edit.start, edit.end, edit.value));
+                setBodySelection(adjustOffset(start), adjustOffset(end));
+                return true;
             };
             const closePopupOnEscape = (event) => {
                 if (event.key !== 'Escape' || (!bulletPicker && !formatToolbar)) return;
@@ -2027,7 +2234,9 @@
                 closeBulletPicker();
                 bulletPicker = document.createElement('div');
                 bulletPicker.className = 'test-bullet-picker';
-                bulletPicker.innerHTML = '<button type="button" data-bullet="number">1</button><button type="button" data-bullet="•">•</button><button type="button" data-bullet="◦">◦</button><button type="button" data-bullet="-">-</button>';
+                bulletPicker.innerHTML = isText2BodyField()
+                    ? '<button type="button" data-bullet="number">1</button><button type="button" data-bullet="•">•</button>'
+                    : '<button type="button" data-bullet="number">1</button><button type="button" data-bullet="•">•</button><button type="button" data-bullet="◦">◦</button><button type="button" data-bullet="-">-</button>';
                 const fieldRect = bodyField.getBoundingClientRect();
                 bulletPicker.style.left = Math.min(fieldRect.left, window.innerWidth - 190) + 'px';
                 bulletPicker.style.top = Math.min(fieldRect.top + 34, window.innerHeight - 70) + 'px';
@@ -2041,11 +2250,22 @@
                 };
                 bulletButtons.forEach((button, buttonIndex) => {
                     button.addEventListener('click', () => {
-                        const bulletText = button.dataset.bullet === 'number' ? '1. ' : button.dataset.bullet + ' ';
                         const selection = getBodySelection();
                         const cursor = selection.end;
-                        const replaceStart = bulletCommandStart === null ? cursor - 1 : bulletCommandStart;
+                        let replaceStart = bulletCommandStart === null ? cursor - 1 : bulletCommandStart;
                         const replaceEnd = bulletCommandEnd === null ? cursor : bulletCommandEnd;
+                        const fieldValue = getBodyValue();
+                        const lineStart = fieldValue.lastIndexOf('\n', replaceStart - 1) + 1;
+                        const isInitialText2Bullet = isText2BodyField() &&
+                            button.dataset.bullet !== 'number' &&
+                            fieldValue.slice(0, replaceStart).trim() === '';
+                        if (isInitialText2Bullet) replaceStart = lineStart;
+                        const indentation = (fieldValue.slice(lineStart, replaceStart).match(/^\s*/) || [''])[0];
+                        const level = getText2IndentLevel(indentation);
+                        const sequence = getText2NumberSequence(fieldValue, lineStart, level) + 1;
+                        const bulletText = button.dataset.bullet === 'number'
+                            ? (isText2BodyField() ? `${getText2NumberMarker(level, sequence)} ` : '1. ')
+                            : (isText2BodyField() ? `${isInitialText2Bullet ? '•' : getText2BulletMarker(level)} ` : button.dataset.bullet + ' ');
                         replaceBodyRange(replaceStart, replaceEnd, bulletText);
                         bodyField.focus();
                         editTouched = true;
@@ -2076,7 +2296,12 @@
                 const cursor = selection.end;
                 const lineStart = value.lastIndexOf('\n', cursor - 1) + 1;
                 const lineBeforeCursor = value.slice(lineStart, cursor);
-                const prefixedSlash = /^(\s*)(?:(\d+)\.|[•◦-])\s*\/$/.exec(lineBeforeCursor);
+                const text2NumberMarker = isText2BodyField() ? '(?:\\d+|[a-z]+|[ivxlcdm]+)' : '\\d+';
+                const text2BulletMarker = isText2BodyField() ? '[•◦▪-]' : '[•◦-]';
+                const prefixedSlash = new RegExp(
+                    `^(\\s*)(?:${text2NumberMarker}\\.|${text2BulletMarker})\\s*\\/$`,
+                    isText2BodyField() ? 'i' : ''
+                ).exec(lineBeforeCursor);
                 if (prefixedSlash) {
                     bulletCommandStart = lineStart + prefixedSlash[1].length;
                     bulletCommandEnd = cursor;
@@ -2092,6 +2317,14 @@
                 }
             };
             const insertBodyLineBreak = () => {
+                if (isText2BodyField() && insertText2NumberedLineBreak()) {
+                    bodyInputHandler();
+                    return;
+                }
+                if (isText2BodyField() && insertText2BulletLineBreak()) {
+                    bodyInputHandler();
+                    return;
+                }
                 const value = getBodyValue();
                 const selection = getBodySelection();
                 const start = selection.start;
@@ -2259,6 +2492,14 @@
                     insertBodyLineBreak();
                 } else if (event.key === 'Tab') {
                     event.preventDefault();
+                    if (isText2BodyField() && handleText2NumberIndent(value, start, end, lineStart, lineEnd, event.shiftKey)) {
+                        bodyInputHandler();
+                        return;
+                    }
+                    if (isText2BodyField() && handleText2BulletIndent(value, start, end, lineStart, lineEnd, event.shiftKey)) {
+                        bodyInputHandler();
+                        return;
+                    }
                     const hasSelection = start !== end;
                     if (!hasSelection) {
                         if (event.shiftKey) {
@@ -2448,7 +2689,7 @@
                             if (slot?.active) {
                                 blocks.push(slot.type === 'table'
                                     ? { type: 'table', table: slot.tableData }
-                                    : { type: 'text', text: slot.field.textContent.replace(/\r/g, ''), html: getStoredBodyHtml(slot.field) });
+                                    : { type: slot.type, text: slot.field.textContent.replace(/\r/g, ''), html: getStoredBodyHtml(slot.field) });
                                 continue;
                             }
                             const imageState = contentImageBlocks.find((item) => item.panel === element);

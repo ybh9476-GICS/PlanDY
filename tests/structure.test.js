@@ -9,7 +9,7 @@ const source = fs.readFileSync(sourcePath, 'utf8');
 const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
 const appFeatures = fs.readFileSync(path.join(root, 'js', 'app-features.js'), 'utf8');
 const rolePermissions = fs.readFileSync(path.join(root, 'js', 'role-permissions.js'), 'utf8');
-const testEditor = fs.readFileSync(path.join(root, 'js', 'test-editor.js'), 'utf8');
+const testEditor = fs.readFileSync(path.join(root, 'js', 'test-editor-v14.js'), 'utf8');
 const testEditorCss = fs.readFileSync(path.join(root, 'css', 'test-editor.css'), 'utf8');
 const compatibilityPages = [
     'home.html', 'overview.html', 'floor.html', 'zone.html', 'rack.html',
@@ -21,11 +21,11 @@ const expectedTabs = ['overview', 'floor', 'zone', 'rack', 'editor', 'route', 's
 const actualTabs = [...source.matchAll(/<section id="view-([^"]+)"/g)].map((match) => match[1]);
 assert.deepStrictEqual(actualTabs, expectedTabs, 'The menu panels changed unexpectedly.');
 
-for (const asset of ['css/style.css', 'css/test-editor.css', 'js/role-permissions.js', 'js/app.js', 'js/app-features.js', 'js/test-editor.js']) {
+for (const asset of ['css/style.css', 'css/test-editor.css', 'js/role-permissions.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
     assert.ok(fs.existsSync(path.join(root, asset)), `Missing runtime asset: ${asset}`);
 }
 
-for (const script of ['js/role-permissions.js', 'js/app.js', 'js/app-features.js', 'js/test-editor.js']) {
+for (const script of ['js/role-permissions.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
     const code = fs.readFileSync(path.join(root, script), 'utf8');
     new vm.Script(code, { filename: script });
 }
@@ -145,7 +145,7 @@ assert.ok(!testEditor.includes("field.addEventListener('keyup'"), 'Body editing 
 assert.ok(!testEditor.includes('spellcheck="false"'), 'Card editor text inputs must allow browser spellcheck.');
 assert.ok(!testEditor.includes('field.spellcheck = false'), 'Dynamically added body fields must allow browser spellcheck.');
 assert.ok(testEditor.includes("type === 'left-right'"), 'Saved left 1 / right 2 cards must remain backward compatible.');
-assert.ok(testEditor.includes('try {\n                onChange(rows);'), 'Card storage failures must not interrupt the editor flow.');
+assert.ok(/try \{\r?\n                onChange\(rows\);/.test(testEditor), 'Card storage failures must not interrupt the editor flow.');
 assert.ok(testEditor.includes("error?.name === 'QuotaExceededError'"), 'Quota storage warning handling was removed.');
 assert.ok(testEditor.includes('indexedDB.open(imageDatabaseName, 1)'), 'Card images must use IndexedDB storage.');
 assert.ok(testEditor.includes('migrateLegacyCardImages(initialRows)'), 'Legacy card images must migrate to IndexedDB.');
@@ -176,7 +176,7 @@ assert.ok(testEditor.includes('test-card-table-caption-icon'), 'Table title icon
 assert.ok(testEditor.includes('test-body-editor-panel'), 'Body editor panels were removed.');
 assert.ok(testEditor.includes('test-edit-content-blocks'), 'Dynamic content block container was removed.');
 assert.ok(testEditor.includes('contentBlocks'), 'Content block storage was removed.');
-assert.ok(testEditor.includes("['text', 'table', 'image', 'pdf', 'googleDrive']"), 'Text, table, image, PDF, and Google Drive blocks must be stored or copied.');
+assert.ok(testEditor.includes("['text', 'text2', 'table', 'image', 'pdf', 'googleDrive']"), 'Text, Text 2, table, image, PDF, and Google Drive blocks must be stored or copied.');
 assert.ok(testEditor.includes('test-add-pdf-block'), 'PDF add button was removed.');
 assert.ok(testEditor.includes("type: 'pdf', pdfId"), 'PDF block metadata must be saved.');
 assert.ok(testEditor.includes('openOriginalPdf'), 'PDF original viewer was removed.');
@@ -185,10 +185,24 @@ assert.ok(testEditor.includes('test-add-google-drive-block'), 'Google Drive docu
 assert.ok(testEditor.includes('parseGoogleDriveDocumentUrl'), 'Google Drive URL validation was removed.');
 assert.ok(testEditor.includes('openGoogleDriveDocument'), 'Google Drive document viewer was removed.');
 assert.ok(testEditorCss.includes('.test-card-google-drive-frame'), 'Google Drive card preview styles are missing.');
-assert.ok(!testEditor.includes('data-body-type="plainText">텍스트 2'), 'The Text 2 body type option must be removed.');
-assert.ok(!source.includes('js/text2-editor.js'), 'The removed Text 2 runtime must not be loaded.');
-assert.ok(!testEditor.includes('window.createText2Editor'), 'The removed Text 2 editor must not be initialized.');
-assert.ok(!testEditor.includes('window.renderText2Card'), 'The removed Text 2 renderer must not be called.');
+assert.ok(testEditor.includes('data-body-type="text2">텍스트 2'), 'The Text 2 body type option is missing.');
+assert.ok(!source.includes('js/text2-editor.js'), 'Text 2 must use the existing Text engine without a separate editor runtime.');
+assert.ok(!testEditor.includes('window.Text2Editor'), 'Text 2 must not use a reimplemented editor.');
+assert.ok(testEditor.includes("block.type === 'text' || block.type === 'text2'"), 'Text 2 must use the existing Text renderer.');
+assert.ok(testEditor.includes("type: slot.type, text: slot.field.textContent.replace(/\\r/g, ''), html: getStoredBodyHtml(slot.field)"), 'Text 2 must preserve the exact Text storage format while keeping its own type.');
+assert.ok(testEditor.includes('const getText2NumberMarker'), 'Text 2 must own its numbering marker rules.');
+assert.ok(testEditor.includes("return `${toText2Alphabetic(sequence)}.`;"), 'Text 2 second-level numbering must use alphabetic markers.');
+assert.ok(testEditor.includes("return `${toText2Roman(sequence)}.`;"), 'Text 2 third-level numbering must use Roman numeral markers.');
+assert.ok(testEditor.includes('if (!shiftKey && level >= 2) return true;'), 'Text 2 numbered lists must stop indenting at the third level.');
+assert.ok(testEditor.includes("const getText2BulletMarker = (level) => ['•', '◦', '-']"), 'Text 2 must own its three-level bullet marker rules.');
+assert.ok(testEditor.includes('const insertText2BulletLineBreak'), 'Text 2 bullet lists must continue with Enter.');
+assert.ok(testEditor.includes('const handleText2BulletIndent'), 'Text 2 bullet lists must handle Tab and Shift+Tab independently.');
+assert.ok(testEditor.includes('const isInitialText2Bullet = isText2BodyField()'), 'Text 2 must recognize the first bullet item separately.');
+assert.ok(testEditor.includes("isInitialText2Bullet ? '•' : getText2BulletMarker(level)"), 'The first Text 2 bullet must always start with a round bullet marker.');
+assert.ok(testEditor.includes("? '<button type=\"button\" data-bullet=\"number\">1</button><button type=\"button\" data-bullet=\"•\">•</button>'"), 'Text 2 slash picker must show only number and primary bullet buttons.');
+assert.ok(testEditor.includes("const bulletMarker = bodyType === 'text2' ? '[•◦▪-]'"), 'Text 2 viewer rendering must recognize the third-level bullet marker.');
+assert.ok(testEditor.includes('renderTestListBody(blockElement, block.html, block.text || \'\', block.type);'), 'Text 2 viewer rendering must receive the saved body type.');
+assert.ok(testEditor.includes("const numberMarker = bodyType === 'text2'"), 'Text 2 viewer rendering must recognize alphabetic and Roman list markers.');
 assert.ok(testEditor.includes("block?.type === 'plainText'"), 'Legacy Text 2 blocks must be migrated to Text.');
 assert.ok(testEditor.includes("? { type: 'text', text: String(block.text || ''), html:"), 'Legacy Text 2 data must retain text and HTML during migration.');
 assert.ok(testEditor.includes('test-add-image-block'), 'Image add button was removed.');
@@ -248,7 +262,7 @@ assert.ok(!appFeatures.includes("searchResultsList.innerHTML = '<div class=\"sea
 
 assert.ok(/<script src="js\/app\.js(?:\?[^\"]*)?"><\/script>/.test(source), 'Router entry was removed.');
 assert.ok(/<script src="js\/app-features\.js(?:\?[^\"]*)?"><\/script>/.test(source), 'Shared feature entry was removed.');
-assert.ok(/<script src="js\/test-editor\.js(?:\?[^\"]*)?"><\/script>/.test(source), 'Test editor entry was removed.');
+assert.ok(/<script src="js\/test-editor-v14\.js(?:\?[^\"]*)?"><\/script>/.test(source), 'Test editor entry was removed.');
 assert.ok(source.includes('id="testCardList"'), 'Test card list was removed.');
 assert.ok(source.includes('id="testAddCardBtn"'), 'Test card add button was removed.');
 

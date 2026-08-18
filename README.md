@@ -52,7 +52,7 @@ index.html                 화면 마크업 원본
 js/app.js                  해시 기반 메뉴 전환과 사이드바
 js/role-permissions.js     로컬 로그인과 Viewer/Editor 권한
 js/app-features.js         검색·알림·업데이트 등록
-js/test-editor.js          공통 카드 편집 기능
+js/test-editor-v14.js      공통 카드 편집 기능
 css/style.css              공통 스타일
 css/test-editor.css        카드 편집기 스타일
 assets/                    화면 이미지·미디어

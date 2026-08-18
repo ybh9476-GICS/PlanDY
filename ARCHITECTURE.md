@@ -12,7 +12,7 @@
 - `js/app.js`: 해시 탭 라우팅과 사이드바 접기/펼치기
 - `js/role-permissions.js`: 로컬 로그인 세션, Viewer/Editor 권한, 로그아웃 처리
 - `js/app-features.js`: 검색, 알림, 업데이트 등록
-- `js/test-editor.js`: 테스트 메뉴 카드 편집기
+- `js/test-editor-v14.js`: 테스트 메뉴 카드 편집기
 - `css/style.css`: 공통 레이아웃과 컴포넌트
 - `css/test-editor.css`: 테스트 메뉴 카드 편집기 전용 스타일
 
