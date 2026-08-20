@@ -1954,6 +1954,27 @@
                     formatToolbar = null;
                 }
             };
+            const closeFormatToolbarOnOutsidePointerDown = (event) => {
+                if (formatToolbar && !formatToolbar.contains(event.target)) closeFormatToolbar();
+            };
+            const closeFormatToolbarOnSelectionChange = () => {
+                window.setTimeout(() => {
+                    if (!formatToolbar) return;
+                    const selection = window.getSelection();
+                    if (!selection || !selection.rangeCount || selection.isCollapsed) {
+                        closeFormatToolbar();
+                        return;
+                    }
+                    const range = selection.getRangeAt(0);
+                    if (!bodyField?.contains(range.commonAncestorContainer)) closeFormatToolbar();
+                }, 0);
+            };
+            const closeFormatToolbarForContextChange = () => closeFormatToolbar();
+            document.addEventListener('pointerdown', closeFormatToolbarOnOutsidePointerDown, true);
+            document.addEventListener('selectionchange', closeFormatToolbarOnSelectionChange);
+            window.addEventListener('wms-role-change', closeFormatToolbarForContextChange);
+            window.addEventListener('wms-auth-change', closeFormatToolbarForContextChange);
+            window.addEventListener('hashchange', closeFormatToolbarForContextChange);
             const activateBodyField = (field) => {
                 if (bodyField === field) return;
                 closeBulletPicker();
@@ -2201,7 +2222,7 @@
                 closeFormatToolbar();
                 formatToolbar = document.createElement('div');
                 formatToolbar.className = 'test-format-toolbar';
-                formatToolbar.innerHTML = '<button type="button" data-weight="700">Bold</button><button type="button" data-weight="400">Regular</button><span class="test-format-divider"></span><div class="test-format-colors"></div>';
+                formatToolbar.innerHTML = '<button type="button" data-weight="700">Bold</button><button type="button" data-weight="400">Regular</button><span class="test-format-divider"></span><div class="test-format-colors"></div><button type="button" class="test-format-toolbar-close" aria-label="서식 도구 닫기" title="닫기">&times;</button>';
                 const colors = [
                     ['#000000', '검은색'], ['#999999', '회색'], ['#ff0000', '빨간색'],
                     ['#ff9900', '주황색'], ['#0000ff', '파란색'], ['#ff00ff', '분홍색']
@@ -2218,17 +2239,22 @@
                 });
                 formatToolbar.querySelectorAll('button').forEach((button) => {
                     button.addEventListener('mousedown', (event) => event.preventDefault());
+                });
+                formatToolbar.querySelector('.test-format-toolbar-close').addEventListener('click', () => {
+                    closeFormatToolbar();
+                    bodyField.focus();
+                });
+                formatToolbar.querySelectorAll('button[data-weight], button[data-color]').forEach((button) => {
                     button.addEventListener('click', () => {
                         if (button.dataset.weight) applyBodyFormat('weight', button.dataset.weight);
                         if (button.dataset.color) applyBodyFormat('color', button.dataset.color);
                         bodyField.focus();
-                        closeFormatToolbar();
                     });
                 });
-                const toolbarWidth = 260;
+                document.body.appendChild(formatToolbar);
+                const toolbarWidth = formatToolbar.offsetWidth;
                 formatToolbar.style.left = Math.max(8, Math.min(x, window.innerWidth - toolbarWidth - 8)) + 'px';
                 formatToolbar.style.top = Math.max(8, Math.min(y, window.innerHeight - 58)) + 'px';
-                document.body.appendChild(formatToolbar);
             };
             const showBulletPicker = () => {
                 closeBulletPicker();
@@ -2660,6 +2686,11 @@
                     document.removeEventListener(eventName, blockOutsideInteraction, true);
                 });
                 document.removeEventListener('keydown', closePopupOnEscape);
+                document.removeEventListener('pointerdown', closeFormatToolbarOnOutsidePointerDown, true);
+                document.removeEventListener('selectionchange', closeFormatToolbarOnSelectionChange);
+                window.removeEventListener('wms-role-change', closeFormatToolbarForContextChange);
+                window.removeEventListener('wms-auth-change', closeFormatToolbarForContextChange);
+                window.removeEventListener('hashchange', closeFormatToolbarForContextChange);
                 closeBulletPicker();
                 closeFormatToolbar();
                 resizeCleanup?.();

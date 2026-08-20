@@ -139,6 +139,10 @@ assert.ok(testEditor.includes('html: getStoredBodyHtml(slot.field)'), 'Temporary
 assert.ok(testEditor.includes('getTextBeforeBodyLineBreakFiller'), 'Stale line-break fillers must be detected from actual DOM text order.');
 assert.ok(testEditor.includes("if (!isCompositionKey && (isEnterKey || event.key === 'Tab')) removeBodyLineBreakFillers();"), 'Text and IME input must keep the empty-line filler until content is inserted.');
 assert.ok(!testEditor.includes('const editsBody ='), 'Generic keydown handling must not remove the empty-line filler before text insertion.');
+assert.ok(testEditor.includes('test-format-toolbar-close'), 'The text format toolbar must provide an explicit close button.');
+assert.ok(testEditor.includes('closeFormatToolbarOnOutsidePointerDown'), 'The text format toolbar must close when clicking outside it.');
+assert.ok(testEditor.includes('closeFormatToolbarOnSelectionChange'), 'The text format toolbar must close when its text selection is cleared.');
+assert.ok(testEditor.includes('closeFormatToolbarForContextChange'), 'The text format toolbar must close when the editing context changes.');
 assert.ok(!/field\.addEventListener\('compositionstart',[\s\S]{0,180}removeBodyLineBreakFillers\(\);/.test(testEditor), 'IME composition start must not remove the empty-line filler.');
 assert.ok(!testEditor.includes("field.addEventListener('beforeinput'"), 'Body editing must not cancel the browser-native IME line break.');
 assert.ok(!testEditor.includes("field.addEventListener('keyup'"), 'Body editing must not add a delayed IME line-break fallback.');

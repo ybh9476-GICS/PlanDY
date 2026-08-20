@@ -1264,6 +1264,18 @@
     color: #1d4ed8;
 }
 
+.test-format-toolbar-close {
+    display: inline-grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    padding: 0 !important;
+    margin-left: 0.05rem;
+    font-size: 16px;
+    line-height: 1;
+}
+
 .test-format-divider {
     width: 1px;
     height: 20px;
