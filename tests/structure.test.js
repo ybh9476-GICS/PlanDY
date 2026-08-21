@@ -9,6 +9,7 @@ const source = fs.readFileSync(sourcePath, 'utf8');
 const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
 const appFeatures = fs.readFileSync(path.join(root, 'js', 'app-features.js'), 'utf8').replace(/\r\n/g, '\n');
 const rolePermissions = fs.readFileSync(path.join(root, 'js', 'role-permissions.js'), 'utf8');
+const cardContentModel = fs.readFileSync(path.join(root, 'js', 'card-content-model.js'), 'utf8');
 const testEditor = fs.readFileSync(path.join(root, 'js', 'test-editor-v14.js'), 'utf8');
 const testEditorCss = fs.readFileSync(path.join(root, 'css', 'test-editor.css'), 'utf8');
 const compatibilityPages = [
@@ -21,11 +22,11 @@ const expectedTabs = ['overview', 'floor', 'zone', 'rack', 'editor', 'route', 's
 const actualTabs = [...source.matchAll(/<section id="view-([^"]+)"/g)].map((match) => match[1]);
 assert.deepStrictEqual(actualTabs, expectedTabs, 'The menu panels changed unexpectedly.');
 
-for (const asset of ['css/style.css', 'css/test-editor.css', 'js/role-permissions.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
+for (const asset of ['css/style.css', 'css/test-editor.css', 'js/role-permissions.js', 'js/card-content-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
     assert.ok(fs.existsSync(path.join(root, asset)), `Missing runtime asset: ${asset}`);
 }
 
-for (const script of ['js/role-permissions.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
+for (const script of ['js/role-permissions.js', 'js/card-content-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
     const code = fs.readFileSync(path.join(root, script), 'utf8');
     new vm.Script(code, { filename: script });
 }
@@ -180,7 +181,31 @@ assert.ok(testEditor.includes('test-card-table-caption-icon'), 'Table title icon
 assert.ok(testEditor.includes('test-body-editor-panel'), 'Body editor panels were removed.');
 assert.ok(testEditor.includes('test-edit-content-blocks'), 'Dynamic content block container was removed.');
 assert.ok(testEditor.includes('contentBlocks'), 'Content block storage was removed.');
-assert.ok(testEditor.includes("['text', 'text2', 'table', 'image', 'pdf', 'googleDrive']"), 'Text, Text 2, table, image, PDF, and Google Drive blocks must be stored or copied.');
+assert.ok(source.indexOf('js/card-content-model.js') < source.indexOf('js/app.js'), 'The card content model must load before application initialization.');
+assert.ok(cardContentModel.includes('function registerBlockType(definition)'), 'Future card block formats must use the shared registry.');
+assert.ok(cardContentModel.includes("aliases: ['plainText', 'text2']"), 'Legacy text aliases must be confined to the compatibility model.');
+assert.ok(cardContentModel.includes('formatVersion: Math.max(textFormatVersion'), 'Canonical Text blocks must include an explicit format version without downgrading future data.');
+
+const cardContentContext = { window: {} };
+vm.createContext(cardContentContext);
+new vm.Script(cardContentModel, { filename: 'js/card-content-model.js' }).runInContext(cardContentContext);
+const runtimeContentModel = cardContentContext.window.wmsCardContentModel;
+for (const legacyType of ['plainText', 'text', 'text2']) {
+    const legacyBlock = { type: legacyType, text: 'preserved', html: '<b>preserved</b>' };
+    const normalizedBlock = runtimeContentModel.normalizeBlock(legacyBlock);
+    assert.strictEqual(normalizedBlock.type, 'text', `${legacyType} must be read as canonical Text.`);
+    assert.strictEqual(normalizedBlock.formatVersion, 2, `${legacyType} must use Text format version 2 in the editor.`);
+    assert.strictEqual(normalizedBlock.text, 'preserved', `${legacyType} text must be preserved.`);
+    assert.strictEqual(normalizedBlock.html, '<b>preserved</b>', `${legacyType} HTML must be preserved.`);
+    assert.strictEqual(legacyBlock.type, legacyType, `${legacyType} source data must not be rewritten while loading.`);
+}
+assert.strictEqual(runtimeContentModel.normalizeEditorType('text2'), 'text', 'Legacy body types must select the visible Text option.');
+assert.strictEqual(runtimeContentModel.normalizeEditorType('table'), 'table', 'Table body types must remain tables.');
+const futureTextBlock = runtimeContentModel.normalizeBlock({ type: 'text', formatVersion: 3, text: 'future' });
+assert.strictEqual(futureTextBlock.formatVersion, 3, 'Future Text versions must not be downgraded while reading.');
+assert.strictEqual(runtimeContentModel.isEditableBlock(futureTextBlock), false, 'Unsupported future Text versions must remain read-only.');
+assert.ok(testEditor.includes('const contentModel = window.wmsCardContentModel;'), 'The shared editor must use the card content model.');
+assert.ok(!testEditor.includes('contentModel.migrateRows'), 'Opening a page must not persist text-format migration automatically.');
 assert.ok(testEditor.includes('test-add-pdf-block'), 'PDF add button was removed.');
 assert.ok(testEditor.includes("type: 'pdf', pdfId"), 'PDF block metadata must be saved.');
 assert.ok(testEditor.includes('openOriginalPdf'), 'PDF original viewer was removed.');
@@ -189,28 +214,22 @@ assert.ok(testEditor.includes('test-add-google-drive-block'), 'Google Drive docu
 assert.ok(testEditor.includes('parseGoogleDriveDocumentUrl'), 'Google Drive URL validation was removed.');
 assert.ok(testEditor.includes('openGoogleDriveDocument'), 'Google Drive document viewer was removed.');
 assert.ok(testEditorCss.includes('.test-card-google-drive-frame'), 'Google Drive card preview styles are missing.');
-assert.ok(testEditor.includes('data-body-type="text" hidden>텍스트'), 'The original Text body type button must remain hidden instead of being removed.');
-assert.ok(testEditor.includes('data-body-type="text2">Text'), 'The Text 2 body type option must be displayed as Text.');
+assert.ok(testEditor.includes('data-body-type="text">Text'), 'The single visible Text body type option is missing.');
+assert.ok(!testEditor.includes('data-body-type="text2"'), 'The temporary Text 2 UI type must be removed.');
 assert.ok(testEditor.includes('data-body-type="table">Table'), 'The Table body type option must be displayed as Table.');
-assert.ok(!source.includes('js/text2-editor.js'), 'Text 2 must use the existing Text engine without a separate editor runtime.');
-assert.ok(!testEditor.includes('window.Text2Editor'), 'Text 2 must not use a reimplemented editor.');
-assert.ok(testEditor.includes("block.type === 'text' || block.type === 'text2'"), 'Text 2 must use the existing Text renderer.');
-assert.ok(testEditor.includes("type: slot.type, text: slot.field.textContent.replace(/\\r/g, ''), html: getStoredBodyHtml(slot.field)"), 'Text 2 must preserve the exact Text storage format while keeping its own type.');
-assert.ok(testEditor.includes('const getText2NumberMarker'), 'Text 2 must own its numbering marker rules.');
-assert.ok(testEditor.includes("return `${toText2Alphabetic(sequence)}.`;"), 'Text 2 second-level numbering must use alphabetic markers.');
-assert.ok(testEditor.includes("return `${toText2Roman(sequence)}.`;"), 'Text 2 third-level numbering must use Roman numeral markers.');
-assert.ok(testEditor.includes('if (!shiftKey && level >= 2) return true;'), 'Text 2 numbered lists must stop indenting at the third level.');
-assert.ok(testEditor.includes("const getText2BulletMarker = (level) => ['•', '◦', '-']"), 'Text 2 must own its three-level bullet marker rules.');
-assert.ok(testEditor.includes('const insertText2BulletLineBreak'), 'Text 2 bullet lists must continue with Enter.');
-assert.ok(testEditor.includes('const handleText2BulletIndent'), 'Text 2 bullet lists must handle Tab and Shift+Tab independently.');
-assert.ok(testEditor.includes('const isInitialText2Bullet = isText2BodyField()'), 'Text 2 must recognize the first bullet item separately.');
-assert.ok(testEditor.includes("isInitialText2Bullet ? '•' : getText2BulletMarker(level)"), 'The first Text 2 bullet must always start with a round bullet marker.');
-assert.ok(testEditor.includes("? '<button type=\"button\" data-bullet=\"number\">1</button><button type=\"button\" data-bullet=\"•\">•</button>'"), 'Text 2 slash picker must show only number and primary bullet buttons.');
-assert.ok(testEditor.includes("const bulletMarker = bodyType === 'text2' ? '[•◦▪-]'"), 'Text 2 viewer rendering must recognize the third-level bullet marker.');
-assert.ok(testEditor.includes('renderTestListBody(blockElement, block.html, block.text || \'\', block.type);'), 'Text 2 viewer rendering must receive the saved body type.');
-assert.ok(testEditor.includes("const numberMarker = bodyType === 'text2'"), 'Text 2 viewer rendering must recognize alphabetic and Roman list markers.');
-assert.ok(testEditor.includes("block?.type === 'plainText'"), 'Legacy Text 2 blocks must be migrated to Text.');
-assert.ok(testEditor.includes("? { type: 'text', text: String(block.text || ''), html:"), 'Legacy Text 2 data must retain text and HTML during migration.');
+assert.ok(!testEditor.includes("'text2'"), 'The editor runtime must not branch on the temporary Text 2 storage type.');
+assert.ok(testEditor.includes('const isRichTextBodyField'), 'The canonical Text editor state check is missing.');
+assert.ok(testEditor.includes('const getRichTextNumberMarker'), 'Canonical Text numbering rules are missing.');
+assert.ok(testEditor.includes("return `${toRichTextAlphabetic(sequence)}.`;"), 'Second-level numbering must use alphabetic markers.');
+assert.ok(testEditor.includes("return `${toRichTextRoman(sequence)}.`;"), 'Third-level numbering must use Roman numeral markers.');
+assert.ok(testEditor.includes('if (!shiftKey && level >= 2) return true;'), 'Numbered lists must stop indenting at the third level.');
+assert.ok(testEditor.includes("const getRichTextBulletMarker = (level) => ['•', '◦', '-']"), 'Text bullet indentation must retain three levels.');
+assert.ok(testEditor.includes('const insertRichTextBulletLineBreak'), 'Text bullet lists must continue with Enter.');
+assert.ok(testEditor.includes('const handleRichTextBulletIndent'), 'Text bullet lists must handle Tab and Shift+Tab.');
+assert.ok(testEditor.includes("bulletPicker.innerHTML = '<button type=\"button\" data-bullet=\"number\">1</button><button type=\"button\" data-bullet=\"•\">•</button>';"), 'The Text slash picker must show only number and primary bullet choices.');
+assert.ok(testEditor.includes("const numberMarker = '(?:\\\\d+|[a-z]+|[ivxlcdm]+)\\\\.';"), 'The Text viewer must recognize nested numbering markers.');
+assert.ok(testEditor.includes("const bulletMarker = '[•◦▪-]';"), 'The Text viewer must recognize nested bullet markers.');
+assert.ok(testEditor.includes('contentModel.createTextBlock'), 'Copy and save paths must emit canonical Text blocks.');
 assert.ok(testEditor.includes('test-add-image-block'), 'Image add button was removed.');
 assert.ok(testEditor.includes('hasUnsupportedCardContent'), 'Unsupported card content must lock editing.');
 assert.ok(!testEditor.includes("imageBlock.panel.querySelector('input')?.click();"), 'Adding an image block must not open the file chooser automatically.');

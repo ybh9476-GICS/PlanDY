@@ -1,5 +1,7 @@
 // Shared card editor. Each menu receives an isolated instance and data store.
 (function () {
+    const contentModel = window.wmsCardContentModel;
+    if (!contentModel) throw new Error('Card content model must load before the shared card editor.');
     const imageDatabaseName = 'wms-card-images-v1';
     const imageStoreName = 'images';
     let imageDatabasePromise = null;
@@ -120,7 +122,7 @@
                 const blocks = [];
                 const addBodyBlock = (body, html, bodyType, table) => {
                     if (bodyType === 'table' && table) blocks.push({ type: 'table', table });
-                    else if (body || html) blocks.push({ type: bodyType === 'text2' ? 'text2' : 'text', text: body || '', html: html || '' });
+                    else if (body || html) blocks.push(contentModel.createTextBlock({ text: body || '', html: html || '' }));
                 };
                 addBodyBlock(card.body, card.bodyHtml, card.bodyType, card.table);
                 addBodyBlock(card.body2, card.body2Html, card.body2Type, card.table2);
@@ -150,11 +152,7 @@
         const cardClipboardStorageKey = 'wms-test-card-clipboard-v1';
         const cardClipboardLifetime = 24 * 60 * 60 * 1000;
         const copyPlainValue = (value) => JSON.parse(JSON.stringify(value));
-        const normalizeContentBlocks = (blocks) => Array.isArray(blocks)
-            ? blocks.map((block) => block?.type === 'plainText'
-                ? { type: 'text', text: String(block.text || ''), html: typeof block.html === 'string' ? block.html : '' }
-                : block)
-            : [];
+        const normalizeContentBlocks = contentModel.normalizeBlocks;
         const getClipboardImageIds = (clipboard) => Array.isArray(clipboard?.contentBlocks)
             ? clipboard.contentBlocks.filter((block) => block.type === 'image' && block.imageId).map((block) => block.imageId)
             : [];
@@ -164,7 +162,7 @@
             typeof clipboard.title === 'string' &&
             typeof clipboard.description === 'string' &&
             Array.isArray(clipboard.contentBlocks) &&
-            clipboard.contentBlocks.every((block) => ['text', 'text2', 'table', 'image', 'pdf', 'googleDrive'].includes(block?.type)) &&
+            clipboard.contentBlocks.every((block) => contentModel.isEditableBlock(block)) &&
             Number(clipboard.expiresAt) > Date.now()
         );
         let cardClipboard = null;
@@ -172,7 +170,7 @@
             try {
                 const storedClipboard = JSON.parse(localStorage.getItem(cardClipboardStorageKey) || 'null');
                 if (isValidCardClipboard(storedClipboard)) {
-                    cardClipboard = storedClipboard;
+                    cardClipboard = { ...storedClipboard, contentBlocks: normalizeContentBlocks(storedClipboard.contentBlocks) };
                 } else if (storedClipboard) {
                     localStorage.removeItem(cardClipboardStorageKey);
                     getClipboardImageIds(storedClipboard).forEach((imageId) => removeImageBlob(imageId).catch(() => {}));
@@ -205,7 +203,7 @@
         const hasUnsupportedCardContent = (card) => {
             try {
                 const contentBlocks = card.dataset.contentBlocks ? JSON.parse(card.dataset.contentBlocks) : [];
-                return Array.isArray(contentBlocks) && contentBlocks.some((block) => !['text', 'text2', 'table', 'image', 'pdf', 'googleDrive'].includes(block?.type));
+                return Array.isArray(contentBlocks) && contentBlocks.some((block) => !contentModel.isEditableBlock(block));
             } catch (error) {
                 return true;
             }
@@ -545,7 +543,7 @@
 
         function addTestCard(type, initialCards = [], columnWidths = null) {
             const createCard = (initialCard = {}) => {
-                const contentBlocks = normalizeContentBlocks(initialCard.contentBlocks);
+                const contentBlocks = Array.isArray(initialCard.contentBlocks) ? copyPlainValue(initialCard.contentBlocks) : [];
                 const card = document.createElement('div');
                 card.className = 'test-created-card';
                 card.dataset.title = initialCard.title || '';
@@ -650,7 +648,8 @@
                 contentBlocksContainer.replaceChildren();
                 renderTestText(title, card.dataset.title || '');
                 renderTestText(description, card.dataset.description || '');
-                contentBlocks.forEach((block) => {
+                contentBlocks.forEach((storedBlock) => {
+                    const block = contentModel.normalizeBlock(storedBlock);
                     const blockElement = document.createElement('section');
                     blockElement.className = `test-card-content-block test-card-content-block-${block.type}`;
                     if (block.type === 'image' && block.imageId) {
@@ -704,8 +703,8 @@
                         blockElement.appendChild(driveFrame);
                     } else if (block.type === 'table') {
                         renderTestTable(blockElement, block.table);
-                    } else if (block.type === 'text' || block.type === 'text2') {
-                        renderTestListBody(blockElement, block.html, block.text || '', block.type);
+                    } else if (block.type === 'text') {
+                        renderTestListBody(blockElement, block.html, block.text || '');
                     } else if (block.type === 'diagram') {
                         const diagram = document.createElement('div');
                         diagram.className = 'mermaid test-card-diagram';
@@ -880,7 +879,7 @@
 
         // 입력 데이터는 그대로 유지하고, 카드 표시에서만 목록 줄을 기호/본문 영역으로 나눈다.
         // 따라서 좁은 카드에서도 자동 줄바꿈이 번호 또는 글머리 기호 아래로 내려가지 않는다.
-        function renderTestListBody(container, html, text, bodyType = 'text') {
+        function renderTestListBody(container, html, text) {
             const source = document.createElement('span');
             if (html) renderTestBody(source, html);
             else renderTestText(source, text || '');
@@ -929,9 +928,9 @@
             container.replaceChildren();
             lines.forEach((segments) => {
                 const plainText = segments.map((segment) => segment.text).join('');
-                const numberMarker = bodyType === 'text2' ? '(?:\\d+|[a-z]+|[ivxlcdm]+)\\.' : '\\d+\\.';
-                const bulletMarker = bodyType === 'text2' ? '[•◦▪-]' : '[•◦-]';
-                const listMatch = new RegExp(`^(\\s*)(${numberMarker}|${bulletMarker})\\s+`, bodyType === 'text2' ? 'i' : '').exec(plainText);
+                const numberMarker = '(?:\\d+|[a-z]+|[ivxlcdm]+)\\.';
+                const bulletMarker = '[•◦▪-]';
+                const listMatch = new RegExp(`^(\\s*)(${numberMarker}|${bulletMarker})\\s+`, 'i').exec(plainText);
                 const line = document.createElement('div');
                 line.className = 'test-card-body-line';
                 if (!listMatch) {
@@ -1114,7 +1113,7 @@
             const bodyTypeIsLocked = Boolean(card.dataset.contentBlocks && JSON.parse(card.dataset.contentBlocks).length) || card.dataset.bodyTypeLocked === 'true';
             const primarySlot = {
                 field: primaryBodyField,
-                type: card.dataset.bodyType || 'text',
+                type: contentModel.normalizeEditorType(card.dataset.bodyType),
                 tableData: card.dataset.table ? JSON.parse(card.dataset.table) : { title: '', hasHeader: true, hasFirstColumnHeader: false, rows: [['', '', ''], ['', '', ''], ['', '', '']] }
             };
             let bodyField = primaryBodyField;
@@ -1142,7 +1141,7 @@
                 primaryBodyField.parentElement.insertBefore(secondaryBodyField, primaryBodyField.nextSibling);
                 secondarySlot = {
                     field: secondaryBodyField,
-                    type: card.dataset.body2Type || 'text',
+                    type: contentModel.normalizeEditorType(card.dataset.body2Type),
                     tableData: card.dataset.table2 ? JSON.parse(card.dataset.table2) : { title: '', hasHeader: true, hasFirstColumnHeader: false, rows: [['', '', ''], ['', '', ''], ['', '', '']] }
                 };
                 bodySlots.push(secondarySlot);
@@ -1310,14 +1309,14 @@
             if (Array.isArray(storedContentBlocks)) {
                 let bodyIndex = 0;
                 storedContentBlocks.forEach((block, blockOrder) => {
-                    if (block.type !== 'text' && block.type !== 'text2' && block.type !== 'table') return;
+                    if (block.type !== 'text' && block.type !== 'table') return;
                     const slot = bodySlots[bodyIndex++];
                     if (!slot) return;
                     slot.type = block.type;
                     slot.tableData = block.type === 'table' ? (block.table || slot.tableData) : slot.tableData;
                     slot.typeLocked = true;
-                    slot.field.innerHTML = (block.type === 'text' || block.type === 'text2') ? (block.html || '') : '';
-                    if ((block.type === 'text' || block.type === 'text2') && !slot.field.innerHTML) slot.field.textContent = block.text || '';
+                    slot.field.innerHTML = block.type === 'text' ? (block.html || '') : '';
+                    if (block.type === 'text' && !slot.field.innerHTML) slot.field.textContent = block.text || '';
                     slot.active = true;
                     slot.blockOrder = blockOrder;
                 });
@@ -1498,7 +1497,7 @@
             const renderBodyType = () => {
                 if (!supportsTableBody) return;
                 bodySlots.forEach((slot) => {
-                    slot.field.style.display = (slot.type === 'text' || slot.type === 'text2') ? '' : 'none';
+                    slot.field.style.display = slot.type === 'text' ? '' : 'none';
                     slot.tableEditor.style.display = slot.type === 'table' ? 'block' : 'none';
                     slot.typeSection.querySelectorAll('[data-body-type]').forEach((button) => button.classList.toggle('selected', button.dataset.bodyType === slot.type));
                     if (slot.type === 'table') {
@@ -1530,7 +1529,7 @@
                     title.textContent = bodySlots.length > 1 ? `본문 ${index + 1}` : '본문';
                     const typeSection = document.createElement('section');
                     typeSection.className = 'test-body-type-section';
-                    typeSection.innerHTML = `<div class="test-body-type-options"><button type="button" data-body-type="text" hidden>텍스트</button><button type="button" data-body-type="text2">Text</button><button type="button" data-body-type="table">Table</button></div><p>최초 등록 후 본문 타입은 변경할 수 없습니다.</p>`;
+                    typeSection.innerHTML = `<div class="test-body-type-options"><button type="button" data-body-type="text">Text</button><button type="button" data-body-type="table">Table</button></div><p>최초 등록 후 본문 타입은 변경할 수 없습니다.</p>`;
                     const slotTableEditor = document.createElement('section');
                     slotTableEditor.className = 'test-table-editor-section';
                     contentArea.appendChild(panel);
@@ -1836,7 +1835,7 @@
                             if (slot?.active) {
                                 clipboardBlocks.push(slot.type === 'table'
                                     ? { type: 'table', table: copyPlainValue(slot.tableData) }
-                                    : { type: slot.type, text: slot.field.textContent.replace(/\r/g, ''), html: getStoredBodyHtml(slot.field) });
+                                    : contentModel.createTextBlock({ text: slot.field.textContent.replace(/\r/g, ''), html: getStoredBodyHtml(slot.field) }));
                                 continue;
                             }
                             const imageState = contentImageBlocks.find((item) => item.panel === element);
@@ -1899,14 +1898,14 @@
                     headerField.textContent = cardClipboard.title;
                     descriptionField.textContent = cardClipboard.description;
                     cardClipboard.contentBlocks.forEach((block) => {
-                        if (block.type === 'text' || block.type === 'text2' || block.type === 'table') {
+                        if (block.type === 'text' || block.type === 'table') {
                             const slot = bodySlots.find((item) => !item.active);
                             if (!slot) return;
                             slot.active = true;
                             slot.type = block.type;
                             slot.typeLocked = false;
                             slot.field.replaceChildren();
-                            if (block.type === 'text' || block.type === 'text2') {
+                            if (block.type === 'text') {
                                 slot.field.innerHTML = block.html || '';
                                 if (!slot.field.innerHTML) slot.field.textContent = block.text || '';
                             } else {
@@ -1929,7 +1928,7 @@
                     renderBodyType();
                     refreshBodyLabels();
                     resizeField(descriptionField);
-                    bodySlots.filter((slot) => slot.active && (slot.type === 'text' || slot.type === 'text2')).forEach((slot) => resizeField(slot.field));
+                    bodySlots.filter((slot) => slot.active && slot.type === 'text').forEach((slot) => resizeField(slot.field));
                     editTouched = true;
                     refreshClipboardActions();
                     showCardNotice('복사한 내용을 불러왔습니다. 등록을 눌러 저장하세요.');
@@ -1983,11 +1982,11 @@
                 bulletCommandEnd = null;
                 bodyField = field;
             };
-            const isText2BodyField = () => bodySlots.some((slot) => slot.field === bodyField && slot.type === 'text2');
-            const getText2IndentLevel = (indentation) => (
+            const isRichTextBodyField = () => bodySlots.some((slot) => slot.field === bodyField && slot.type === 'text');
+            const getRichTextIndentLevel = (indentation) => (
                 (indentation.match(/\t/g)?.length || 0) + Math.floor(indentation.replace(/\t/g, '').length / 4)
             );
-            const toText2Alphabetic = (value) => {
+            const toRichTextAlphabetic = (value) => {
                 let number = Math.max(1, value);
                 let result = '';
                 while (number > 0) {
@@ -1997,7 +1996,7 @@
                 }
                 return result;
             };
-            const toText2Roman = (value) => {
+            const toRichTextRoman = (value) => {
                 const symbols = [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
                 let number = Math.max(1, value);
                 let result = '';
@@ -2009,29 +2008,29 @@
                 });
                 return result;
             };
-            const getText2NumberMarker = (level, sequence) => {
+            const getRichTextNumberMarker = (level, sequence) => {
                 if (level === 0) return `${sequence}.`;
-                if (level === 1) return `${toText2Alphabetic(sequence)}.`;
-                return `${toText2Roman(sequence)}.`;
+                if (level === 1) return `${toRichTextAlphabetic(sequence)}.`;
+                return `${toRichTextRoman(sequence)}.`;
             };
-            const getText2NumberedLine = (line) => /^(\s*)((?:\d+|[a-z]+|[ivxlcdm]+)\.)\s(.*)$/i.exec(line);
-            const getText2BulletMarker = (level) => ['•', '◦', '-'][Math.min(2, Math.max(0, level))];
-            const getText2BulletLine = (line) => /^(\s*)([•◦▪-])\s(.*)$/.exec(line);
-            const getText2NumberSequence = (value, lineStart, level) => {
+            const getRichTextNumberedLine = (line) => /^(\s*)((?:\d+|[a-z]+|[ivxlcdm]+)\.)\s(.*)$/i.exec(line);
+            const getRichTextBulletMarker = (level) => ['•', '◦', '-'][Math.min(2, Math.max(0, level))];
+            const getRichTextBulletLine = (line) => /^(\s*)([•◦▪-])\s(.*)$/.exec(line);
+            const getRichTextNumberSequence = (value, lineStart, level) => {
                 const precedingLines = value.slice(0, lineStart).split('\n');
                 let sequence = 0;
                 for (let index = precedingLines.length - 1; index >= 0; index -= 1) {
                     const candidate = precedingLines[index];
                     const candidateIndentation = (candidate.match(/^\s*/) || [''])[0];
-                    const candidateLevel = getText2IndentLevel(candidateIndentation);
+                    const candidateLevel = getRichTextIndentLevel(candidateIndentation);
                     if (candidateLevel < level) break;
                     if (candidateLevel > level) continue;
-                    if (!getText2NumberedLine(candidate)) break;
+                    if (!getRichTextNumberedLine(candidate)) break;
                     sequence += 1;
                 }
                 return sequence;
             };
-            const renumberText2NumberedLines = (selectionStart, selectionEnd = selectionStart) => {
+            const renumberRichTextNumberedLines = (selectionStart, selectionEnd = selectionStart) => {
                 const value = getBodyValue();
                 const edits = [];
                 const counters = new Map();
@@ -2039,8 +2038,8 @@
                 let lineStart = 0;
                 value.split('\n').forEach((line, lineIndex) => {
                     const indentation = (line.match(/^\s*/) || [''])[0];
-                    const level = getText2IndentLevel(indentation);
-                    const numbered = getText2NumberedLine(line);
+                    const level = getRichTextIndentLevel(indentation);
+                    const numbered = getRichTextNumberedLine(line);
                     if (!numbered || level > 2) {
                         if (level === 0) counters.delete('root');
                         else if (parentIds[level - 1]) counters.delete(parentIds[level - 1]);
@@ -2051,7 +2050,7 @@
                     const parentId = level === 0 ? 'root' : (parentIds[level - 1] || `orphan-${level}`);
                     const sequence = (counters.get(parentId) || 0) + 1;
                     counters.set(parentId, sequence);
-                    const marker = getText2NumberMarker(level, sequence);
+                    const marker = getRichTextNumberMarker(level, sequence);
                     const markerStart = lineStart + numbered[1].length;
                     const markerEnd = markerStart + numbered[2].length;
                     if (numbered[2] !== marker) edits.push({ start: markerStart, end: markerEnd, value: marker });
@@ -2068,65 +2067,65 @@
                 setBodySelection(nextSelection.start, nextSelection.end);
                 return nextSelection;
             };
-            const insertText2NumberedLineBreak = () => {
+            const insertRichTextNumberedLineBreak = () => {
                 const value = getBodyValue();
                 const selection = getBodySelection();
                 const lineStart = value.lastIndexOf('\n', selection.start - 1) + 1;
                 const currentLine = value.slice(lineStart, selection.start);
-                const numbered = getText2NumberedLine(currentLine);
+                const numbered = getRichTextNumberedLine(currentLine);
                 if (!numbered) return false;
-                const level = getText2IndentLevel(numbered[1]);
+                const level = getRichTextIndentLevel(numbered[1]);
                 if (level > 2) return false;
-                const sequence = getText2NumberSequence(value, lineStart, level);
-                const nextLine = `\n${numbered[1]}${getText2NumberMarker(level, sequence + 1)} `;
+                const sequence = getRichTextNumberSequence(value, lineStart, level);
+                const nextLine = `\n${numbered[1]}${getRichTextNumberMarker(level, sequence + 1)} `;
                 replaceBodyRange(selection.start, selection.end, nextLine);
                 const caret = selection.start + nextLine.length;
-                renumberText2NumberedLines(caret);
+                renumberRichTextNumberedLines(caret);
                 return true;
             };
-            const insertText2BulletLineBreak = () => {
+            const insertRichTextBulletLineBreak = () => {
                 const value = getBodyValue();
                 const selection = getBodySelection();
                 const lineStart = value.lastIndexOf('\n', selection.start - 1) + 1;
                 const currentLine = value.slice(lineStart, selection.start);
-                const bullet = getText2BulletLine(currentLine);
+                const bullet = getRichTextBulletLine(currentLine);
                 if (!bullet) return false;
-                const level = getText2IndentLevel(bullet[1]);
+                const level = getRichTextIndentLevel(bullet[1]);
                 if (level > 2) return false;
-                const nextLine = `\n${bullet[1]}${getText2BulletMarker(level)} `;
+                const nextLine = `\n${bullet[1]}${getRichTextBulletMarker(level)} `;
                 replaceBodyRange(selection.start, selection.end, nextLine);
                 return true;
             };
-            const handleText2NumberIndent = (value, start, end, lineStart, lineEnd, shiftKey) => {
+            const handleRichTextNumberIndent = (value, start, end, lineStart, lineEnd, shiftKey) => {
                 const selected = value.slice(lineStart, lineEnd);
                 const selectedLines = selected.split('\n');
-                if (!selectedLines.some((line) => getText2NumberedLine(line))) return false;
+                if (!selectedLines.some((line) => getRichTextNumberedLine(line))) return false;
                 if (start === end) {
                     const line = selectedLines[0];
-                    const numbered = getText2NumberedLine(line);
+                    const numbered = getRichTextNumberedLine(line);
                     if (!numbered) return false;
-                    const level = getText2IndentLevel(numbered[1]);
+                    const level = getRichTextIndentLevel(numbered[1]);
                     if (!shiftKey && level >= 2) return true;
                     if (!shiftKey) {
                         replaceBodyRange(lineStart, lineStart, '    ');
-                        renumberText2NumberedLines(start + 4);
+                        renumberRichTextNumberedLines(start + 4);
                         return true;
                     }
                     if (level > 0) {
                         const removeLength = line.startsWith('\t') ? 1 : 4;
                         replaceBodyRange(lineStart, lineStart + removeLength, '');
-                        renumberText2NumberedLines(Math.max(lineStart, start - removeLength));
+                        renumberRichTextNumberedLines(Math.max(lineStart, start - removeLength));
                         return true;
                     }
                     const prefixLength = numbered[1].length + numbered[2].length + 1;
                     replaceBodyRange(lineStart, lineStart + prefixLength, '');
-                    renumberText2NumberedLines(Math.max(lineStart, start - prefixLength));
+                    renumberRichTextNumberedLines(Math.max(lineStart, start - prefixLength));
                     return true;
                 }
                 const changed = selectedLines.map((line) => {
-                    const numbered = getText2NumberedLine(line);
+                    const numbered = getRichTextNumberedLine(line);
                     if (!shiftKey) {
-                        if (numbered && getText2IndentLevel(numbered[1]) >= 2) return line;
+                        if (numbered && getRichTextIndentLevel(numbered[1]) >= 2) return line;
                         return `    ${line}`;
                     }
                     if (/^(    |\t)/.test(line)) return line.replace(/^(    |\t)/, '');
@@ -2134,18 +2133,18 @@
                     return line.replace(/^([•◦-])\s/, '');
                 }).join('\n');
                 replaceBodyRange(lineStart, lineEnd, changed);
-                renumberText2NumberedLines(lineStart + changed.length);
+                renumberRichTextNumberedLines(lineStart + changed.length);
                 return true;
             };
-            const handleText2BulletIndent = (value, start, end, lineStart, lineEnd, shiftKey) => {
+            const handleRichTextBulletIndent = (value, start, end, lineStart, lineEnd, shiftKey) => {
                 const selectedLines = value.slice(lineStart, lineEnd).split('\n');
-                if (!selectedLines.some((line) => getText2BulletLine(line))) return false;
+                if (!selectedLines.some((line) => getRichTextBulletLine(line))) return false;
                 const edits = [];
                 let currentLineStart = lineStart;
                 selectedLines.forEach((line) => {
-                    const bullet = getText2BulletLine(line);
+                    const bullet = getRichTextBulletLine(line);
                     if (!shiftKey) {
-                        if (bullet && getText2IndentLevel(bullet[1]) >= 2) {
+                        if (bullet && getRichTextIndentLevel(bullet[1]) >= 2) {
                             currentLineStart += line.length + 1;
                             return;
                         }
@@ -2155,7 +2154,7 @@
                             edits.push({
                                 start: markerStart,
                                 end: markerStart + bullet[2].length,
-                                value: getText2BulletMarker(getText2IndentLevel(bullet[1]) + 1)
+                                value: getRichTextBulletMarker(getRichTextIndentLevel(bullet[1]) + 1)
                             });
                         }
                     } else if (/^(    |\t)/.test(line)) {
@@ -2165,7 +2164,7 @@
                             edits.push({
                                 start: markerStart,
                                 end: markerStart + bullet[2].length,
-                                value: getText2BulletMarker(getText2IndentLevel(bullet[1]) - 1)
+                                value: getRichTextBulletMarker(getRichTextIndentLevel(bullet[1]) - 1)
                             });
                         }
                         edits.push({ start: currentLineStart, end: currentLineStart + remove.length, value: '' });
@@ -2260,9 +2259,7 @@
                 closeBulletPicker();
                 bulletPicker = document.createElement('div');
                 bulletPicker.className = 'test-bullet-picker';
-                bulletPicker.innerHTML = isText2BodyField()
-                    ? '<button type="button" data-bullet="number">1</button><button type="button" data-bullet="•">•</button>'
-                    : '<button type="button" data-bullet="number">1</button><button type="button" data-bullet="•">•</button><button type="button" data-bullet="◦">◦</button><button type="button" data-bullet="-">-</button>';
+                bulletPicker.innerHTML = '<button type="button" data-bullet="number">1</button><button type="button" data-bullet="•">•</button>';
                 const fieldRect = bodyField.getBoundingClientRect();
                 bulletPicker.style.left = Math.min(fieldRect.left, window.innerWidth - 190) + 'px';
                 bulletPicker.style.top = Math.min(fieldRect.top + 34, window.innerHeight - 70) + 'px';
@@ -2282,16 +2279,16 @@
                         const replaceEnd = bulletCommandEnd === null ? cursor : bulletCommandEnd;
                         const fieldValue = getBodyValue();
                         const lineStart = fieldValue.lastIndexOf('\n', replaceStart - 1) + 1;
-                        const isInitialText2Bullet = isText2BodyField() &&
+                        const isInitialRichTextBullet = isRichTextBodyField() &&
                             button.dataset.bullet !== 'number' &&
                             fieldValue.slice(0, replaceStart).trim() === '';
-                        if (isInitialText2Bullet) replaceStart = lineStart;
+                        if (isInitialRichTextBullet) replaceStart = lineStart;
                         const indentation = (fieldValue.slice(lineStart, replaceStart).match(/^\s*/) || [''])[0];
-                        const level = getText2IndentLevel(indentation);
-                        const sequence = getText2NumberSequence(fieldValue, lineStart, level) + 1;
+                        const level = getRichTextIndentLevel(indentation);
+                        const sequence = getRichTextNumberSequence(fieldValue, lineStart, level) + 1;
                         const bulletText = button.dataset.bullet === 'number'
-                            ? (isText2BodyField() ? `${getText2NumberMarker(level, sequence)} ` : '1. ')
-                            : (isText2BodyField() ? `${isInitialText2Bullet ? '•' : getText2BulletMarker(level)} ` : button.dataset.bullet + ' ');
+                            ? `${getRichTextNumberMarker(level, sequence)} `
+                            : `${isInitialRichTextBullet ? '•' : getRichTextBulletMarker(level)} `;
                         replaceBodyRange(replaceStart, replaceEnd, bulletText);
                         bodyField.focus();
                         editTouched = true;
@@ -2322,11 +2319,11 @@
                 const cursor = selection.end;
                 const lineStart = value.lastIndexOf('\n', cursor - 1) + 1;
                 const lineBeforeCursor = value.slice(lineStart, cursor);
-                const text2NumberMarker = isText2BodyField() ? '(?:\\d+|[a-z]+|[ivxlcdm]+)' : '\\d+';
-                const text2BulletMarker = isText2BodyField() ? '[•◦▪-]' : '[•◦-]';
+                const richTextNumberMarker = '(?:\\d+|[a-z]+|[ivxlcdm]+)';
+                const richTextBulletMarker = '[•◦▪-]';
                 const prefixedSlash = new RegExp(
-                    `^(\\s*)(?:${text2NumberMarker}\\.|${text2BulletMarker})\\s*\\/$`,
-                    isText2BodyField() ? 'i' : ''
+                    `^(\\s*)(?:${richTextNumberMarker}\\.|${richTextBulletMarker})\\s*\\/$`,
+                    'i'
                 ).exec(lineBeforeCursor);
                 if (prefixedSlash) {
                     bulletCommandStart = lineStart + prefixedSlash[1].length;
@@ -2343,11 +2340,11 @@
                 }
             };
             const insertBodyLineBreak = () => {
-                if (isText2BodyField() && insertText2NumberedLineBreak()) {
+                if (isRichTextBodyField() && insertRichTextNumberedLineBreak()) {
                     bodyInputHandler();
                     return;
                 }
-                if (isText2BodyField() && insertText2BulletLineBreak()) {
+                if (isRichTextBodyField() && insertRichTextBulletLineBreak()) {
                     bodyInputHandler();
                     return;
                 }
@@ -2518,11 +2515,11 @@
                     insertBodyLineBreak();
                 } else if (event.key === 'Tab') {
                     event.preventDefault();
-                    if (isText2BodyField() && handleText2NumberIndent(value, start, end, lineStart, lineEnd, event.shiftKey)) {
+                    if (isRichTextBodyField() && handleRichTextNumberIndent(value, start, end, lineStart, lineEnd, event.shiftKey)) {
                         bodyInputHandler();
                         return;
                     }
-                    if (isText2BodyField() && handleText2BulletIndent(value, start, end, lineStart, lineEnd, event.shiftKey)) {
+                    if (isRichTextBodyField() && handleRichTextBulletIndent(value, start, end, lineStart, lineEnd, event.shiftKey)) {
                         bodyInputHandler();
                         return;
                     }
@@ -2720,7 +2717,7 @@
                             if (slot?.active) {
                                 blocks.push(slot.type === 'table'
                                     ? { type: 'table', table: slot.tableData }
-                                    : { type: slot.type, text: slot.field.textContent.replace(/\r/g, ''), html: getStoredBodyHtml(slot.field) });
+                                    : contentModel.createTextBlock({ text: slot.field.textContent.replace(/\r/g, ''), html: getStoredBodyHtml(slot.field) }));
                                 continue;
                             }
                             const imageState = contentImageBlocks.find((item) => item.panel === element);
