@@ -147,12 +147,16 @@
 <div id="menuManagerModal" class="menu-manager-modal" aria-hidden="true">
     <div class="menu-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="menuManagerTitle">
         <div class="menu-manager-header">
-            <div><h2 id="menuManagerTitle">메뉴 관리</h2><p>모든 메뉴를 숨기거나 삭제할 수 있습니다. 삭제해도 연결된 화면 데이터는 유지됩니다.</p></div>
+            <div><h2 id="menuManagerTitle">메뉴 관리</h2><p>메인·하위 메뉴를 같은 방식으로 관리합니다. 하위 메뉴가 있는 메인 메뉴는 하위 메뉴를 먼저 삭제해야 삭제할 수 있습니다.</p></div>
             <button id="menuManagerCloseBtn" class="menu-manager-close" type="button" aria-label="닫기">×</button>
         </div>
         <form id="menuAddForm" class="menu-add-form">
-            <label for="menuNameInput">새 메뉴 이름</label>
-            <div><input id="menuNameInput" type="text" maxlength="30" placeholder="예: 입출고 현황" autocomplete="off"><button id="menuAddBtn" type="submit" disabled>추가</button></div>
+            <label for="menuNameInput">새 메뉴</label>
+            <div class="menu-add-fields">
+                <select id="menuParentSelect" aria-label="새 메뉴 계층"><option value="">메인 메뉴</option></select>
+                <input id="menuNameInput" type="text" maxlength="30" placeholder="예: 입출고 현황" autocomplete="off">
+                <button id="menuAddBtn" type="submit" disabled>추가</button>
+            </div>
         </form>
         <div id="menuManagerList" class="menu-manager-list"></div>
         <section class="content-sync-actions permission-editor-only" aria-label="콘텐츠 JSON 관리">
@@ -818,7 +822,8 @@
 <script src="js/role-permissions.js?v=brand-sync-v2"></script>
 <script src="js/content-sync.js?v=content-json-v1"></script>
 <script src="js/card-content-model.js?v=text-model-v2"></script>
-<script src="js/app.js?v=local-login-v1"></script>
+<script src="js/menu-tree-model.js?v=menu-tree-v1"></script>
+<script src="js/app.js?v=menu-tree-v1"></script>
 
 <!-- Search Modal Overlay -->
 <div id="searchModal" class="search-modal-overlay" style="display:none;">

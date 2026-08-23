@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '..');
 const sourcePath = path.join(root, 'index.html');
 const source = fs.readFileSync(sourcePath, 'utf8');
 const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
+const menuTreeModel = require(path.join(root, 'js', 'menu-tree-model.js'));
 const appFeatures = fs.readFileSync(path.join(root, 'js', 'app-features.js'), 'utf8').replace(/\r\n/g, '\n');
 const rolePermissions = fs.readFileSync(path.join(root, 'js', 'role-permissions.js'), 'utf8');
 const cardContentModel = fs.readFileSync(path.join(root, 'js', 'card-content-model.js'), 'utf8');
@@ -22,11 +23,11 @@ const expectedTabs = ['overview', 'floor', 'zone', 'rack', 'editor', 'route', 's
 const actualTabs = [...source.matchAll(/<section id="view-([^"]+)"/g)].map((match) => match[1]);
 assert.deepStrictEqual(actualTabs, expectedTabs, 'The menu panels changed unexpectedly.');
 
-for (const asset of ['css/style.css', 'css/test-editor.css', 'js/role-permissions.js', 'js/card-content-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
+for (const asset of ['css/style.css', 'css/test-editor.css', 'js/role-permissions.js', 'js/card-content-model.js', 'js/menu-tree-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
     assert.ok(fs.existsSync(path.join(root, asset)), `Missing runtime asset: ${asset}`);
 }
 
-for (const script of ['js/role-permissions.js', 'js/card-content-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
+for (const script of ['js/role-permissions.js', 'js/card-content-model.js', 'js/menu-tree-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
     const code = fs.readFileSync(path.join(root, script), 'utf8');
     new vm.Script(code, { filename: script });
 }
@@ -64,6 +65,13 @@ assert.ok(rolePermissions.includes('영문·숫자만 사용할 수 있습니다
 assert.ok(rolePermissions.includes("hint.textContent = '입력 완료';"), 'Completed credentials must be announced.');
 assert.ok(rolePermissions.includes("window.location.hash = '';"), 'Logout must clear the current route.');
 assert.ok(app.includes('window.wmsPermissions?.isAuthenticated?.() !== true'), 'Routing must block unauthenticated menu access.');
+assert.ok(source.indexOf('js/menu-tree-model.js') < source.indexOf('js/app.js'), 'The menu hierarchy model must load before the router.');
+assert.ok(source.includes('id="menuParentSelect"'), 'Menu management must allow a main or submenu parent to be selected.');
+assert.ok(app.includes("schemaVersion: 2, menus, deletedBuiltinIds"), 'Hierarchical menu settings must persist their schema version.');
+assert.ok(app.includes('이 메뉴에는 하위 메뉴가 있어 삭제할 수 없습니다.'), 'Main menus with children must be protected from deletion.');
+assert.ok(app.includes('remove.disabled = menuHasChildren(menu.id)'), 'The delete control must explain unavailable parent deletion before execution.');
+assert.ok(app.includes("const iconMarkup = isSubmenu ? '' : menu.icon;"), 'Submenus must omit icons without deleting their stored icon metadata.');
+assert.ok(app.includes("createMenuLink(child, true)"), 'Child links must use the submenu rendering path.');
 assert.ok(source.includes('id="sidebarTitle"') && source.includes('기획 템플릿'), 'The sidebar title was not updated.');
 assert.ok(source.includes('id="sidebarSubtitle"') && source.includes('기획 배포 탬플릿 R&amp;D'), 'The sidebar subtitle was not updated.');
 assert.ok(source.includes('data-original-title="YUPOONG"'), 'The original sidebar logo label must remain recoverable.');
@@ -199,6 +207,32 @@ for (const legacyType of ['plainText', 'text', 'text2']) {
     assert.strictEqual(normalizedBlock.html, '<b>preserved</b>', `${legacyType} HTML must be preserved.`);
     assert.strictEqual(legacyBlock.type, legacyType, `${legacyType} source data must not be rewritten while loading.`);
 }
+
+const normalizedLegacyMenus = menuTreeModel.normalizeMenus([
+    { id: 'first', label: '첫 번째', order: 4 },
+    { id: 'second', label: '두 번째', order: 9 }
+]);
+assert.deepStrictEqual(normalizedLegacyMenus.map(menu => [menu.id, menu.parentId, menu.order]), [
+    ['first', null, 0], ['second', null, 1]
+], 'Legacy flat menus must migrate to ordered main menus without changing IDs.');
+
+const hierarchicalMenus = menuTreeModel.normalizeMenus([
+    { id: 'main-a', label: '메인 A', parentId: null, visible: true, order: 0 },
+    { id: 'child-a1', label: '하위 A1', parentId: 'main-a', visible: true, order: 0 },
+    { id: 'child-a2', label: '하위 A2', parentId: 'main-a', visible: true, order: 1 },
+    { id: 'main-b', label: '메인 B', parentId: null, visible: false, order: 1 },
+    { id: 'child-b1', label: '하위 B1', parentId: 'main-b', visible: true, order: 0 }
+]);
+assert.deepStrictEqual(menuTreeModel.getVisibleMenus(hierarchicalMenus).map(menu => menu.id), ['main-a', 'child-a1', 'child-a2'], 'Children of hidden main menus must not be routable.');
+assert.strictEqual(menuTreeModel.getPathLabel(hierarchicalMenus, 'child-a1'), '메인 A > 하위 A1', 'Submenu labels must include their main-menu path.');
+assert.strictEqual(menuTreeModel.hasChildren(hierarchicalMenus, 'main-a'), true, 'Main-menu deletion guards must detect children.');
+assert.deepStrictEqual(menuTreeModel.moveWithinParent(hierarchicalMenus, 'child-a2', -1).filter(menu => menu.parentId === 'main-a').map(menu => menu.id), ['child-a2', 'child-a1'], 'Submenu ordering must remain within the same parent.');
+const invalidGrandchild = menuTreeModel.normalizeMenus([
+    { id: 'main', label: '메인', parentId: null, order: 0 },
+    { id: 'child', label: '하위', parentId: 'main', order: 0 },
+    { id: 'grandchild', label: '3단계', parentId: 'child', order: 0 }
+]);
+assert.strictEqual(menuTreeModel.getMenu(invalidGrandchild, 'grandchild').parentId, null, 'Unsupported third-level menus must be promoted instead of becoming unreachable.');
 assert.strictEqual(runtimeContentModel.normalizeEditorType('text2'), 'text', 'Legacy body types must select the visible Text option.');
 assert.strictEqual(runtimeContentModel.normalizeEditorType('table'), 'table', 'Table body types must remain tables.');
 const futureTextBlock = runtimeContentModel.normalizeBlock({ type: 'text', formatVersion: 3, text: 'future' });
@@ -275,8 +309,13 @@ assert.ok(testEditor.includes('initialValues.tables.some(Boolean)'), 'Table card
 assert.ok(testEditor.includes('test-card-edit-copy'), 'Card copy action was removed from the edit dialog.');
 assert.ok(testEditor.includes('test-card-edit-paste'), 'Empty-card paste action was removed from the edit dialog.');
 assert.ok(testEditor.includes("cardClipboardStorageKey = 'wms-test-card-clipboard-v1'"), 'Structured card clipboard persistence was removed.');
+assert.ok(testEditor.includes('function readCardClipboard()'), 'Every card editor must read the shared card clipboard.');
+assert.ok(!testEditor.includes("if (testCardList.id === 'testCardList')"), 'Card clipboard loading must not be limited to the Test menu.');
+assert.ok(testEditor.includes('const sharedClipboard = readCardClipboard();'), 'Paste visibility and execution must use the latest shared clipboard value.');
+assert.ok(testEditor.includes("clipboardBlocks.push({ type: 'pdf', pdfId, fileName:"), 'Card copy must preserve PDF blocks.');
 assert.ok(testEditor.includes('clipboardSource: Boolean(savedBlock?.clipboardSource)'), 'Pasted images must remain distinguishable from saved card images.');
 assert.ok(testEditor.includes("imageState.file || (imageState.clipboardSource && imageState.imageId)"), 'Pasted images must be cloned into independent card image IDs.');
+assert.ok(testEditor.includes("pdfState.file || (pdfState.clipboardSource && pdfState.pdfId)"), 'Pasted PDFs must be cloned into independent asset IDs.');
 assert.ok(testEditor.includes('!cardHasStoredContent(card)'), 'Paste must remain restricted to empty cards.');
 assert.ok(testEditorCss.includes('.test-card-edit-paste'), 'Card paste button styling was removed.');
 assert.ok(testEditorCss.includes('.test-card-edit-copy'), 'Card copy button styling was removed.');

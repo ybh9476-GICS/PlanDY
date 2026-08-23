@@ -170,6 +170,7 @@ function inferMenuIcon(label) {
 }
 const defaultMenus = Array.from(navMenu.querySelectorAll('.nav-link')).map((link, index) => ({
     id: link.getAttribute('data-tab'),
+    parentId: null,
     label: link.querySelector('.hide-on-collapse').textContent.trim(),
     tooltip: link.getAttribute('data-tooltip'),
     icon: link.querySelector('svg').outerHTML,
@@ -187,21 +188,37 @@ function escapeHtml(value) {
 function loadMenus() {
     try {
         const saved = JSON.parse(localStorage.getItem(menuStorageKey));
-        if (!saved || !Array.isArray(saved.menus)) return defaultMenus.map(menu => ({ ...menu }));
+        if (!saved || !Array.isArray(saved.menus)) return window.WmsMenuTreeModel.normalizeMenus(defaultMenus);
         deletedBuiltinIds = Array.isArray(saved.deletedBuiltinIds) ? saved.deletedBuiltinIds : [];
         const savedById = new Map(saved.menus.map(menu => [menu.id, menu]));
         const builtins = defaultMenus
             .filter(menu => !deletedBuiltinIds.includes(menu.id))
             .map(menu => ({ ...menu, ...(savedById.get(menu.id) || {}), builtin: true }));
         const customs = saved.menus.filter(menu => !menu.builtin && typeof menu.id === 'string' && typeof menu.label === 'string');
-        return [...builtins, ...customs].sort((a, b) => a.order - b.order);
-    } catch (_) { return defaultMenus.map(menu => ({ ...menu })); }
+        return window.WmsMenuTreeModel.normalizeMenus([...builtins, ...customs]);
+    } catch (_) { return window.WmsMenuTreeModel.normalizeMenus(defaultMenus); }
 }
 
 let deletedBuiltinIds = [];
 let menus = loadMenus();
-function saveMenus() { localStorage.setItem(menuStorageKey, JSON.stringify({ menus, deletedBuiltinIds })); }
-function getVisibleTabs() { return menus.filter(menu => menu.visible !== false).map(menu => menu.id); }
+function saveMenus() {
+    localStorage.setItem(menuStorageKey, JSON.stringify({ schemaVersion: 2, menus, deletedBuiltinIds }));
+}
+function getMenu(id) { return window.WmsMenuTreeModel.getMenu(menus, id); }
+function getRootMenus() { return window.WmsMenuTreeModel.getRootMenus(menus); }
+function getChildMenus(parentId) { return window.WmsMenuTreeModel.getChildren(menus, parentId); }
+function menuHasChildren(parentId) { return window.WmsMenuTreeModel.hasChildren(menus, parentId); }
+function getVisibleMenus() { return window.WmsMenuTreeModel.getVisibleMenus(menus); }
+function getVisibleTabs() { return getVisibleMenus().map(menu => menu.id); }
+
+window.wmsMenuTree = {
+    getMenu: id => getMenu(id),
+    getParent: id => {
+        const menu = getMenu(id);
+        return menu?.parentId ? getMenu(menu.parentId) : null;
+    },
+    getPathLabel: id => window.WmsMenuTreeModel.getPathLabel(menus, id)
+};
 
 function ensureCustomPanel(menu) {
     let panel = document.getElementById('view-' + menu.id);
@@ -511,19 +528,86 @@ function handleNavClick(event) {
     switchTab(tabId);
 }
 
+let expandedMainMenuId = null;
+
+function createMenuLink(menu, isSubmenu = false) {
+    if (!menu.builtin) ensureCustomPanel(menu);
+    const iconMarkup = isSubmenu ? '' : menu.icon;
+    const link = document.createElement('a');
+    link.href = '#' + menu.id;
+    link.dataset.tab = menu.id;
+    link.dataset.tooltip = menu.tooltip || menu.label;
+    link.dataset.menuLevel = isSubmenu ? 'submenu' : 'main';
+    link.className = 'nav-link ' + (isSubmenu ? 'nav-link-submenu' : 'nav-link-main');
+    link.innerHTML = '<div class="nav-link-indicator" style="display:none;"></div>' + iconMarkup + '<span class="hide-on-collapse">' + escapeHtml(menu.label) + '</span>';
+    link.addEventListener('click', handleNavClick);
+    return link;
+}
+
+function updateSidebarMenuState(tabId) {
+    const activeMenu = getMenu(tabId);
+    const activeMainId = activeMenu?.parentId || activeMenu?.id || null;
+
+    navMenu.querySelectorAll('[data-menu-group]').forEach(group => {
+        const mainId = group.dataset.menuGroup;
+        const isExpanded = mainId === expandedMainMenuId;
+        const submenu = group.querySelector('.nav-submenu');
+        const toggle = group.querySelector('.nav-submenu-toggle');
+        const mainLink = group.querySelector('.nav-link-main');
+        if (submenu) submenu.hidden = !isExpanded;
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', String(isExpanded));
+            toggle.title = isExpanded ? '하위 메뉴 접기' : '하위 메뉴 펼치기';
+        }
+        mainLink?.classList.toggle('has-active-child', Boolean(activeMenu?.parentId && activeMainId === mainId));
+    });
+
+    navMenu.querySelectorAll('.nav-link[data-tab]').forEach(link => {
+        const isTarget = link.dataset.tab === tabId;
+        link.classList.toggle('active', isTarget);
+        const indicator = link.querySelector('.nav-link-indicator');
+        if (indicator) indicator.style.display = isTarget ? 'block' : 'none';
+    });
+}
+
 function renderMenus() {
     navMenu.replaceChildren();
-    menus.filter(menu => menu.visible !== false).sort((a, b) => a.order - b.order).forEach(menu => {
-        if (!menu.builtin) ensureCustomPanel(menu);
-        const link = document.createElement('a');
-        link.href = '#' + menu.id;
-        link.dataset.tab = menu.id;
-        link.dataset.tooltip = menu.tooltip || menu.label;
-        link.className = 'nav-link';
-        link.innerHTML = '<div class="nav-link-indicator" style="display:none;"></div>' + menu.icon + '<span class="hide-on-collapse">' + escapeHtml(menu.label) + '</span>';
-        link.addEventListener('click', handleNavClick);
-        navMenu.appendChild(link);
+    const visibleIds = new Set(getVisibleTabs());
+    getRootMenus().filter(menu => visibleIds.has(menu.id)).forEach(menu => {
+        const visibleChildren = getChildMenus(menu.id).filter(child => visibleIds.has(child.id));
+        const group = document.createElement('div');
+        group.className = 'nav-menu-group';
+        group.dataset.menuGroup = menu.id;
+        const mainRow = document.createElement('div');
+        mainRow.className = 'nav-menu-main-row';
+        mainRow.appendChild(createMenuLink(menu));
+
+        if (visibleChildren.length) {
+            const submenuId = 'submenu-' + menu.id;
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'nav-submenu-toggle hide-on-collapse';
+            toggle.setAttribute('aria-controls', submenuId);
+            toggle.setAttribute('aria-label', menu.label + ' 하위 메뉴 펼치기 또는 접기');
+            toggle.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 5 5 5-5 5"></path></svg>';
+            toggle.addEventListener('click', () => {
+                expandedMainMenuId = expandedMainMenuId === menu.id ? null : menu.id;
+                updateSidebarMenuState(window.location.hash.replace('#', ''));
+            });
+            mainRow.appendChild(toggle);
+
+            const submenu = document.createElement('div');
+            submenu.id = submenuId;
+            submenu.className = 'nav-submenu';
+            submenu.hidden = true;
+            visibleChildren.forEach(child => submenu.appendChild(createMenuLink(child, true)));
+            group.append(mainRow, submenu);
+        } else {
+            group.appendChild(mainRow);
+        }
+        navMenu.appendChild(group);
     });
+    updateSidebarMenuState(window.location.hash.replace('#', ''));
 }
 
 function switchTab(tabId) {
@@ -535,12 +619,9 @@ function switchTab(tabId) {
     if (tabId === 'authoring') tabId = 'editor';
     if (!getVisibleTabs().includes(tabId)) tabId = getVisibleTabs()[0] || 'overview';
 
-    navMenu.querySelectorAll('.nav-link').forEach(link => {
-        const isTarget = link.dataset.tab === tabId;
-        link.classList.toggle('active', isTarget);
-        const indicator = link.querySelector('.nav-link-indicator');
-        if (indicator) indicator.style.display = isTarget ? 'block' : 'none';
-    });
+    const activeMenu = getMenu(tabId);
+    expandedMainMenuId = activeMenu?.parentId || activeMenu?.id || null;
+    updateSidebarMenuState(tabId);
     document.querySelectorAll('.view-panel').forEach(panel => {
         panel.style.display = panel.id === 'view-' + tabId ? 'block' : 'none';
     });
@@ -560,10 +641,11 @@ const menuManagerModal = document.getElementById('menuManagerModal');
 const menuManagerList = document.getElementById('menuManagerList');
 const menuNameInput = document.getElementById('menuNameInput');
 const menuAddBtn = document.getElementById('menuAddBtn');
+const menuParentSelect = document.getElementById('menuParentSelect');
 
 function applyMenuChange() {
     if (!isEditorMode()) return;
-    menus.forEach((menu, index) => menu.order = index);
+    menus = window.WmsMenuTreeModel.normalizeMenus(menus);
     saveMenus();
     renderMenus();
     renderMenuManager();
@@ -578,22 +660,44 @@ function updateMenu(id, changes) {
 }
 
 function moveMenu(id, direction) {
-    const index = menus.findIndex(menu => menu.id === id);
-    const target = index + direction;
-    if (target < 0 || target >= menus.length) return;
-    [menus[index], menus[target]] = [menus[target], menus[index]];
+    menus = window.WmsMenuTreeModel.moveWithinParent(menus, id, direction);
+    applyMenuChange();
+}
+
+function moveMenuToParent(id, parentId) {
+    const menu = getMenu(id);
+    const normalizedParentId = parentId || null;
+    if (!menu || menu.parentId === normalizedParentId) return;
+    if (menuHasChildren(id)) {
+        window.alert('하위 메뉴가 있는 메인 메뉴는 다른 메뉴 아래로 이동할 수 없습니다. 하위 메뉴를 먼저 이동하거나 삭제해 주세요.');
+        renderMenuManager();
+        return;
+    }
+    const parent = normalizedParentId ? getMenu(normalizedParentId) : null;
+    if (normalizedParentId && (!parent || parent.parentId)) {
+        window.alert('메인 메뉴만 상위 메뉴로 선택할 수 있습니다.');
+        renderMenuManager();
+        return;
+    }
+    const siblingCount = menus.filter(item => item.parentId === normalizedParentId && item.id !== id).length;
+    menus = menus.map(item => item.id === id ? { ...item, parentId: normalizedParentId, order: siblingCount } : item);
     applyMenuChange();
 }
 
 function removeMenu(id) {
     const menu = menus.find(item => item.id === id);
-    if (!menu || !window.confirm('“' + menu.label + '” 메뉴를 삭제하겠습니까?')) return;
-    if (menus.length === 1) {
-        window.alert('최소 한 개의 메뉴는 유지해야 합니다.');
+    if (!menu) return;
+    if (menuHasChildren(id)) {
+        window.alert('이 메뉴에는 하위 메뉴가 있어 삭제할 수 없습니다. 하위 메뉴를 먼저 삭제해 주세요.');
         return;
     }
+    if (!menu.parentId && getRootMenus().length === 1) {
+        window.alert('최소 한 개의 메인 메뉴는 유지해야 합니다.');
+        return;
+    }
+    if (!window.confirm('“' + menu.label + '” 메뉴를 삭제하겠습니까?')) return;
     if (menu.builtin) {
-        deletedBuiltinIds.push(id);
+        if (!deletedBuiltinIds.includes(id)) deletedBuiltinIds.push(id);
         menus = menus.filter(item => item.id !== id);
     } else {
         document.getElementById('view-' + id)?.remove();
@@ -633,11 +737,28 @@ function startMenuRename(menu, label, actions) {
     input.select();
 }
 
-function renderMenuManager() {
-    menuManagerList.replaceChildren();
-    menus.sort((a, b) => a.order - b.order).forEach((menu, index) => {
+function renderMenuParentOptions() {
+    const selectedParentId = menuParentSelect.value;
+    menuParentSelect.replaceChildren();
+    const mainOption = document.createElement('option');
+    mainOption.value = '';
+    mainOption.textContent = '메인 메뉴';
+    menuParentSelect.appendChild(mainOption);
+    getRootMenus().forEach(menu => {
+        const option = document.createElement('option');
+        option.value = menu.id;
+        option.textContent = menu.label + '의 하위 메뉴';
+        menuParentSelect.appendChild(option);
+    });
+    if (Array.from(menuParentSelect.options).some(option => option.value === selectedParentId)) {
+        menuParentSelect.value = selectedParentId;
+    }
+}
+
+function createMenuManagerRow(menu, siblings, index) {
         const row = document.createElement('div');
-        row.className = 'menu-manager-row' + (menu.visible === false ? ' is-hidden' : '');
+        row.className = 'menu-manager-row' + (menu.parentId ? ' is-submenu' : '') + (menu.visible === false ? ' is-hidden' : '');
+        row.dataset.menuId = menu.id;
         const visible = document.createElement('input');
         visible.type = 'checkbox';
         visible.checked = menu.visible !== false;
@@ -647,30 +768,77 @@ function renderMenuManager() {
         label.className = 'menu-row-label';
         label.textContent = menu.label;
         row.append(visible, label);
+        const levelBadge = document.createElement('span');
+        levelBadge.className = 'menu-row-level';
+        levelBadge.textContent = menu.parentId ? '하위' : '메인';
+        row.appendChild(levelBadge);
         if (menu.builtin) {
             const badge = document.createElement('span');
             badge.className = 'menu-row-builtin';
-            badge.textContent = '기본 메뉴';
+            badge.textContent = '기본';
             row.appendChild(badge);
         }
+
+        const parentSelect = document.createElement('select');
+        parentSelect.className = 'menu-row-parent-select';
+        parentSelect.setAttribute('aria-label', menu.label + ' 상위 메뉴');
+        const rootOption = document.createElement('option');
+        rootOption.value = '';
+        rootOption.textContent = '메인';
+        parentSelect.appendChild(rootOption);
+        getRootMenus().filter(rootMenu => rootMenu.id !== menu.id).forEach(rootMenu => {
+            const option = document.createElement('option');
+            option.value = rootMenu.id;
+            option.textContent = rootMenu.label;
+            parentSelect.appendChild(option);
+        });
+        parentSelect.value = menu.parentId || '';
+        parentSelect.disabled = menuHasChildren(menu.id);
+        parentSelect.title = parentSelect.disabled ? '하위 메뉴가 있으면 상위 메뉴를 변경할 수 없습니다.' : '상위 메뉴 변경';
+        parentSelect.addEventListener('change', () => moveMenuToParent(menu.id, parentSelect.value));
+        row.appendChild(parentSelect);
+
         const actions = document.createElement('div');
         actions.className = 'menu-row-actions';
-        [['↑', '위로', index === 0, () => moveMenu(menu.id, -1)], ['↓', '아래로', index === menus.length - 1, () => moveMenu(menu.id, 1)]].forEach(([text, title, disabled, action]) => {
+        [['↑', '같은 계층에서 위로', index === 0, () => moveMenu(menu.id, -1)], ['↓', '같은 계층에서 아래로', index === siblings.length - 1, () => moveMenu(menu.id, 1)]].forEach(([text, title, disabled, action]) => {
             const button = document.createElement('button');
             button.type = 'button'; button.className = 'menu-row-action'; button.textContent = text; button.title = title; button.disabled = disabled;
             button.addEventListener('click', action);
             actions.appendChild(button);
         });
+        if (!menu.parentId) {
+            const addChild = document.createElement('button');
+            addChild.type = 'button'; addChild.className = 'menu-row-action add-child'; addChild.textContent = '+ 하위';
+            addChild.title = menu.label + '에 하위 메뉴 추가';
+            addChild.addEventListener('click', () => {
+                menuParentSelect.value = menu.id;
+                menuNameInput.focus();
+            });
+            actions.appendChild(addChild);
+        }
         const rename = document.createElement('button');
         rename.type = 'button'; rename.className = 'menu-row-action'; rename.textContent = '수정'; rename.title = '이름 수정';
         rename.addEventListener('click', () => startMenuRename(menu, label, actions));
         actions.appendChild(rename);
         const remove = document.createElement('button');
         remove.type = 'button'; remove.className = 'menu-row-action delete'; remove.textContent = '삭제';
+        remove.disabled = menuHasChildren(menu.id);
+        remove.title = remove.disabled ? '하위 메뉴를 먼저 삭제해야 합니다.' : '메뉴 삭제';
         remove.addEventListener('click', () => removeMenu(menu.id));
         actions.appendChild(remove);
         row.appendChild(actions);
-        menuManagerList.appendChild(row);
+        return row;
+}
+
+function renderMenuManager() {
+    menuManagerList.replaceChildren();
+    renderMenuParentOptions();
+    getRootMenus().forEach((menu, index, rootMenus) => {
+        menuManagerList.appendChild(createMenuManagerRow(menu, rootMenus, index));
+        const children = getChildMenus(menu.id);
+        children.forEach((child, childIndex) => {
+            menuManagerList.appendChild(createMenuManagerRow(child, children, childIndex));
+        });
     });
 }
 
@@ -694,12 +862,25 @@ document.getElementById('menuAddForm').addEventListener('submit', event => {
     event.preventDefault();
     if (!isEditorMode()) return;
     const label = menuNameInput.value.trim();
-    if (!label) return;
+    if (label.length < 2 || label.length > 30) {
+        window.alert('메뉴 이름은 2~30자로 입력하세요.');
+        menuNameInput.focus();
+        return;
+    }
+    if (menus.some(menu => menu.label.trim() === label)) {
+        window.alert('같은 이름의 메뉴가 이미 있습니다.');
+        menuNameInput.focus();
+        return;
+    }
+    const selectedParent = menuParentSelect.value ? getMenu(menuParentSelect.value) : null;
+    const parentId = selectedParent && !selectedParent.parentId ? selectedParent.id : null;
     menus.push({
         id: 'custom-' + Date.now(), label, tooltip: label, icon: inferMenuIcon(label), iconAuto: true,
-        builtin: false, visible: true, order: menus.length
+        parentId, builtin: false, visible: true,
+        order: menus.filter(menu => menu.parentId === parentId).length
     });
     menuNameInput.value = '';
+    menuParentSelect.value = '';
     menuAddBtn.disabled = true;
     applyMenuChange();
 });

@@ -20,6 +20,8 @@
     };
 
     function getSearchTabTitle(tabId) {
+        const hierarchicalLabel = window.wmsMenuTree?.getPathLabel?.(tabId);
+        if (hierarchicalLabel) return hierarchicalLabel;
         const menuLink = Array.from(document.querySelectorAll('.nav-link[data-tab]'))
             .find(link => link.dataset.tab === tabId);
         const menuLabel = menuLink?.querySelector('.hide-on-collapse')?.textContent.trim();
@@ -330,7 +332,7 @@
         const activeLink = document.querySelector('.nav-link.active[data-tab]');
         if (activeLink) {
             const tabId = activeLink.getAttribute('data-tab');
-            return tabNameMap[tabId] || tabId;
+            return window.wmsMenuTree?.getPathLabel?.(tabId) || tabNameMap[tabId] || tabId;
         }
         return '알 수 없음';
     }

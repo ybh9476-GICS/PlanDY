@@ -143,20 +143,22 @@
         return migrated;
     }
 
-    function initializeSharedCardEditor({ cardList: testCardList, addButton: testAddCardBtn, initialRows = [], onChange = () => {}, structuredContent = false, supportsTripleCards = false }) {
-        if (!testCardList || !testAddCardBtn || testCardList.dataset.cardEditorInitialized) return;
-        testCardList.dataset.cardEditorInitialized = 'true';
-        const isEditorMode = () => window.wmsPermissions?.isEditor() === true;
-        supportsTripleCards = Boolean(supportsTripleCards);
-        let restoring = false;
-        const cardClipboardStorageKey = 'wms-test-card-clipboard-v1';
-        const cardClipboardLifetime = 24 * 60 * 60 * 1000;
-        const copyPlainValue = (value) => JSON.parse(JSON.stringify(value));
-        const normalizeContentBlocks = contentModel.normalizeBlocks;
-        const getClipboardImageIds = (clipboard) => Array.isArray(clipboard?.contentBlocks)
-            ? clipboard.contentBlocks.filter((block) => block.type === 'image' && block.imageId).map((block) => block.imageId)
-            : [];
-        const isValidCardClipboard = (clipboard) => Boolean(
+    const cardClipboardStorageKey = 'wms-test-card-clipboard-v1';
+    const cardClipboardLifetime = 24 * 60 * 60 * 1000;
+    const copyPlainValue = (value) => JSON.parse(JSON.stringify(value));
+    const normalizeContentBlocks = contentModel.normalizeBlocks;
+
+    function getClipboardAssetIds(clipboard) {
+        if (!Array.isArray(clipboard?.contentBlocks)) return [];
+        return clipboard.contentBlocks.flatMap((block) => {
+            if (block.type === 'image' && block.imageId) return [block.imageId];
+            if (block.type === 'pdf' && block.pdfId) return [block.pdfId];
+            return [];
+        });
+    }
+
+    function isValidCardClipboard(clipboard) {
+        return Boolean(
             clipboard &&
             clipboard.version === 1 &&
             typeof clipboard.title === 'string' &&
@@ -165,20 +167,30 @@
             clipboard.contentBlocks.every((block) => contentModel.isEditableBlock(block)) &&
             Number(clipboard.expiresAt) > Date.now()
         );
-        let cardClipboard = null;
-        if (testCardList.id === 'testCardList') {
-            try {
-                const storedClipboard = JSON.parse(localStorage.getItem(cardClipboardStorageKey) || 'null');
-                if (isValidCardClipboard(storedClipboard)) {
-                    cardClipboard = { ...storedClipboard, contentBlocks: normalizeContentBlocks(storedClipboard.contentBlocks) };
-                } else if (storedClipboard) {
-                    localStorage.removeItem(cardClipboardStorageKey);
-                    getClipboardImageIds(storedClipboard).forEach((imageId) => removeImageBlob(imageId).catch(() => {}));
-                }
-            } catch (error) {
-                localStorage.removeItem(cardClipboardStorageKey);
+    }
+
+    function readCardClipboard() {
+        try {
+            const storedClipboard = JSON.parse(localStorage.getItem(cardClipboardStorageKey) || 'null');
+            if (isValidCardClipboard(storedClipboard)) {
+                return { ...storedClipboard, contentBlocks: normalizeContentBlocks(storedClipboard.contentBlocks) };
             }
+            if (storedClipboard) {
+                localStorage.removeItem(cardClipboardStorageKey);
+                getClipboardAssetIds(storedClipboard).forEach((assetId) => removeImageBlob(assetId).catch(() => {}));
+            }
+        } catch (error) {
+            localStorage.removeItem(cardClipboardStorageKey);
         }
+        return null;
+    }
+
+    function initializeSharedCardEditor({ cardList: testCardList, addButton: testAddCardBtn, initialRows = [], onChange = () => {}, structuredContent = false, supportsTripleCards = false }) {
+        if (!testCardList || !testAddCardBtn || testCardList.dataset.cardEditorInitialized) return;
+        testCardList.dataset.cardEditorInitialized = 'true';
+        const isEditorMode = () => window.wmsPermissions?.isEditor() === true;
+        supportsTripleCards = Boolean(supportsTripleCards);
+        let restoring = false;
 
         const cardHasStoredContent = (card) => {
             let contentBlocks = [];
@@ -1620,7 +1632,14 @@
                     return { state, panel };
                 };
                 const createPdfBlock = (savedBlock = null) => {
-                    const state = { type: 'pdf', pdfId: savedBlock?.pdfId || '', fileName: savedBlock?.fileName || '', file: null, preview: '' };
+                    const state = {
+                        type: 'pdf',
+                        pdfId: savedBlock?.pdfId || '',
+                        fileName: savedBlock?.fileName || '',
+                        file: null,
+                        preview: '',
+                        clipboardSource: Boolean(savedBlock?.clipboardSource)
+                    };
                     const panel = document.createElement('section');
                     panel.className = 'test-edit-pdf-block';
                     const render = () => {
@@ -1819,15 +1838,16 @@
                     contentGoogleDriveBlocks.some((state) => state.panel?.isConnected && parseGoogleDriveDocumentUrl(state.url))
                 );
                 const refreshClipboardActions = () => {
+                    const sharedClipboard = readCardClipboard();
                     copyButton.disabled = !editorHasCopyableContent();
                     pasteButton.hidden = !(
-                        isValidCardClipboard(cardClipboard) &&
+                        isValidCardClipboard(sharedClipboard) &&
                         !cardHasStoredContent(card) &&
                         !editorHasDraft()
                     );
                 };
                 const storeClipboardSnapshot = async () => {
-                    const newClipboardImageIds = [];
+                    const newClipboardAssetIds = [];
                     const clipboardBlocks = [];
                     try {
                         for (const element of Array.from(contentArea.children)) {
@@ -1845,8 +1865,19 @@
                                 if (!imageBlob) throw new Error('복사할 이미지 데이터를 찾을 수 없습니다.');
                                 const imageId = `clipboard-${createImageId()}`;
                                 await saveImageBlob(imageId, imageBlob);
-                                newClipboardImageIds.push(imageId);
+                                newClipboardAssetIds.push(imageId);
                                 clipboardBlocks.push({ type: 'image', imageId });
+                                continue;
+                            }
+                            const pdfState = contentPdfBlocks.find((item) => item.panel === element);
+                            if (pdfState) {
+                                if (!pdfState.file && !pdfState.pdfId) continue;
+                                const pdfBlob = pdfState.file || await loadImageBlob(pdfState.pdfId);
+                                if (!pdfBlob) throw new Error('복사할 PDF 데이터를 찾을 수 없습니다.');
+                                const pdfId = `clipboard-${createImageId()}`;
+                                await saveImageBlob(pdfId, pdfBlob);
+                                newClipboardAssetIds.push(pdfId);
+                                clipboardBlocks.push({ type: 'pdf', pdfId, fileName: pdfState.fileName || '등록 PDF' });
                                 continue;
                             }
                             const googleDriveState = contentGoogleDriveBlocks.find((item) => item.panel === element);
@@ -1862,13 +1893,12 @@
                             description: descriptionField.textContent.trim(),
                             contentBlocks: clipboardBlocks
                         };
+                        const previousClipboard = readCardClipboard();
                         localStorage.setItem(cardClipboardStorageKey, JSON.stringify(nextClipboard));
-                        const previousClipboard = cardClipboard;
-                        cardClipboard = nextClipboard;
-                        getClipboardImageIds(previousClipboard).forEach((imageId) => removeImageBlob(imageId).catch(showStorageWarning));
+                        getClipboardAssetIds(previousClipboard).forEach((assetId) => removeImageBlob(assetId).catch(showStorageWarning));
                         showCardNotice('카드 내용을 복사했습니다. 빈 카드에서 붙여넣을 수 있습니다.');
                     } catch (error) {
-                        newClipboardImageIds.forEach((imageId) => removeImageBlob(imageId).catch(() => {}));
+                        newClipboardAssetIds.forEach((assetId) => removeImageBlob(assetId).catch(() => {}));
                         showCardNotice(error?.message || '카드 복사에 실패했습니다.', true);
                         throw error;
                     }
@@ -1891,13 +1921,14 @@
                     }, 1200);
                 });
                 pasteButton.addEventListener('click', () => {
-                    if (!isValidCardClipboard(cardClipboard) || cardHasStoredContent(card) || editorHasDraft()) {
+                    const sharedClipboard = readCardClipboard();
+                    if (!isValidCardClipboard(sharedClipboard) || cardHasStoredContent(card) || editorHasDraft()) {
                         refreshClipboardActions();
                         return;
                     }
-                    headerField.textContent = cardClipboard.title;
-                    descriptionField.textContent = cardClipboard.description;
-                    cardClipboard.contentBlocks.forEach((block) => {
+                    headerField.textContent = sharedClipboard.title;
+                    descriptionField.textContent = sharedClipboard.description;
+                    sharedClipboard.contentBlocks.forEach((block) => {
                         if (block.type === 'text' || block.type === 'table') {
                             const slot = bodySlots.find((item) => !item.active);
                             if (!slot) return;
@@ -1919,6 +1950,9 @@
                         if (block.type === 'image' && block.imageId) {
                             const imageBlock = createImageBlock({ imageId: block.imageId, clipboardSource: true });
                             contentArea.appendChild(imageBlock.panel);
+                        } else if (block.type === 'pdf' && block.pdfId) {
+                            const pdfBlock = createPdfBlock({ ...block, clipboardSource: true });
+                            contentArea.appendChild(pdfBlock.panel);
                         } else if (block.type === 'googleDrive') {
                             const googleDriveBlock = createGoogleDriveBlock(block);
                             contentArea.appendChild(googleDriveBlock.panel);
@@ -2744,9 +2778,11 @@
                             const pdfState = contentPdfBlocks.find((item) => item.panel === element);
                             if (!pdfState) continue;
                             let pdfId = pdfState.pdfId;
-                            if (pdfState.file) {
+                            if (pdfState.file || (pdfState.clipboardSource && pdfState.pdfId)) {
+                                const pdfBlob = pdfState.file || await loadImageBlob(pdfState.pdfId);
+                                if (!pdfBlob) throw new Error('붙여넣을 PDF 데이터를 찾을 수 없습니다.');
                                 pdfId = createImageId();
-                                await saveImageBlob(pdfId, pdfState.file);
+                                await saveImageBlob(pdfId, pdfBlob);
                                 newImageIds.push(pdfId);
                                 committedImageStates.push({ state: pdfState, imageId: pdfId, assetKey: 'pdfId' });
                             }
