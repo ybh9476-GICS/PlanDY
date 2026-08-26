@@ -42,6 +42,49 @@
           ["8", "출고 상차·출고 확정", "차량에 싣고 출고 완료 및 재고 차감을 기록합니다."]
         ]
       }
+    },
+    {
+      "id": "terms-automated-warehouse-rack-v3",
+      "menuId": "custom-1787718566928",
+      "rowIndex": 1,
+      "cardIndex": 0,
+      "image": {
+        "id": "automated-warehouse-rack-location-terms-v4",
+        "url": "assets/wms/automated-warehouse-rack-location-terms-v4.png"
+      },
+      "card": {
+        "title": "자동화 창고 랙·로케이션 용어",
+        "description": "위키의 랙 주소 체계와 AS/RS 연계 자료를 바탕으로 정리한 핵심 용어입니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2": "",
+        "body2Html": "",
+        "body2Type": "text",
+        "table2": null,
+        "imageId": "",
+        "image": "",
+        "editLocked": false
+      },
+      "table": {
+        "title": "자동화 창고 랙 관련 핵심 용어",
+        "hasHeader": true,
+        "hasFirstColumnHeader": false,
+        "columnWidths": [23, 42, 35],
+        "rows": [
+          ["용어", "의미", "WMS·자동화 창고 적용"],
+          ["Rack(랙)", "팔레트·토트 등을 여러 단에 보관하는 구조물입니다.", "AS/RS는 랙, 저장·반출 설비, WMS 소프트웨어가 결합된 구성으로 설명됩니다."],
+          ["Area(구역)", "창고 내부의 큰 운영 구역입니다.", "랙·로케이션을 운영 목적이나 물류 특성별로 묶는 상위 주소입니다."],
+          ["Aisle(통로)", "랙 사이의 이동 통로입니다.", "스태커크레인·셔틀·지게차 등 설비의 이동 및 작업 경로를 구분합니다."],
+          ["Bay(베이)", "통로를 따라 구분한 하나의 랙 구간입니다.", "랙 주소의 가로 방향 구획으로 사용합니다."],
+          ["Level(레벨)", "높이 방향의 보관 단입니다.", "수직 보관 위치와 설비의 취급 높이를 식별합니다."],
+          ["Position(포지션)", "같은 베이·레벨 안의 세부 위치입니다.", "좌우 또는 깊이 방향의 슬롯을 구분합니다."],
+          ["Bin(빈)", "실제 재고를 놓는 가장 세부적인 보관 칸입니다.", "재고·LPN·가용 여부·잠금 상태의 관리 단위입니다."],
+          ["Location(로케이션)", "WMS에서 보관·작업 위치를 나타내는 주소입니다.", "입고·보관·피킹·보충·출고 작업을 정확한 랙 위치와 연결합니다."],
+          ["AS/RS", "자동 저장·반출 시스템입니다.", "랙과 저장·반출 설비의 화물 이동·보관 위치 데이터를 WMS와 연계합니다."]
+        ]
+      }
     }
   ]
 }

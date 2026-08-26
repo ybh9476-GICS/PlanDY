@@ -109,10 +109,19 @@
     font-size: 13px;
 }
 
-.test-card-edit-btn {
+.test-card-editor-controls {
     position: absolute;
     top: 0.65rem;
     right: 0.65rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.test-card-edit-btn,
+.test-card-move-btn,
+.test-card-lock-btn {
+    box-sizing: border-box;
     padding: 0.25rem 0.5rem;
     border: 1px solid #cbd5e1;
     border-radius: 0.35rem;
@@ -123,9 +132,8 @@
     cursor: pointer;
 }
 
-.test-card-move-btn {
-    position: absolute;
-    top: 0.65rem;
+.test-card-move-btn,
+.test-card-lock-btn {
     width: 28px;
     height: 26px;
     padding: 0;
@@ -138,14 +146,6 @@
     cursor: pointer;
 }
 
-.test-card-move-down-btn {
-    right: 3.65rem;
-}
-
-.test-card-move-up-btn {
-    right: 5.55rem;
-}
-
 .test-card-edit-btn:hover {
     border-color: #2563eb;
     color: #2563eb;
@@ -156,6 +156,26 @@
     background: #f8fafc;
     color: #94a3b8;
     cursor: not-allowed;
+}
+
+.test-card-lock-btn:hover:not(:disabled) {
+    border-color: #2563eb;
+    color: #2563eb;
+}
+
+.test-card-lock-btn:disabled {
+    border-color: #e2e8f0;
+    background: #f8fafc;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
+.test-created-card.test-card-is-locked {
+    border-color: #fdba74;
+}
+
+body[data-role="viewer"] .test-created-card.test-card-is-locked {
+    border-color: rgba(195, 198, 215, 0.4);
 }
 
 .test-card-diagram {

@@ -220,7 +220,23 @@
                 return true;
             }
         };
-        const isCardEditLocked = (card) => card.dataset.editLocked === 'true' || hasUnsupportedCardContent(card);
+        const isManualCardLocked = (card) => card.dataset.editLocked === 'true' && card.dataset.lockSource === 'manual';
+        const isSystemCardLocked = (card) => hasUnsupportedCardContent(card) ||
+            (card.dataset.editLocked === 'true' && card.dataset.lockSource !== 'manual');
+        const isCardEditLocked = (card) => isManualCardLocked(card) || isSystemCardLocked(card);
+        const getCardLockMessage = (card) => {
+            if (isManualCardLocked(card)) return '잠긴 카드로 수정, 삭제 및 에이전트 수정을 할 수 없습니다.';
+            if (card.dataset.lockMessage) return card.dataset.lockMessage;
+            try {
+                const blocks = card.dataset.contentBlocks ? JSON.parse(card.dataset.contentBlocks) : [];
+                if (card.dataset.lockSource === 'system' && blocks.some((block) => block.type === 'diagram')) {
+                    return 'AI 생성 흐름도 카드로 수정할 수 없습니다.';
+                }
+            } catch (_) {
+                // Fall back to the standard read-only message for malformed card data.
+            }
+            return '카드 수정 팝업에서 지원하지 않는 콘텐츠가 있어 수정할 수 없습니다.';
+        };
 
         function showStorageWarning(error) {
             document.querySelector('.test-card-storage-warning')?.remove();
@@ -258,6 +274,8 @@
                     body2: card.dataset.body2 || '', body2Html: card.dataset.body2Html || '',
                     imageId: card.dataset.imageId || '', image: card.dataset.legacyImage || '',
                     editLocked: card.dataset.editLocked === 'true',
+                    lockSource: card.dataset.lockSource || '',
+                    lockMessage: card.dataset.lockMessage || '',
                     contentBlocks: card.dataset.contentBlocks ? JSON.parse(card.dataset.contentBlocks) : []
                 }))
             }));
@@ -573,15 +591,27 @@
                 card.dataset.imageUrl = initialCard.imageId ? '' : (initialCard.image || '');
                 card.dataset.legacyImage = initialCard.imageId ? '' : (initialCard.image || '');
                 card.dataset.editLocked = initialCard.editLocked ? 'true' : '';
+                card.dataset.lockSource = initialCard.editLocked ? (initialCard.lockSource || 'system') : '';
+                card.dataset.lockMessage = initialCard.lockMessage || '';
                 card.dataset.contentBlocks = contentBlocks.length ? JSON.stringify(contentBlocks) : '';
-                card.innerHTML = '<div class="test-card-content"><div class="test-card-title"></div><div class="test-card-description"></div><div class="test-card-image-slot"></div><div class="test-card-body-columns"><div class="test-card-body-text"></div><div class="test-card-body-divider" aria-hidden="true"></div><div class="test-card-body-text test-card-body-text-secondary"></div></div></div><span class="test-card-empty">빈 카드</span><button type="button" class="test-card-edit-btn permission-editor-only">Edit</button>';
+                card.innerHTML = '<div class="test-card-content"><div class="test-card-title"></div><div class="test-card-description"></div><div class="test-card-image-slot"></div><div class="test-card-body-columns"><div class="test-card-body-text"></div><div class="test-card-body-divider" aria-hidden="true"></div><div class="test-card-body-text test-card-body-text-secondary"></div></div></div><span class="test-card-empty">빈 카드</span><div class="test-card-editor-controls permission-editor-only"><button type="button" class="test-card-move-btn test-card-move-up-btn" aria-label="카드를 한 단계 위로 이동" title="위로 이동">↑</button><button type="button" class="test-card-move-btn test-card-move-down-btn" aria-label="카드를 한 단계 아래로 이동" title="아래로 이동">↓</button><button type="button" class="test-card-lock-btn" aria-pressed="false"></button><button type="button" class="test-card-edit-btn">Edit</button></div>';
                 card.querySelector('.test-card-description').insertAdjacentHTML('afterend', '<div class="test-card-content-blocks"></div>');
-                card.insertAdjacentHTML('beforeend', '<button type="button" class="test-card-move-btn test-card-move-up-btn permission-editor-only" aria-label="카드를 한 단계 위로 이동" title="위로 이동">↑</button><button type="button" class="test-card-move-btn test-card-move-down-btn permission-editor-only" aria-label="카드를 한 단계 아래로 이동" title="아래로 이동">↓</button>');
                 card.querySelector('.test-card-edit-btn').addEventListener('click', (event) => {
                     if (!isEditorMode() || isCardEditLocked(card)) return;
                     event.stopPropagation();
                     closeFixedCardReorder();
                     openTestCardEditModal(card);
+                });
+                card.querySelector('.test-card-lock-btn').addEventListener('click', (event) => {
+                    if (!isEditorMode() || isSystemCardLocked(card)) return;
+                    event.stopPropagation();
+                    const nextLocked = !isManualCardLocked(card);
+                    card.dataset.editLocked = nextLocked ? 'true' : '';
+                    card.dataset.lockSource = nextLocked ? 'manual' : '';
+                    card.dataset.lockMessage = '';
+                    renderTestCard(card);
+                    notifyChange();
+                    showCardNotice(nextLocked ? '카드를 잠갔습니다. 수정, 삭제 및 에이전트 수정이 차단됩니다.' : '카드 잠금을 해제했습니다.');
                 });
                 card.querySelector('.test-card-move-up-btn').addEventListener('click', (event) => {
                     if (!isEditorMode()) return;
@@ -648,13 +678,27 @@
             const empty = card.querySelector('.test-card-empty');
             const contentBlocks = card.dataset.contentBlocks ? JSON.parse(card.dataset.contentBlocks) : null;
             const editButton = card.querySelector('.test-card-edit-btn');
+            const lockButton = card.querySelector('.test-card-lock-btn');
             const editLocked = isCardEditLocked(card);
+            const systemLocked = isSystemCardLocked(card);
             card.classList.toggle('test-card-has-title', Boolean(card.dataset.title));
             card.classList.toggle('test-card-has-description', Boolean(card.dataset.description));
+            card.classList.toggle('test-card-is-locked', editLocked);
             if (editButton) {
                 editButton.disabled = editLocked;
-                editButton.title = editLocked ? '카드 수정 팝업에서 지원하지 않는 콘텐츠가 있어 수정할 수 없습니다.' : '';
+                editButton.title = editLocked ? getCardLockMessage(card) : '';
                 editButton.setAttribute('aria-disabled', String(editLocked));
+            }
+            if (lockButton) {
+                lockButton.disabled = systemLocked;
+                lockButton.textContent = editLocked ? '🔒' : '🔓';
+                lockButton.title = systemLocked
+                    ? getCardLockMessage(card)
+                    : (editLocked ? '카드 잠금 해제' : '카드 잠금');
+                lockButton.setAttribute('aria-label', systemLocked
+                    ? getCardLockMessage(card)
+                    : (editLocked ? '카드 잠금 해제' : '카드 잠금'));
+                lockButton.setAttribute('aria-pressed', String(isManualCardLocked(card)));
             }
             if (Array.isArray(contentBlocks)) {
                 contentBlocksContainer.replaceChildren();

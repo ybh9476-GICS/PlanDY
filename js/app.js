@@ -61,6 +61,8 @@ const routeInitialCardRows = [
             title: '5단계 경로 탐색 흐름',
             description: '출발지와 입고지 조건을 기반으로 3D 최적 이동 경로를 생성합니다.',
             editLocked: true,
+            lockSource: 'system',
+            lockMessage: 'AI 생성 흐름도 카드로 수정할 수 없습니다.',
             contentBlocks: [{
                 type: 'diagram',
                 source: 'sequenceDiagram\nautonumber\nparticipant Worker\nparticipant UI as WMS 3D UI\nparticipant System as WMS Route Engine\nWorker->>UI: Select floor and start point\nWorker->>UI: Check inventory status\nWorker->>UI: Select destination and material\nSystem->>UI: Find available optimal location\nSystem->>UI: Generate 3D route via elevators'
