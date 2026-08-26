@@ -686,6 +686,42 @@ function moveMenuToParent(id, parentId) {
     applyMenuChange();
 }
 
+function menuHasManuallyLockedCard(menuId) {
+    const cardStorageKeys = {
+        overview: overviewCardStorageKey,
+        editor: authoringCardStorageKey,
+        route: routeCardStorageKey,
+        test: 'wms-test-menu-cards-v1'
+    };
+    let rows = loadCustomCardState()[menuId];
+    const storageKey = cardStorageKeys[menuId];
+    if (!Array.isArray(rows) && storageKey) {
+        try {
+            rows = JSON.parse(localStorage.getItem(storageKey));
+        } catch (_) {
+            rows = null;
+        }
+    }
+    return Array.isArray(rows) && rows.some(row =>
+        Array.isArray(row?.cards) && row.cards.some(card =>
+            card?.editLocked === true && card?.lockSource === 'manual'
+        )
+    );
+}
+
+function showLockedCardMenuDeleteNotice() {
+    document.querySelector('.menu-delete-lock-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'menu-delete-lock-overlay';
+    overlay.innerHTML = '<section class="menu-delete-lock-dialog" role="dialog" aria-modal="true" aria-labelledby="menuDeleteLockTitle"><h2 id="menuDeleteLockTitle">메뉴 삭제 불가</h2><p>잠금 상태의 카드가 있습니다. 메뉴를 삭제하려면 해당 카드를 잠금 해제해야 합니다.</p><button type="button">확인</button></section>';
+    const close = () => overlay.remove();
+    overlay.querySelector('button').addEventListener('click', close);
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    overlay.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
+    document.body.appendChild(overlay);
+    overlay.querySelector('button').focus();
+}
+
 function removeMenu(id) {
     const menu = menus.find(item => item.id === id);
     if (!menu) return;
@@ -695,6 +731,10 @@ function removeMenu(id) {
     }
     if (!menu.parentId && getRootMenus().length === 1) {
         window.alert('최소 한 개의 메인 메뉴는 유지해야 합니다.');
+        return;
+    }
+    if (menuHasManuallyLockedCard(id)) {
+        showLockedCardMenuDeleteNotice();
         return;
     }
     if (!window.confirm('“' + menu.label + '” 메뉴를 삭제하겠습니까?')) return;
