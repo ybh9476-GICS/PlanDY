@@ -22,8 +22,8 @@
         <input id="loginUserId" type="text" placeholder="아이디를 입력하세요." autocomplete="username" inputmode="latin" maxlength="8" pattern="[A-Za-z0-9]{8}" required>
         <p id="loginUserIdHint" class="login-field-hint" aria-live="polite">영문·숫자 8자</p>
         <label for="loginPassword">비밀번호</label>
-        <input id="loginPassword" type="password" placeholder="비밀번호를 입력하세요." autocomplete="current-password" inputmode="latin" maxlength="8" pattern="[A-Za-z0-9]{8}" required>
-        <p id="loginPasswordHint" class="login-field-hint" aria-live="polite">영문·숫자 8자</p>
+        <input id="loginPassword" type="password" placeholder="비밀번호를 입력하세요." autocomplete="current-password" maxlength="8" required>
+        <p id="loginPasswordHint" class="login-field-hint" aria-live="polite">8자</p>
         <button id="loginSubmitBtn" type="submit" disabled>로그인</button>
         <p class="login-notice">로컬 테스트 환경에서는 영문·숫자 8자의 임의 아이디와 비밀번호로 로그인할 수 있습니다.</p>
     </form>
@@ -819,7 +819,7 @@
     </section>
 </main>
 
-<script src="js/role-permissions.js?v=brand-sync-v2"></script>
+<script src="js/role-permissions.js?v=local-accounts-v2"></script>
 <script src="js/content-sync.js?v=content-json-v1"></script>
 <script src="js/card-content-model.js?v=text-model-v2"></script>
 <script src="js/menu-tree-model.js?v=menu-tree-v1"></script>

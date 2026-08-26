@@ -3,14 +3,21 @@
     const userStorageKey = 'wms-local-login-user-v1';
     const validRoles = new Set(['viewer', 'editor']);
     const loginCredentialPattern = /^[A-Za-z0-9]{8}$/;
+    const localAccounts = Object.freeze({
+        edituser: { password: 'edit!@#$', role: 'editor' },
+        viewuser: { password: 'view1234', role: 'viewer' }
+    });
     let currentRole = 'viewer';
     let currentUserId = '';
 
     try {
         const savedRole = sessionStorage.getItem(roleStorageKey);
         const savedUserId = sessionStorage.getItem(userStorageKey);
-        if (validRoles.has(savedRole)) currentRole = savedRole;
-        if (typeof savedUserId === 'string') currentUserId = savedUserId.trim();
+        const restoredUserId = typeof savedUserId === 'string' ? savedUserId.trim() : '';
+        if (localAccounts[restoredUserId]) {
+            currentUserId = restoredUserId;
+            if (validRoles.has(savedRole) && (savedRole !== 'editor' || localAccounts[restoredUserId].role === 'editor')) currentRole = savedRole;
+        }
     } catch (_) {
         // Storage can be unavailable in private or restricted browser contexts.
     }
@@ -18,6 +25,7 @@
     const isAuthenticated = () => Boolean(currentUserId);
     const isEditor = () => isAuthenticated() && currentRole === 'editor';
     const getRoleLabel = () => currentRole === 'editor' ? 'Editor' : 'Viewer';
+    const canSelectEditorRole = () => currentUserId === 'edituser';
 
     const brandFieldNames = ['title', 'description'];
     const brandDataKey = (field) => `brand${field.charAt(0).toUpperCase()}${field.slice(1)}`;
@@ -92,7 +100,7 @@
     }
 
     function applyRole(role) {
-        currentRole = validRoles.has(role) ? role : 'viewer';
+        currentRole = role === 'editor' && canSelectEditorRole() ? 'editor' : 'viewer';
         updateUi();
         persistSession();
         window.dispatchEvent(new CustomEvent('wms-role-change', { detail: { role: currentRole, userId: currentUserId } }));
@@ -100,9 +108,10 @@
 
     function login(userId, password) {
         const nextUserId = String(userId || '').trim();
-        if (!loginCredentialPattern.test(nextUserId) || !loginCredentialPattern.test(String(password || ''))) return false;
+        const account = localAccounts[nextUserId];
+        if (!loginCredentialPattern.test(nextUserId) || !account || account.password !== String(password || '')) return false;
         currentUserId = nextUserId;
-        currentRole = 'viewer';
+        currentRole = account.role;
         updateUi();
         persistSession();
         window.dispatchEvent(new CustomEvent('wms-auth-change', { detail: { authenticated: true, userId: currentUserId } }));
@@ -144,6 +153,7 @@
     const logoutCancelButton = document.getElementById('logoutCancelBtn');
     const logoutConfirmButton = document.getElementById('logoutConfirmBtn');
     const radioButtons = Array.from(modal.querySelectorAll('input[name="permissionRole"]'));
+    const editorRoleButton = radioButtons.find((radio) => radio.value === 'editor');
     let previouslyFocused = null;
 
     const setModalOpen = (target, open) => {
@@ -158,44 +168,49 @@
     const openPermission = () => {
         if (!isAuthenticated()) return;
         previouslyFocused = document.activeElement;
+        if (editorRoleButton) {
+            editorRoleButton.disabled = !canSelectEditorRole();
+            editorRoleButton.setAttribute('aria-disabled', String(editorRoleButton.disabled));
+        }
         const selected = radioButtons.find((radio) => radio.value === currentRole);
         if (selected) selected.checked = true;
         setModalOpen(modal, true);
         selected?.focus();
     };
-    const normalizeLoginCredential = (field) => {
+    const normalizeLoginUserId = (field) => {
         const normalized = field.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 8);
         const changed = field.value !== normalized;
         if (changed) field.value = normalized;
         return changed;
     };
-    const updateLoginFieldHint = (field, hint, invalidInput) => {
+    const updateLoginFieldHint = (field, hint, invalidInput, isUserId) => {
         hint.classList.remove('is-warning', 'is-success');
         if (field.dataset.isComposing === 'true') {
             hint.textContent = '한글 입력 중 — 영문으로 전환하세요';
             hint.classList.add('is-warning');
-        } else if (invalidInput || field.dataset.invalidInput === 'true') {
+        } else if (isUserId && (invalidInput || field.dataset.invalidInput === 'true')) {
             hint.textContent = '영문·숫자만 사용할 수 있습니다';
             hint.classList.add('is-warning');
-        } else if (loginCredentialPattern.test(field.value)) {
+        } else if ((isUserId ? loginCredentialPattern.test(field.value) : field.value.length === 8)) {
             hint.textContent = '입력 완료';
             hint.classList.add('is-success');
         } else if (field.value) {
             hint.textContent = `${field.value.length}/8자`;
         } else {
-            hint.textContent = '영문·숫자 8자';
+            hint.textContent = isUserId ? '영문·숫자 8자' : '8자';
         }
     };
     const updateLoginSubmitState = () => {
-        const userInvalidInput = loginUserId.dataset.isComposing === 'true' ? false : normalizeLoginCredential(loginUserId);
-        const passwordInvalidInput = loginPassword.dataset.isComposing === 'true' ? false : normalizeLoginCredential(loginPassword);
+        const userInvalidInput = loginUserId.dataset.isComposing === 'true' ? false : normalizeLoginUserId(loginUserId);
+        const passwordInvalidInput = false;
         if (userInvalidInput) loginUserId.dataset.invalidInput = 'true';
         else if (loginUserId.value) delete loginUserId.dataset.invalidInput;
         if (passwordInvalidInput) loginPassword.dataset.invalidInput = 'true';
         else if (loginPassword.value) delete loginPassword.dataset.invalidInput;
-        updateLoginFieldHint(loginUserId, loginUserIdHint, userInvalidInput);
-        updateLoginFieldHint(loginPassword, loginPasswordHint, passwordInvalidInput);
-        loginSubmitButton.disabled = !(loginCredentialPattern.test(loginUserId.value) && loginCredentialPattern.test(loginPassword.value));
+        updateLoginFieldHint(loginUserId, loginUserIdHint, userInvalidInput, true);
+        updateLoginFieldHint(loginPassword, loginPasswordHint, passwordInvalidInput, false);
+        const account = localAccounts[loginUserId.value];
+        loginSubmitButton.disabled = !(loginCredentialPattern.test(loginUserId.value) && account?.password === loginPassword.value);
     };
 
     loginUserId.addEventListener('input', updateLoginSubmitState);

@@ -56,9 +56,13 @@ assert.ok(rolePermissions.includes('const isAuthenticated = () => Boolean(curren
 assert.ok(rolePermissions.includes('const initializeBrandSync = () => {'), 'Brand text must synchronize on initialization.');
 assert.ok(rolePermissions.includes("window.wmsBranding = {"), 'Brand text must expose a shared update path.');
 assert.ok(rolePermissions.includes('if (document.body.dataset[dataKey] !== normalizedValue)'), 'Brand synchronization must not create recursive attribute updates.');
-assert.ok(rolePermissions.includes('const loginCredentialPattern = /^[A-Za-z0-9]{8}$/;'), 'Login credentials must require exactly eight alphanumeric characters.');
-assert.ok(rolePermissions.includes("field.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 8)"), 'Login credentials must normalize pasted invalid characters.');
-assert.ok(rolePermissions.includes('loginCredentialPattern.test(loginUserId.value) && loginCredentialPattern.test(loginPassword.value)'), 'Login activation must require two valid eight-character credentials.');
+assert.ok(rolePermissions.includes("edituser: { password: 'edit!@#$', role: 'editor' }") && rolePermissions.includes("viewuser: { password: 'view1234', role: 'viewer' }"), 'The two local login accounts must have fixed credentials and roles.');
+assert.ok(rolePermissions.includes("const canSelectEditorRole = () => currentUserId === 'edituser';"), 'Only the Editor account may select the Editor role.');
+assert.ok(rolePermissions.includes("currentRole = role === 'editor' && canSelectEditorRole() ? 'editor' : 'viewer';"), 'Viewer accounts must be blocked from the Editor execution path.');
+assert.ok(rolePermissions.includes('editorRoleButton.disabled = !canSelectEditorRole();'), 'The Editor role button must be disabled for Viewer accounts.');
+assert.ok(rolePermissions.includes("field.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 8)"), 'User IDs must normalize pasted invalid characters.');
+assert.ok(rolePermissions.includes('const passwordInvalidInput = false;'), 'Passwords must retain special characters.');
+assert.ok(rolePermissions.includes('account?.password === loginPassword.value'), 'Login activation must require a matching local account password.');
 assert.ok(rolePermissions.includes("field.dataset.isComposing = 'true';"), 'Credential fields must detect Korean composition.');
 assert.ok(rolePermissions.includes('한글 입력 중 — 영문으로 전환하세요'), 'Korean input state must be announced to the user.');
 assert.ok(rolePermissions.includes('영문·숫자만 사용할 수 있습니다'), 'Invalid credential characters must be explained.');
