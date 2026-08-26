@@ -2859,11 +2859,14 @@
                         }
                     }
                 } else if (row && row.classList.contains('test-card-row')) {
-                    if (row.classList.contains('test-card-row-triple') && row.children.length === 3) {
+                    // 열 크기 조절 핸들도 row의 자식이므로 children.length를 사용하면
+                    // 실제 카드 수보다 크게 계산되어 행 전체가 삭제될 수 있다.
+                    const rowCards = getGroupCardsInReadingOrder(row);
+                    if (row.classList.contains('test-card-row-triple') && rowCards.length === 3) {
                         card.remove();
                         row.classList.remove('test-card-row-triple');
-                    } else if (row.children.length === 2) {
-                        const remaining = row.children[0] === card ? row.children[1] : row.children[0];
+                    } else if (rowCards.length === 2) {
+                        const remaining = rowCards.find((rowCard) => rowCard !== card);
                         remaining.classList.add('test-created-card-single');
                         row.parentElement.insertBefore(remaining, row);
                         row.remove();

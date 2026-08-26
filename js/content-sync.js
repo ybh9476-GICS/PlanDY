@@ -1,5 +1,6 @@
 (function () {
     const contentUrl = 'data/site-content.json';
+    const cardPatchUrl = 'data/card-patches.json';
     const appliedMarkerKey = 'wms-published-content-applied-v1';
     const storageKeys = {
         menus: 'wms-sidebar-menu-settings-v1',
@@ -9,6 +10,60 @@
         authoringCards: 'wms-authoring-cards-v1',
         testCards: 'wms-test-menu-cards-v1'
     };
+
+    async function savePatchedImage(imageId, imageUrl) {
+        const response = await fetch(imageUrl, { cache: 'no-store' });
+        if (!response.ok) throw new Error('카드 이미지를 불러올 수 없습니다.');
+        const blob = await response.blob();
+        const database = await new Promise((resolve, reject) => {
+            const request = indexedDB.open('wms-card-images-v1', 1);
+            request.onupgradeneeded = () => {
+                if (!request.result.objectStoreNames.contains('images')) request.result.createObjectStore('images', { keyPath: 'id' });
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        await new Promise((resolve, reject) => {
+            const transaction = database.transaction('images', 'readwrite');
+            transaction.objectStore('images').put({ id: imageId, blob });
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error);
+            transaction.onabort = () => reject(transaction.error);
+        });
+    }
+
+    async function applyPendingCardPatches() {
+        const response = await fetch(`${cardPatchUrl}?v=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) return false;
+        const documentValue = await response.json();
+        if (!Array.isArray(documentValue?.patches)) return false;
+
+        let changed = false;
+        for (const patch of documentValue.patches) {
+            if (!patch?.id || localStorage.getItem(`wms-card-patch-applied-v1:${patch.id}`)) continue;
+            if (!patch.card || !patch.image) continue;
+            // 자동 등록 대상만 만들거나 갱신한다. 다른 메뉴와 카드 행은 그대로 보존한다.
+            const state = readStoredValue(storageKeys.customCards) || {};
+            const rows = Array.isArray(state[patch.menuId]) ? state[patch.menuId] : (state[patch.menuId] = []);
+            while (rows.length <= patch.rowIndex) rows.push({ type: 'single', columnWidths: null, cards: [] });
+            const row = rows[patch.rowIndex];
+            if (!Array.isArray(row.cards)) row.cards = [];
+            const card = row.cards[patch.cardIndex] || {};
+            await savePatchedImage(patch.image.id, patch.image.url);
+            row.cards[patch.cardIndex] = {
+                ...card,
+                ...patch.card,
+                contentBlocks: [
+                    { type: 'image', imageId: patch.image.id },
+                    { type: 'table', table: patch.table }
+                ]
+            };
+            localStorage.setItem(storageKeys.customCards, JSON.stringify(state));
+            localStorage.setItem(`wms-card-patch-applied-v1:${patch.id}`, 'true');
+            changed = true;
+        }
+        return changed;
+    }
 
     const isEditor = () => window.wmsPermissions?.isEditor?.() === true;
     const isContentDocument = (value) => Boolean(value)
@@ -119,6 +174,9 @@
         document.getElementById('contentExportBtn')?.addEventListener('click', downloadContent);
         document.getElementById('contentImportBtn')?.addEventListener('click', requestImport);
         document.getElementById('contentRestoreBtn')?.addEventListener('click', restorePublishedContent);
+        applyPendingCardPatches().then((changed) => {
+            if (changed) window.location.reload();
+        }).catch(() => {});
         document.getElementById('contentImportInput')?.addEventListener('change', (event) => {
             importContent(event.target.files?.[0]);
             event.target.value = '';
