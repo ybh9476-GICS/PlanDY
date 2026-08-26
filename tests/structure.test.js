@@ -36,7 +36,7 @@ assert.ok(source.includes('data-role="viewer"'), 'The site must open in Viewer m
 assert.ok(source.includes('permissionStatusBtn'), 'The sidebar role status control is missing.');
 assert.ok(source.includes('permissionModal'), 'The role selection dialog is missing.');
 assert.ok(source.includes('id="loginScreen"'), 'The local login screen is missing.');
-assert.ok(source.includes('data-brand-title="기획 템플릿"') && source.includes('data-brand-description="기획 배포 탬플릿 R&amp;D"'), 'Brand text must have one shared source of truth.');
+assert.ok(source.includes('data-brand-title="대영포장 WMS"') && source.includes('data-brand-description="대영포장 WMS, WCS 기획"'), 'Brand text must have one shared source of truth.');
 assert.ok(source.includes('id="loginTitle"') && source.includes('id="sidebarTitle"') && source.includes('data-brand-field="title"'), 'Login and sidebar titles must share a brand field.');
 assert.ok(source.includes('id="loginSubtitle"') && source.includes('id="sidebarSubtitle"') && source.includes('data-brand-field="description"'), 'Login and sidebar descriptions must share a brand field.');
 assert.ok(source.includes('placeholder="아이디를 입력하세요."'), 'The login user ID placeholder is missing.');
@@ -72,8 +72,8 @@ assert.ok(app.includes('이 메뉴에는 하위 메뉴가 있어 삭제할 수 �
 assert.ok(app.includes('remove.disabled = menuHasChildren(menu.id)'), 'The delete control must explain unavailable parent deletion before execution.');
 assert.ok(app.includes("const iconMarkup = isSubmenu ? '' : menu.icon;"), 'Submenus must omit icons without deleting their stored icon metadata.');
 assert.ok(app.includes("createMenuLink(child, true)"), 'Child links must use the submenu rendering path.');
-assert.ok(source.includes('id="sidebarTitle"') && source.includes('기획 템플릿'), 'The sidebar title was not updated.');
-assert.ok(source.includes('id="sidebarSubtitle"') && source.includes('기획 배포 탬플릿 R&amp;D'), 'The sidebar subtitle was not updated.');
+assert.ok(source.includes('id="sidebarTitle"') && source.includes('대영포장 WMS'), 'The sidebar title was not updated.');
+assert.ok(source.includes('id="sidebarSubtitle"') && source.includes('대영포장 WMS, WCS 기획'), 'The sidebar subtitle was not updated.');
 assert.ok(source.includes('data-original-title="YUPOONG"'), 'The original sidebar logo label must remain recoverable.');
 assert.ok(source.includes('data-original-subtitle="유풍 창고 관리 시스템(WMS)"'), 'The original sidebar subtitle must remain recoverable.');
 assert.ok(testEditor.includes('permission-editor-only'), 'Card editing controls must be marked as Editor-only.');
