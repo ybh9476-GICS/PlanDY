@@ -11,6 +11,7 @@ const menuTreeModel = require(path.join(root, 'js', 'menu-tree-model.js'));
 const appFeatures = fs.readFileSync(path.join(root, 'js', 'app-features.js'), 'utf8').replace(/\r\n/g, '\n');
 const rolePermissions = fs.readFileSync(path.join(root, 'js', 'role-permissions.js'), 'utf8');
 const cardContentModel = fs.readFileSync(path.join(root, 'js', 'card-content-model.js'), 'utf8');
+const contentSync = fs.readFileSync(path.join(root, 'js', 'content-sync.js'), 'utf8');
 const testEditor = fs.readFileSync(path.join(root, 'js', 'test-editor-v14.js'), 'utf8');
 const testEditorCss = fs.readFileSync(path.join(root, 'css', 'test-editor.css'), 'utf8');
 const compatibilityPages = [
@@ -23,11 +24,11 @@ const expectedTabs = ['overview', 'floor', 'zone', 'rack', 'editor', 'route', 's
 const actualTabs = [...source.matchAll(/<section id="view-([^"]+)"/g)].map((match) => match[1]);
 assert.deepStrictEqual(actualTabs, expectedTabs, 'The menu panels changed unexpectedly.');
 
-for (const asset of ['css/style.css', 'css/test-editor.css', 'js/role-permissions.js', 'js/card-content-model.js', 'js/menu-tree-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
+for (const asset of ['css/style.css', 'css/test-editor.css', 'js/role-permissions.js', 'js/content-sync.js', 'js/card-content-model.js', 'js/menu-tree-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
     assert.ok(fs.existsSync(path.join(root, asset)), `Missing runtime asset: ${asset}`);
 }
 
-for (const script of ['js/role-permissions.js', 'js/card-content-model.js', 'js/menu-tree-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
+for (const script of ['js/role-permissions.js', 'js/content-sync.js', 'js/card-content-model.js', 'js/menu-tree-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
     const code = fs.readFileSync(path.join(root, script), 'utf8');
     new vm.Script(code, { filename: script });
 }
@@ -270,6 +271,14 @@ assert.ok(testEditor.includes("const bulletMarker = '[•◦▪-]';"), 'The Text
 assert.ok(testEditor.includes('contentModel.createTextBlock'), 'Copy and save paths must emit canonical Text blocks.');
 assert.ok(testEditor.includes('test-add-image-block'), 'Image add button was removed.');
 assert.ok(testEditor.includes('hasUnsupportedCardContent'), 'Unsupported card content must lock editing.');
+assert.ok(testEditor.includes('const normalizeImageDisplayWidth = (value) => {'), 'Image display widths must be stored safely.');
+assert.ok(testEditor.includes('const getImageResizeBounds = (card, imageFrame) => {'), 'Image resizing must constrain the minimum and maximum widths.');
+assert.ok(testEditor.includes('const imageResizeMargin = 16;'), 'Image resizing must retain the required 16px horizontal margins.');
+assert.ok(testEditor.includes("['top-left', -1, -1], ['top-right', 1, -1], ['bottom-left', -1, 1], ['bottom-right', 1, 1]"), 'Images must expose four corner resize handles.');
+assert.ok(testEditor.includes('const verticalDelta = (moveEvent.clientY - startY) * verticalDirection * aspectRatio;'), 'Corner dragging must preserve image proportions for vertical movement.');
+assert.ok(testEditor.includes('if (!isEditorMode() || isCardEditLocked(card)) return;'), 'Image resize persistence must be limited to editable Editor cards.');
+assert.ok(testEditor.includes('displayWidth: normalizeImageDisplayWidth(savedBlock?.displayWidth)'), 'Image size settings must load into the card editor.');
+assert.ok(testEditor.includes("...(imageState.displayWidth ? { displayWidth: imageState.displayWidth } : {})"), 'Image size settings must survive copy and save paths.');
 assert.ok(!testEditor.includes("imageBlock.panel.querySelector('input')?.click();"), 'Adding an image block must not open the file chooser automatically.');
 assert.ok(testEditor.includes('test-add-body-block'), 'Body add button was removed.');
 assert.ok(testEditor.includes('test-card-move-up-btn'), 'Card move-up button was removed.');
@@ -301,6 +310,9 @@ assert.ok(testEditorCss.includes('object-fit: contain;'), 'Content-block images 
 assert.ok(testEditor.includes("imageFrame.className = 'test-card-image-frame'"), 'Each structured image must have its own original-view frame.');
 assert.ok(testEditor.includes('class="test-card-image-frame"'), 'Legacy card images must use the same original-view frame.');
 assert.ok(testEditorCss.includes('.test-card-image-frame:focus-within .test-original-view-btn'), 'Original-view buttons must remain available while focused.');
+assert.ok(testEditorCss.includes('.test-card-image-resize-handle'), 'Image corner resize handles must be styled.');
+assert.ok(testEditorCss.includes('max-width: calc(100% - 32px);'), 'Resized images must retain 16px margins inside cards.');
+assert.ok(testEditorCss.includes('body[data-role="viewer"] .test-card-image-resize-handle'), 'Viewer mode must hide image resize controls.');
 assert.ok(testEditorCss.includes('.test-card-has-description .test-card-content-blocks'), 'A card description must have clear separation from its first structured content block.');
 assert.ok(testEditorCss.includes('.test-card-has-description .test-card-image-slot'), 'A card description must have clear separation from its image content.');
 assert.ok(testEditorCss.includes('.test-card-has-description .test-card-body-columns'), 'A card description must have clear separation from its text or table content.');

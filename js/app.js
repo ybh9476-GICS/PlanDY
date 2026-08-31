@@ -7,6 +7,14 @@ const overviewCardStorageKey = 'wms-overview-cards-v1';
 const routeCardStorageKey = 'wms-route-cards-v1';
 const authoringCardStorageKey = 'wms-authoring-cards-v1';
 const isEditorMode = () => window.wmsPermissions?.isEditor() === true;
+const initializeAfterCardPatches = (callback) => {
+    const ready = window.wmsCardPatchReady;
+    if (!ready || typeof ready.then !== 'function') {
+        callback();
+        return;
+    }
+    ready.then(callback, callback);
+};
 const overviewInitialCardRows = [
     {
         type: 'single',
@@ -335,8 +343,10 @@ function initializeOverviewCardArea() {
         });
     };
 
-    if (window.initializeSharedCardEditor) connectSharedEditor();
-    else window.addEventListener('shared-card-editor-ready', connectSharedEditor, { once: true });
+    initializeAfterCardPatches(() => {
+        if (window.initializeSharedCardEditor) connectSharedEditor();
+        else window.addEventListener('shared-card-editor-ready', connectSharedEditor, { once: true });
+    });
 }
 
 function loadRouteCardRows() {
@@ -368,8 +378,10 @@ function initializeRouteCardArea() {
         });
     };
 
-    if (window.initializeSharedCardEditor) connectSharedEditor();
-    else window.addEventListener('shared-card-editor-ready', connectSharedEditor, { once: true });
+    initializeAfterCardPatches(() => {
+        if (window.initializeSharedCardEditor) connectSharedEditor();
+        else window.addEventListener('shared-card-editor-ready', connectSharedEditor, { once: true });
+    });
 }
 
 function loadAuthoringCardRows() {
@@ -401,8 +413,10 @@ function initializeAuthoringCardArea() {
         });
     };
 
-    if (window.initializeSharedCardEditor) connectSharedEditor();
-    else window.addEventListener('shared-card-editor-ready', connectSharedEditor, { once: true });
+    initializeAfterCardPatches(() => {
+        if (window.initializeSharedCardEditor) connectSharedEditor();
+        else window.addEventListener('shared-card-editor-ready', connectSharedEditor, { once: true });
+    });
 }
 
 function initializeCustomCardArea(menu, panel) {
@@ -423,8 +437,10 @@ function initializeCustomCardArea(menu, panel) {
             }
         });
     };
-    if (window.initializeSharedCardEditor) connectSharedEditor();
-    else window.addEventListener('shared-card-editor-ready', connectSharedEditor, { once: true });
+    initializeAfterCardPatches(() => {
+        if (window.initializeSharedCardEditor) connectSharedEditor();
+        else window.addEventListener('shared-card-editor-ready', connectSharedEditor, { once: true });
+    });
     return;
 
     const list = panel.querySelector('.custom-card-list');

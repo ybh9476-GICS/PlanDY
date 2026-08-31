@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-26T07:23:02.066Z",
+  "updatedAt": "2026-08-31T04:48:18.478Z",
   "storage": {
     "menus": {
       "schemaVersion": 2,
       "menus": [
         {
           "id": "custom-1786691916656",
-          "label": "개요",
-          "tooltip": "개요",
+          "label": "용어",
+          "tooltip": "용어",
           "icon": "<svg class=\"nav-icon\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path><polyline points=\"14 2 14 8 20 8\"></polyline><line x1=\"8\" y1=\"13\" x2=\"16\" y2=\"13\"></line><line x1=\"8\" y1=\"17\" x2=\"16\" y2=\"17\"></line></svg>",
           "iconAuto": true,
           "builtin": false,
@@ -18,14 +18,36 @@
         },
         {
           "id": "custom-1787718566928",
-          "label": "용어",
-          "tooltip": "용어",
+          "label": "WMS 흐름",
+          "tooltip": "WMS 흐름",
           "icon": "<svg class=\"nav-icon\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path><polyline points=\"14 2 14 8 20 8\"></polyline><line x1=\"8\" y1=\"13\" x2=\"16\" y2=\"13\"></line><line x1=\"8\" y1=\"17\" x2=\"16\" y2=\"17\"></line></svg>",
           "iconAuto": true,
           "parentId": "custom-1786691916656",
           "builtin": false,
           "visible": true,
           "order": 0
+        },
+        {
+          "id": "custom-1787900342908",
+          "label": "랙 로케이션",
+          "tooltip": "랙 로케이션",
+          "icon": "<svg class=\"nav-icon\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"></path><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"></polyline><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"></line></svg>",
+          "iconAuto": true,
+          "parentId": "custom-1786691916656",
+          "builtin": false,
+          "visible": true,
+          "order": 1
+        },
+        {
+          "id": "custom-1787900401783",
+          "label": "자동화 설비",
+          "tooltip": "자동화 설비",
+          "icon": "<svg class=\"nav-icon\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path><polyline points=\"14 2 14 8 20 8\"></polyline><line x1=\"8\" y1=\"13\" x2=\"16\" y2=\"13\"></line><line x1=\"8\" y1=\"17\" x2=\"16\" y2=\"17\"></line></svg>",
+          "iconAuto": true,
+          "parentId": "custom-1786691916656",
+          "builtin": false,
+          "visible": true,
+          "order": 2
         }
       ],
       "deletedBuiltinIds": [
@@ -44,11 +66,8 @@
       "custom-1786691916656": [],
       "custom-1787718566928": [
         {
-          "type": "double",
-          "columnWidths": [
-            50,
-            50
-          ],
+          "type": "single",
+          "columnWidths": null,
           "cards": [
             {
               "title": "입고부터 출고까지의 WMS 흐름",
@@ -69,7 +88,8 @@
               "contentBlocks": [
                 {
                   "type": "image",
-                  "imageId": "wms-inbound-outbound-v2"
+                  "imageId": "wms-inbound-outbound-v2",
+                  "displayWidth": 609
                 },
                 {
                   "type": "table",
@@ -132,6 +152,111 @@
                   }
                 }
               ]
+            }
+          ]
+        }
+      ],
+      "custom-1787729036435": [
+        {
+          "type": "double",
+          "columnWidths": [
+            47.4816,
+            52.5184
+          ],
+          "cards": [
+            {
+              "title": "입고부터 출고까지의 WMS 흐름",
+              "description": "입고부터 출고까지의 8단계 업무 흐름과 핵심 용어입니다.",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": false,
+              "lockSource": "",
+              "lockMessage": "",
+              "contentBlocks": [
+                {
+                  "type": "image",
+                  "imageId": "e4e905a1-93bc-4b1c-9769-6085bbd70d5b"
+                },
+                {
+                  "type": "table",
+                  "table": {
+                    "title": "WMS 입고부터 출고까지의 8단계",
+                    "hasHeader": true,
+                    "hasFirstColumnHeader": false,
+                    "columnWidths": [
+                      10.097281005914516,
+                      29.902718994085493,
+                      60
+                    ],
+                    "rows": [
+                      [
+                        "순서",
+                        "용어",
+                        "설명"
+                      ],
+                      [
+                        "1",
+                        "입고 접수·하역",
+                        "도크에서 도착 상품을 내리고 입고 예정 정보와 대조합니다."
+                      ],
+                      [
+                        "2",
+                        "검수·바코드 스캔",
+                        "SKU·수량·포장 단위를 확인하고 WMS 재고에 반영합니다."
+                      ],
+                      [
+                        "3",
+                        "적치",
+                        "WMS가 지정한 로케이션으로 상품을 옮겨 보관합니다."
+                      ],
+                      [
+                        "4",
+                        "보관·재고 관리",
+                        "수량·위치·로트·유통기한을 관리하고 필요 시 보충합니다."
+                      ],
+                      [
+                        "5",
+                        "피킹",
+                        "출고 주문에 맞는 상품을 보관 위치에서 꺼냅니다."
+                      ],
+                      [
+                        "6",
+                        "검품·합포·포장",
+                        "주문 일치 여부를 확인하고 포장·라벨 부착을 합니다."
+                      ],
+                      [
+                        "7",
+                        "출고 대기·상차 준비",
+                        "배송 노선이나 차량별로 포장 완료 상품을 모아 둡니다."
+                      ],
+                      [
+                        "8",
+                        "출고 상차·출고 확정",
+                        "차량에 싣고 출고 완료 및 재고 차감을 기록합니다."
+                      ]
+                    ],
+                    "rowHeights": [
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36
+                    ]
+                  }
+                }
+              ]
             },
             {
               "title": "자동화 창고 랙·로케이션 용어",
@@ -146,13 +271,13 @@
               "body2Html": "",
               "imageId": "",
               "image": "",
-              "editLocked": true,
-              "lockSource": "manual",
+              "editLocked": false,
+              "lockSource": "",
               "lockMessage": "",
               "contentBlocks": [
                 {
                   "type": "image",
-                  "imageId": "automated-warehouse-rack-location-terms-v4"
+                  "imageId": "a93c30c1-ce79-4fcf-aad2-f39a26c1ee3b"
                 },
                 {
                   "type": "table",
@@ -218,6 +343,503 @@
                       ]
                     ],
                     "rowHeights": [
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "custom-1787729125393": [
+        {
+          "type": "double",
+          "columnWidths": [
+            50,
+            50
+          ],
+          "cards": [
+            {
+              "title": "입고부터 출고까지의 WMS 흐름",
+              "description": "입고부터 출고까지의 8단계 업무 흐름과 핵심 용어입니다.",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": true,
+              "lockSource": "manual",
+              "lockMessage": "",
+              "contentBlocks": [
+                {
+                  "type": "image",
+                  "imageId": "856282f3-3ac3-4705-a50d-b0012a10e6f0"
+                },
+                {
+                  "type": "table",
+                  "table": {
+                    "title": "WMS 입고부터 출고까지의 8단계",
+                    "hasHeader": true,
+                    "hasFirstColumnHeader": false,
+                    "columnWidths": [
+                      12,
+                      28.000000000000004,
+                      60
+                    ],
+                    "rows": [
+                      [
+                        "순서",
+                        "용어",
+                        "설명"
+                      ],
+                      [
+                        "1",
+                        "입고 접수·하역",
+                        "도크에서 도착 상품을 내리고 입고 예정 정보와 대조합니다."
+                      ],
+                      [
+                        "2",
+                        "검수·바코드 스캔",
+                        "SKU·수량·포장 단위를 확인하고 WMS 재고에 반영합니다."
+                      ],
+                      [
+                        "3",
+                        "적치",
+                        "WMS가 지정한 로케이션으로 상품을 옮겨 보관합니다."
+                      ],
+                      [
+                        "4",
+                        "보관·재고 관리",
+                        "수량·위치·로트·유통기한을 관리하고 필요 시 보충합니다."
+                      ],
+                      [
+                        "5",
+                        "피킹",
+                        "출고 주문에 맞는 상품을 보관 위치에서 꺼냅니다."
+                      ],
+                      [
+                        "6",
+                        "검품·합포·포장",
+                        "주문 일치 여부를 확인하고 포장·라벨 부착을 합니다."
+                      ],
+                      [
+                        "7",
+                        "출고 대기·상차 준비",
+                        "배송 노선이나 차량별로 포장 완료 상품을 모아 둡니다."
+                      ],
+                      [
+                        "8",
+                        "출고 상차·출고 확정",
+                        "차량에 싣고 출고 완료 및 재고 차감을 기록합니다."
+                      ]
+                    ],
+                    "rowHeights": [
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "title": "자동화 창고 랙·로케이션 용어",
+              "description": "위키의 랙 주소 체계와 AS/RS 연계 자료를 바탕으로 정리한 핵심 용어입니다.",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": true,
+              "lockSource": "manual",
+              "lockMessage": "",
+              "contentBlocks": [
+                {
+                  "type": "image",
+                  "imageId": "47c1e2d2-164d-432a-82dc-0170bb6ffd90"
+                },
+                {
+                  "type": "table",
+                  "table": {
+                    "title": "자동화 창고 랙 관련 핵심 용어",
+                    "hasHeader": true,
+                    "hasFirstColumnHeader": false,
+                    "columnWidths": [
+                      15.188771979507923,
+                      33.27746403028185,
+                      51.533763990210225
+                    ],
+                    "rows": [
+                      [
+                        "용어",
+                        "의미",
+                        "WMS·자동화 창고 적용"
+                      ],
+                      [
+                        "Rack(랙)",
+                        "팔레트·토트 등을 여러 단에 보관하는 구조물입니다.",
+                        "AS/RS는 랙, 저장·반출 설비, WMS 소프트웨어가 결합된 구성으로 설명됩니다."
+                      ],
+                      [
+                        "Area(구역)",
+                        "창고 내부의 큰 운영 구역입니다.",
+                        "랙·로케이션을 운영 목적이나 물류 특성별로 묶는 상위 주소입니다."
+                      ],
+                      [
+                        "Aisle(통로)",
+                        "랙 사이의 이동 통로입니다.",
+                        "스태커크레인·셔틀·지게차 등 설비의 이동 및 작업 경로를 구분합니다."
+                      ],
+                      [
+                        "Bay(베이)",
+                        "통로를 따라 구분한 하나의 랙 구간입니다.",
+                        "랙 주소의 가로 방향 구획으로 사용합니다."
+                      ],
+                      [
+                        "Level(레벨)",
+                        "높이 방향의 보관 단입니다.",
+                        "수직 보관 위치와 설비의 취급 높이를 식별합니다."
+                      ],
+                      [
+                        "Position(포지션)",
+                        "같은 베이·레벨 안의 세부 위치입니다.",
+                        "좌우 또는 깊이 방향의 슬롯을 구분합니다."
+                      ],
+                      [
+                        "Bin(빈)",
+                        "실제 재고를 놓는 가장 세부적인 보관 칸입니다.",
+                        "재고·LPN·가용 여부·잠금 상태의 관리 단위입니다."
+                      ],
+                      [
+                        "Location(로케이션)",
+                        "WMS에서 보관·작업 위치를 나타내는 주소입니다.",
+                        "입고·보관·피킹·보충·출고 작업을 정확한 랙 위치와 연결합니다."
+                      ],
+                      [
+                        "AS/RS",
+                        "자동 저장·반출 시스템입니다.",
+                        "랙과 저장·반출 설비의 화물 이동·보관 위치 데이터를 WMS와 연계합니다."
+                      ]
+                    ],
+                    "rowHeights": [
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "custom-1787729201959": [
+        {
+          "type": "double",
+          "columnWidths": [
+            50,
+            50
+          ],
+          "cards": [
+            {
+              "title": "",
+              "description": "",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": false,
+              "lockSource": "",
+              "lockMessage": "",
+              "contentBlocks": []
+            },
+            {
+              "title": "",
+              "description": "",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": false,
+              "lockSource": "",
+              "lockMessage": "",
+              "contentBlocks": []
+            }
+          ]
+        }
+      ],
+      "custom-1787900342908": [
+        {
+          "type": "single",
+          "columnWidths": null,
+          "cards": [
+            {
+              "title": "자동화 창고 랙·로케이션 용어",
+              "description": "위키의 랙 주소 체계와 AS/RS 연계 자료를 바탕으로 정리한 핵심 용어입니다.",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": true,
+              "lockSource": "manual",
+              "lockMessage": "",
+              "contentBlocks": [
+                {
+                  "type": "image",
+                  "imageId": "0acc43c9-0676-4161-8b7c-4fbe19d643d1",
+                  "displayWidth": 513
+                },
+                {
+                  "type": "table",
+                  "table": {
+                    "title": "자동화 창고 랙 관련 핵심 용어",
+                    "hasHeader": true,
+                    "hasFirstColumnHeader": false,
+                    "columnWidths": [
+                      15.188771979507923,
+                      33.27746403028185,
+                      51.533763990210225
+                    ],
+                    "rows": [
+                      [
+                        "용어",
+                        "의미",
+                        "WMS·자동화 창고 적용"
+                      ],
+                      [
+                        "Rack(랙)",
+                        "팔레트·토트 등을 여러 단에 보관하는 구조물입니다.",
+                        "AS/RS는 랙, 저장·반출 설비, WMS 소프트웨어가 결합된 구성으로 설명됩니다."
+                      ],
+                      [
+                        "Area(구역)",
+                        "창고 내부의 큰 운영 구역입니다.",
+                        "랙·로케이션을 운영 목적이나 물류 특성별로 묶는 상위 주소입니다."
+                      ],
+                      [
+                        "Aisle(통로)",
+                        "랙 사이의 이동 통로입니다.",
+                        "스태커크레인·셔틀·지게차 등 설비의 이동 및 작업 경로를 구분합니다."
+                      ],
+                      [
+                        "Bay(베이)",
+                        "통로를 따라 구분한 하나의 랙 구간입니다.",
+                        "랙 주소의 가로 방향 구획으로 사용합니다."
+                      ],
+                      [
+                        "Level(레벨)",
+                        "높이 방향의 보관 단입니다.",
+                        "수직 보관 위치와 설비의 취급 높이를 식별합니다."
+                      ],
+                      [
+                        "Position(포지션)",
+                        "같은 베이·레벨 안의 세부 위치입니다.",
+                        "좌우 또는 깊이 방향의 슬롯을 구분합니다."
+                      ],
+                      [
+                        "Bin(빈)",
+                        "실제 재고를 놓는 가장 세부적인 보관 칸입니다.",
+                        "재고·LPN·가용 여부·잠금 상태의 관리 단위입니다."
+                      ],
+                      [
+                        "Location(로케이션)",
+                        "WMS에서 보관·작업 위치를 나타내는 주소입니다.",
+                        "입고·보관·피킹·보충·출고 작업을 정확한 랙 위치와 연결합니다."
+                      ],
+                      [
+                        "AS/RS",
+                        "자동 저장·반출 시스템입니다.",
+                        "랙과 저장·반출 설비의 화물 이동·보관 위치 데이터를 WMS와 연계합니다."
+                      ]
+                    ],
+                    "rowHeights": [
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36,
+                      36
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "custom-1787900401783": [
+        {
+          "type": "single",
+          "columnWidths": null,
+          "cards": [
+            {
+              "title": "자동화 창고 운송·이동 설비",
+              "description": "위키 자료를 바탕으로 정리한 운송·이동 설비입니다. AMR과 AGV를 별도 항목으로 두고, 각 썸네일에서 원본 이미지를 열 수 있습니다.",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": true,
+              "lockSource": "manual",
+              "lockMessage": "",
+              "contentBlocks": [
+                {
+                  "type": "table",
+                  "table": {
+                    "title": "운송·이동 설비 종류와 실제 사진",
+                    "hasHeader": true,
+                    "hasFirstColumnHeader": false,
+                    "columnWidths": [
+                      14.055700047948871,
+                      40.879598034208,
+                      21.06470191784312,
+                      24
+                    ],
+                    "rows": [
+                      [
+                        "설비",
+                        "사진에서 확인되는 형태",
+                        "위키 기준 역할",
+                        "이미지"
+                      ],
+                      [
+                        "AMR",
+                        "포크 없이 센서·지도 기반으로 주변을 인식하며 이동하는 자율이동로봇",
+                        "자재·완제품·상자의 유연한 구간 이송",
+                        ""
+                      ],
+                      [
+                        "AGV",
+                        "랙 구역 사이의 통로를 지정된 유도 경로로 이동하는 무인운반차",
+                        "정해진 공정·보관 구간의 반복 이송",
+                        ""
+                      ],
+                      [
+                        "지게형 AMR",
+                        "포크로 팔레트를 들어 랙 통로를 주행하는 자율주행 지게차",
+                        "입고·적치·출고 및 층간 입출고 연계",
+                        ""
+                      ],
+                      [
+                        "엘리베이터 연동 AMR",
+                        "화물을 싣고 엘리베이터에 진입하는 이동 로봇",
+                        "층간 이동과 입출고 작업 연계",
+                        ""
+                      ],
+                      [
+                        "4방향 셔틀",
+                        "랙 레일 위에서 팔레트를 전후·좌우로 이송하는 셔틀",
+                        "고밀도 보관 구간의 팔레트 이동",
+                        ""
+                      ],
+                      [
+                        "팔레트 롤러 컨베이어",
+                        "롤러 위에서 팔레트를 일정 경로로 연속 이송하는 설비",
+                        "입고·출고·AS/RS 입출고 연결",
+                        ""
+                      ],
+                      [
+                        "토트·박스 셔틀",
+                        "다층 랙 안에서 토트·트레이·상자를 운반하는 셔틀",
+                        "랙 내부 보관·반출과 피킹 연계",
+                        ""
+                      ],
+                      [
+                        "스태커크레인",
+                        "고층 랙 사이 레일을 따라 수직·수평으로 움직이는 크레인",
+                        "자동 보관·반출과 재고 위치 관리",
+                        ""
+                      ],
+                      [
+                        "옴니소터",
+                        "다단 선반·빈을 이용해 목적지별로 분류하는 설비",
+                        "주문·목적지별 상품 분류",
+                        ""
+                      ],
+                      [
+                        "갠트리 로봇",
+                        "천장 레일과 컨베이어 위에서 팔레트·상자를 취급하는 로봇",
+                        "지정 지점의 자동 이송·적재·취급",
+                        ""
+                      ]
+                    ],
+                    "thumbnailColumn": 3,
+                    "thumbnailImageIds": [
+                      "",
+                      "transport-amr-lidar-360-v3",
+                      "transport-agv-guided-floor-v3",
+                      "transport-amr-promag",
+                      "transport-elevator-amr-kumalift",
+                      "transport-fourway-shuttle-mb",
+                      "transport-pallet-conveyor-mecalux",
+                      "transport-shuttle-tgw",
+                      "transport-asrs-stacker-kinte",
+                      "transport-omni-sorter-mclogi",
+                      "transport-gantry-rober"
+                    ],
+                    "rowHeights": [
+                      36,
                       36,
                       36,
                       36,

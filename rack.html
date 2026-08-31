@@ -6,7 +6,7 @@
     <title>유풍 창고 관리 시스템(WMS) - 디지털 트윈 오케스트레이션</title>
     <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
     <link rel="stylesheet" href="css/style.css?v=menu-delete-lock-v1"/>
-    <link rel="stylesheet" href="css/test-editor.css?v=image-original-frame-v9"/>
+    <link rel="stylesheet" href="css/test-editor.css?v=image-resize-v12"/>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script>document.addEventListener("DOMContentLoaded", function() { mermaid.initialize({startOnLoad:true, theme:"neutral"}); });</script>
 </head>
@@ -820,10 +820,10 @@
 </main>
 
 <script src="js/role-permissions.js?v=local-accounts-v2"></script>
-<script src="js/content-sync.js?v=card-patch-v5"></script>
+<script src="js/content-sync.js?v=card-patch-v13"></script>
 <script src="js/card-content-model.js?v=text-model-v2"></script>
 <script src="js/menu-tree-model.js?v=menu-tree-v1"></script>
-<script src="js/app.js?v=menu-tree-v2"></script>
+<script src="js/app.js?v=card-patch-gate-v3"></script>
 
 <!-- Search Modal Overlay -->
 <div id="searchModal" class="search-modal-overlay" style="display:none;">
@@ -958,7 +958,7 @@
                 <div id="help-level1-edit" class="help-level1-panel" hidden>
                     <section class="help-level2">
                         <button class="help-level2-toggle" type="button" aria-expanded="false" aria-controls="help-level2-edit-basic"><span class="help-toggle-icon" aria-hidden="true">▶</span><span>3.1 기본 정보와 이미지</span></button>
-                        <div id="help-level2-edit-basic" class="help-level2-panel" hidden><ul><li>카드의 <strong>Edit</strong> 버튼을 눌러 제목, 설명, 이미지, 본문을 수정합니다.</li><li><strong>+ 이미지 추가</strong>에서 파일 업로드, 드래그앤드롭, 붙여넣기로 이미지를 등록합니다.</li><li>이미지 위에 마우스를 올려 <strong>원본보기</strong>를 선택할 수 있습니다.</li></ul></div>
+                        <div id="help-level2-edit-basic" class="help-level2-panel" hidden><ul><li>카드의 <strong>Edit</strong> 버튼을 눌러 제목, 설명, 이미지, 본문을 수정합니다.</li><li><strong>+ 이미지 추가</strong>에서 파일 업로드, 드래그앤드롭, 붙여넣기로 이미지를 등록합니다.</li><li>이미지 위에 마우스를 올려 모서리의 핸들을 이동시키면 크기를 조정할 수 있습니다.</li><li>이미지 위에 마우스를 올려 <strong>원본보기</strong>를 선택할 수 있습니다.</li></ul></div>
                     </section>
                     <section class="help-level2">
                         <button class="help-level2-toggle" type="button" aria-expanded="false" aria-controls="help-level2-edit-pdf"><span class="help-toggle-icon" aria-hidden="true">▶</span><span>3.2 PDF 등록과 확인</span></button>
@@ -1024,6 +1024,6 @@
 </div>
 
 <script src="js/app-features.js?v=help-accordion-v4"></script>
-<script src="js/test-editor-v14.js?v=card-delete-layout-v1"></script>
+<script src="js/test-editor-v14.js?v=image-resize-v5"></script>
 </body>
 </html>

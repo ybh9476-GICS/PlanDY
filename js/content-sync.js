@@ -10,6 +10,17 @@
         authoringCards: 'wms-authoring-cards-v1',
         testCards: 'wms-test-menu-cards-v1'
     };
+    let resolveCardPatchReady;
+    let cardPatchReadySettled = false;
+    window.wmsCardPatchReady = new Promise((resolve) => {
+        resolveCardPatchReady = resolve;
+    });
+
+    function finishCardPatchReady() {
+        if (cardPatchReadySettled) return;
+        cardPatchReadySettled = true;
+        resolveCardPatchReady();
+    }
 
     async function savePatchedImage(imageId, imageUrl) {
         const response = await fetch(imageUrl, { cache: 'no-store' });
@@ -41,21 +52,71 @@
         let changed = false;
         for (const patch of documentValue.patches) {
             if (!patch?.id || localStorage.getItem(`wms-card-patch-applied-v1:${patch.id}`)) continue;
-            if (!patch.card || !patch.image) continue;
+            const images = Array.isArray(patch.images) ? patch.images : (patch.image ? [patch.image] : []);
+            const tableSource = patch.table || documentValue.patches.find((candidate) => candidate?.id === patch.tableTemplateId)?.table;
+            if (!patch.card || images.length === 0 || !tableSource) continue;
             // 자동 등록 대상만 만들거나 갱신한다. 다른 메뉴와 카드 행은 그대로 보존한다.
             const state = readStoredValue(storageKeys.customCards) || {};
             const rows = Array.isArray(state[patch.menuId]) ? state[patch.menuId] : (state[patch.menuId] = []);
-            while (rows.length <= patch.rowIndex) rows.push({ type: 'single', columnWidths: null, cards: [] });
-            const row = rows[patch.rowIndex];
+            for (const generatedCard of patch.cleanupGeneratedCards || []) {
+                for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex -= 1) {
+                    const rowCards = rows[rowIndex]?.cards;
+                    if (!Array.isArray(rowCards)) continue;
+                    for (let cardIndex = rowCards.length - 1; cardIndex >= 0; cardIndex -= 1) {
+                        const candidate = rowCards[cardIndex];
+                        if (candidate?.title !== generatedCard.title || candidate?.description !== generatedCard.description) continue;
+                        rowCards.splice(cardIndex, 1);
+                    }
+                    if (rowCards.length === 0) rows.splice(rowIndex, 1);
+                    else if (rowCards.length === 1) rows[rowIndex].type = 'single';
+                }
+            }
+            for (const cleanupTarget of patch.cleanupTargets || []) {
+                const cleanupRow = rows[cleanupTarget?.rowIndex];
+                const cleanupCard = cleanupRow?.cards?.[cleanupTarget?.cardIndex];
+                if (cleanupCard?.title !== cleanupTarget?.title) continue;
+                cleanupRow.cards.splice(cleanupTarget.cardIndex, 1);
+                if (cleanupRow.cards.length === 0) rows.splice(cleanupTarget.rowIndex, 1);
+                else if (cleanupRow.cards.length === 1) cleanupRow.type = 'single';
+            }
+            let targetRowIndex = patch.rowIndex;
+            let targetCardIndex = patch.cardIndex;
+            if (Number.isInteger(patch.readingIndex) && patch.readingIndex >= 0) {
+                let remaining = patch.readingIndex;
+                for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+                    const cards = rows[rowIndex]?.cards;
+                    if (!Array.isArray(cards)) continue;
+                    if (remaining < cards.length) {
+                        targetRowIndex = rowIndex;
+                        targetCardIndex = remaining;
+                        break;
+                    }
+                    remaining -= cards.length;
+                }
+            }
+            while (rows.length <= targetRowIndex) rows.push({ type: 'single', columnWidths: null, cards: [] });
+            const row = rows[targetRowIndex];
             if (!Array.isArray(row.cards)) row.cards = [];
-            const card = row.cards[patch.cardIndex] || {};
-            await savePatchedImage(patch.image.id, patch.image.url);
-            row.cards[patch.cardIndex] = {
+            const card = row.cards[targetCardIndex] || {};
+            for (const image of images) {
+                if (!image?.id || !image?.url) continue;
+                await savePatchedImage(image.id, image.url);
+            }
+            row.cards[targetCardIndex] = {
                 ...card,
                 ...patch.card,
                 contentBlocks: [
-                    { type: 'image', imageId: patch.image.id },
-                    { type: 'table', table: patch.table }
+                    ...(patch.showImageBlocks === false ? [] : images.map((image) => ({ type: 'image', imageId: image.id }))),
+                    {
+                        type: 'table',
+                        table: {
+                            ...tableSource,
+                            ...(Array.isArray(patch.thumbnailImageIds) ? {
+                                thumbnailColumn: Number(patch.thumbnailColumn),
+                                thumbnailImageIds: patch.thumbnailImageIds
+                            } : {})
+                        }
+                    }
                 ]
             };
             localStorage.setItem(storageKeys.customCards, JSON.stringify(state));
@@ -115,13 +176,15 @@
 
     async function seedEmptyBrowserFromPublishedContent() {
         try {
-            if (hasLocalContent() || localStorage.getItem(appliedMarkerKey)) return;
+            if (hasLocalContent() || localStorage.getItem(appliedMarkerKey)) return false;
             const documentValue = await fetchPublishedContent();
             applyContentDocument(documentValue);
             localStorage.setItem(appliedMarkerKey, 'true');
             window.location.reload();
+            return true;
         } catch (_) {
             // file:// 또는 네트워크 오류에서는 기존 화면의 기본 데이터를 그대로 사용합니다.
+            return false;
         }
     }
 
@@ -174,14 +237,18 @@
         document.getElementById('contentExportBtn')?.addEventListener('click', downloadContent);
         document.getElementById('contentImportBtn')?.addEventListener('click', requestImport);
         document.getElementById('contentRestoreBtn')?.addEventListener('click', restorePublishedContent);
-        applyPendingCardPatches().then((changed) => {
-            if (changed) window.location.reload();
-        }).catch(() => {});
+        applyPendingCardPatches().then(async (changed) => {
+            if (changed) {
+                window.location.reload();
+                return;
+            }
+            const seeded = await seedEmptyBrowserFromPublishedContent();
+            if (!seeded) finishCardPatchReady();
+        }).catch(() => finishCardPatchReady());
         document.getElementById('contentImportInput')?.addEventListener('change', (event) => {
             importContent(event.target.files?.[0]);
             event.target.value = '';
         });
     });
 
-    seedEmptyBrowserFromPublishedContent();
 }());

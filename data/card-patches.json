@@ -85,6 +85,578 @@
           ["AS/RS", "자동 저장·반출 시스템입니다.", "랙과 저장·반출 설비의 화물 이동·보관 위치 데이터를 WMS와 연계합니다."]
         ]
       }
+    },
+    {
+      "id": "terms-transport-equipment-v1",
+      "menuId": "custom-1787718566928",
+      "rowIndex": 2,
+      "cardIndex": 0,
+      "images": [
+        { "id": "transport-amr-promag", "url": "assets/wms/transport-amr-promag.jpg" },
+        { "id": "transport-fourway-shuttle-mb", "url": "assets/wms/transport-fourway-shuttle-mb.jpg" },
+        { "id": "transport-pallet-conveyor-mecalux", "url": "assets/wms/transport-pallet-conveyor-mecalux.jpg" },
+        { "id": "transport-shuttle-tgw", "url": "assets/wms/transport-shuttle-tgw.jpg" },
+        { "id": "transport-asrs-stacker-kinte", "url": "assets/wms/transport-asrs-stacker-kinte.jpg" },
+        { "id": "transport-omni-sorter-mclogi", "url": "assets/wms/transport-omni-sorter-mclogi.png" },
+        { "id": "transport-elevator-amr-kumalift", "url": "assets/wms/transport-elevator-amr-kumalift.jpg" },
+        { "id": "transport-gantry-rober", "url": "assets/wms/transport-gantry-rober.jpg" }
+      ],
+      "card": {
+        "title": "자동화 창고 운송·이동 설비",
+        "description": "위키 자료를 바탕으로 정리한 운송·이동 설비와 실제 설치 사진입니다. 사진별 원본 출처는 표에서 확인할 수 있습니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2": "",
+        "body2Html": "",
+        "body2Type": "text",
+        "table2": null,
+        "imageId": "",
+        "image": "",
+        "editLocked": false
+      },
+      "table": {
+        "title": "운송·이동 설비 종류와 실제 사진 출처",
+        "hasHeader": true,
+        "hasFirstColumnHeader": false,
+        "columnWidths": [19, 28, 29, 24],
+        "rows": [
+          ["설비", "사진에서 확인되는 형태", "위키 기준 역할", "원본 출처"],
+          ["AMR·지게형 AMR", "팔레트를 들어 랙 통로를 주행하는 자율주행 지게차", "자재·완제품·팔레트 이동 및 층간 입출고 연계", "PROMAG 실제 운용 사진\nhttps://promag.pl/strefa-wiedzy/automatyzacja-transportu-dzieki-wozkom-amr/"],
+          ["4WAY AGV·셔틀", "랙 레일 위에서 팔레트를 운반하는 4방향 셔틀", "보관창고·부품 자동화의 고밀도 보관 구간 이동", "MB Intelligence 실제 설치 사진\nhttps://www.mbintell.com/shuttle"],
+          ["팔레트 컨베이어", "롤러·체인 구간으로 팔레트를 연결 이송하는 설비", "완제품 적재 후 보관·출고 구간으로의 고정 경로 이송", "Mecalux 실제 설치 사진\nhttps://www.mecalux.com/warehouse-automation/pallet-conveyor"],
+          ["셔틀 기반 보관 시스템", "다층 랙 안에서 토트·트레이를 운반하는 셔틀", "랙 내부 보관·반출 및 피킹 연계", "TGW 실제 설치 사진\nhttps://www.tgw-group.com/en/our-customers/reca-kellner-kunz"],
+          ["AS/RS·스태커크레인", "고층 랙 사이 레일을 따라 수직·수평으로 움직이는 크레인", "자동 보관·반출과 재고 위치 관리", "Kinte 실제 설치 사진\nhttps://www.asrs-systems.com/sale-14507926-customized-height-heavy-stacker-crane-warehouse-dual-single-mast.html"],
+          ["옴니소터", "다단 선반·빈을 이용해 목적지별로 분류하는 설비", "주문·목적지별 상품 분류", "MCLOGI 실제 설치 사진\nhttps://www.mclogi.com/information/OmniSorter"],
+          ["엘리베이터 연동 AMR", "화물을 싣고 엘리베이터에 진입하는 이동 로봇", "층간 이동과 입출고 작업 연계", "Kumalift 실제 연동 사진\nhttps://monoque.jp/challenge/88/"],
+          ["갠트리 로봇", "천장 레일과 컨베이어 위에서 팔레트·상자를 취급하는 로봇", "지정 지점의 자동 이송·적재·취급", "RO-BER 실제 설치 사진\nhttps://www.ro-ber.de/products"]
+        ]
+      }
+    },
+    {
+      "id": "terms-transport-equipment-v2",
+      "menuId": "custom-1787718566928",
+      "rowIndex": 1,
+      "cardIndex": 1,
+      "cleanupTargets": [
+        { "rowIndex": 2, "cardIndex": 0, "title": "자동화 창고 운송·이동 설비" }
+      ],
+      "images": [
+        { "id": "transport-amr-promag", "url": "assets/wms/transport-amr-promag.jpg" },
+        { "id": "transport-fourway-shuttle-mb", "url": "assets/wms/transport-fourway-shuttle-mb.jpg" },
+        { "id": "transport-pallet-conveyor-mecalux", "url": "assets/wms/transport-pallet-conveyor-mecalux.jpg" },
+        { "id": "transport-shuttle-tgw", "url": "assets/wms/transport-shuttle-tgw.jpg" },
+        { "id": "transport-asrs-stacker-kinte", "url": "assets/wms/transport-asrs-stacker-kinte.jpg" },
+        { "id": "transport-omni-sorter-mclogi", "url": "assets/wms/transport-omni-sorter-mclogi.png" },
+        { "id": "transport-elevator-amr-kumalift", "url": "assets/wms/transport-elevator-amr-kumalift.jpg" },
+        { "id": "transport-gantry-rober", "url": "assets/wms/transport-gantry-rober.jpg" }
+      ],
+      "card": {
+        "title": "자동화 창고 운송·이동 설비",
+        "description": "위키 자료를 바탕으로 정리한 운송·이동 설비와 실제 설치 사진입니다. 사진별 원본 출처는 표에서 확인할 수 있습니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2": "",
+        "body2Html": "",
+        "body2Type": "text",
+        "table2": null,
+        "imageId": "",
+        "image": "",
+        "editLocked": false
+      },
+      "table": {
+        "title": "운송·이동 설비 종류와 실제 사진 출처",
+        "hasHeader": true,
+        "hasFirstColumnHeader": false,
+        "columnWidths": [19, 28, 29, 24],
+        "rows": [
+          ["설비", "사진에서 확인되는 형태", "위키 기준 역할", "원본 출처"],
+          ["AMR·지게형 AMR", "팔레트를 들어 랙 통로를 주행하는 자율주행 지게차", "자재·완제품·팔레트 이동 및 층간 입출고 연계", "PROMAG 실제 운용 사진\nhttps://promag.pl/strefa-wiedzy/automatyzacja-transportu-dzieki-wozkom-amr/"],
+          ["4WAY AGV·셔틀", "랙 레일 위에서 팔레트를 운반하는 4방향 셔틀", "보관창고·부품 자동화의 고밀도 보관 구간 이동", "MB Intelligence 실제 설치 사진\nhttps://www.mbintell.com/shuttle"],
+          ["팔레트 컨베이어", "롤러·체인 구간으로 팔레트를 연결 이송하는 설비", "완제품 적재 후 보관·출고 구간으로의 고정 경로 이송", "Mecalux 실제 설치 사진\nhttps://www.mecalux.com/warehouse-automation/pallet-conveyor"],
+          ["셔틀 기반 보관 시스템", "다층 랙 안에서 토트·트레이를 운반하는 셔틀", "랙 내부 보관·반출 및 피킹 연계", "TGW 실제 설치 사진\nhttps://www.tgw-group.com/en/our-customers/reca-kellner-kunz"],
+          ["AS/RS·스태커크레인", "고층 랙 사이 레일을 따라 수직·수평으로 움직이는 크레인", "자동 보관·반출과 재고 위치 관리", "Kinte 실제 설치 사진\nhttps://www.asrs-systems.com/sale-14507926-customized-height-heavy-stacker-crane-warehouse-dual-single-mast.html"],
+          ["옴니소터", "다단 선반·빈을 이용해 목적지별로 분류하는 설비", "주문·목적지별 상품 분류", "MCLOGI 실제 설치 사진\nhttps://www.mclogi.com/information/OmniSorter"],
+          ["엘리베이터 연동 AMR", "화물을 싣고 엘리베이터에 진입하는 이동 로봇", "층간 이동과 입출고 작업 연계", "Kumalift 실제 연동 사진\nhttps://monoque.jp/challenge/88/"],
+          ["갠트리 로봇", "천장 레일과 컨베이어 위에서 팔레트·상자를 취급하는 로봇", "지정 지점의 자동 이송·적재·취급", "RO-BER 실제 설치 사진\nhttps://www.ro-ber.de/products"]
+        ]
+      }
+    },
+    {
+      "id": "terms-transport-equipment-v4",
+      "menuId": "custom-1787718566928",
+      "rowIndex": 1,
+      "cardIndex": 1,
+      "readingIndex": 2,
+      "cleanupGeneratedCards": [
+        {
+          "title": "자동화 창고 운송·이동 설비",
+          "description": "위키 자료를 바탕으로 정리한 운송·이동 설비와 실제 설치 사진입니다. 사진별 원본 출처는 표에서 확인할 수 있습니다."
+        }
+      ],
+      "images": [
+        { "id": "transport-amr-promag", "url": "assets/wms/transport-amr-promag.jpg" },
+        { "id": "transport-fourway-shuttle-mb", "url": "assets/wms/transport-fourway-shuttle-mb.jpg" },
+        { "id": "transport-pallet-conveyor-mecalux", "url": "assets/wms/transport-pallet-conveyor-mecalux.jpg" },
+        { "id": "transport-shuttle-tgw", "url": "assets/wms/transport-shuttle-tgw.jpg" },
+        { "id": "transport-asrs-stacker-kinte", "url": "assets/wms/transport-asrs-stacker-kinte.jpg" },
+        { "id": "transport-omni-sorter-mclogi", "url": "assets/wms/transport-omni-sorter-mclogi.png" },
+        { "id": "transport-elevator-amr-kumalift", "url": "assets/wms/transport-elevator-amr-kumalift.jpg" },
+        { "id": "transport-gantry-rober", "url": "assets/wms/transport-gantry-rober.jpg" }
+      ],
+      "card": {
+        "title": "자동화 창고 운송·이동 설비",
+        "description": "위키 자료를 바탕으로 정리한 운송·이동 설비와 실제 설치 사진입니다. 사진별 원본 출처는 표에서 확인할 수 있습니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2": "",
+        "body2Html": "",
+        "body2Type": "text",
+        "table2": null,
+        "imageId": "",
+        "image": "",
+        "editLocked": false
+      },
+      "table": {
+        "title": "운송·이동 설비 종류와 실제 사진 출처",
+        "hasHeader": true,
+        "hasFirstColumnHeader": false,
+        "columnWidths": [19, 28, 29, 24],
+        "rows": [
+          ["설비", "사진에서 확인되는 형태", "위키 기준 역할", "원본 출처"],
+          ["AMR·지게형 AMR", "팔레트를 들어 랙 통로를 주행하는 자율주행 지게차", "자재·완제품·팔레트 이동 및 층간 입출고 연계", "PROMAG 실제 운용 사진\nhttps://promag.pl/strefa-wiedzy/automatyzacja-transportu-dzieki-wozkom-amr/"],
+          ["4WAY AGV·셔틀", "랙 레일 위에서 팔레트를 운반하는 4방향 셔틀", "보관창고·부품 자동화의 고밀도 보관 구간 이동", "MB Intelligence 실제 설치 사진\nhttps://www.mbintell.com/shuttle"],
+          ["팔레트 컨베이어", "롤러·체인 구간으로 팔레트를 연결 이송하는 설비", "완제품 적재 후 보관·출고 구간으로의 고정 경로 이송", "Mecalux 실제 설치 사진\nhttps://www.mecalux.com/warehouse-automation/pallet-conveyor"],
+          ["셔틀 기반 보관 시스템", "다층 랙 안에서 토트·트레이를 운반하는 셔틀", "랙 내부 보관·반출 및 피킹 연계", "TGW 실제 설치 사진\nhttps://www.tgw-group.com/en/our-customers/reca-kellner-kunz"],
+          ["AS/RS·스태커크레인", "고층 랙 사이 레일을 따라 수직·수평으로 움직이는 크레인", "자동 보관·반출과 재고 위치 관리", "Kinte 실제 설치 사진\nhttps://www.asrs-systems.com/sale-14507926-customized-height-heavy-stacker-crane-warehouse-dual-single-mast.html"],
+          ["옴니소터", "다단 선반·빈을 이용해 목적지별로 분류하는 설비", "주문·목적지별 상품 분류", "MCLOGI 실제 설치 사진\nhttps://www.mclogi.com/information/OmniSorter"],
+          ["엘리베이터 연동 AMR", "화물을 싣고 엘리베이터에 진입하는 이동 로봇", "층간 이동과 입출고 작업 연계", "Kumalift 실제 연동 사진\nhttps://monoque.jp/challenge/88/"],
+          ["갠트리 로봇", "천장 레일과 컨베이어 위에서 팔레트·상자를 취급하는 로봇", "지정 지점의 자동 이송·적재·취급", "RO-BER 실제 설치 사진\nhttps://www.ro-ber.de/products"]
+        ]
+      }
+    },
+    {
+      "id": "terms-transport-equipment-v5",
+      "menuId": "custom-1787718566928",
+      "rowIndex": 1,
+      "cardIndex": 1,
+      "readingIndex": 2,
+      "images": [
+        { "id": "transport-amr-promag", "url": "assets/wms/transport-amr-promag.jpg" },
+        { "id": "transport-fourway-shuttle-mb", "url": "assets/wms/transport-fourway-shuttle-mb.jpg" },
+        { "id": "transport-pallet-conveyor-mecalux", "url": "assets/wms/transport-pallet-conveyor-mecalux.jpg" },
+        { "id": "transport-shuttle-tgw", "url": "assets/wms/transport-shuttle-tgw.jpg" },
+        { "id": "transport-asrs-stacker-kinte", "url": "assets/wms/transport-asrs-stacker-kinte.jpg" },
+        { "id": "transport-omni-sorter-mclogi", "url": "assets/wms/transport-omni-sorter-mclogi.png" },
+        { "id": "transport-elevator-amr-kumalift", "url": "assets/wms/transport-elevator-amr-kumalift.jpg" },
+        { "id": "transport-gantry-rober", "url": "assets/wms/transport-gantry-rober.jpg" }
+      ],
+      "card": {
+        "title": "자동화 창고 운송·이동 설비",
+        "description": "위키 자료를 바탕으로 정리한 운송·이동 설비와 실제 설치 사진입니다. 사진별 원본 출처는 표에서 확인할 수 있습니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2": "",
+        "body2Html": "",
+        "body2Type": "text",
+        "table2": null,
+        "imageId": "",
+        "image": "",
+        "editLocked": false
+      },
+      "tableTemplateId": "terms-transport-equipment-v4",
+      "thumbnailColumn": 3,
+      "thumbnailImageIds": [
+        "",
+        "transport-amr-promag",
+        "transport-fourway-shuttle-mb",
+        "transport-pallet-conveyor-mecalux",
+        "transport-shuttle-tgw",
+        "transport-asrs-stacker-kinte",
+        "transport-omni-sorter-mclogi",
+        "transport-elevator-amr-kumalift",
+        "transport-gantry-rober"
+      ]
+    },
+    {
+      "id": "terms-transport-equipment-v6",
+      "menuId": "custom-1787718566928",
+      "rowIndex": 1,
+      "cardIndex": 1,
+      "readingIndex": 2,
+      "images": [
+        { "id": "transport-amr-promag", "url": "assets/wms/transport-amr-promag.jpg" },
+        { "id": "transport-fourway-shuttle-mb", "url": "assets/wms/transport-fourway-shuttle-mb.jpg" },
+        { "id": "transport-pallet-conveyor-mecalux", "url": "assets/wms/transport-pallet-conveyor-mecalux.jpg" },
+        { "id": "transport-shuttle-tgw", "url": "assets/wms/transport-shuttle-tgw.jpg" },
+        { "id": "transport-asrs-stacker-kinte", "url": "assets/wms/transport-asrs-stacker-kinte.jpg" },
+        { "id": "transport-omni-sorter-mclogi", "url": "assets/wms/transport-omni-sorter-mclogi.png" },
+        { "id": "transport-elevator-amr-kumalift", "url": "assets/wms/transport-elevator-amr-kumalift.jpg" },
+        { "id": "transport-gantry-rober", "url": "assets/wms/transport-gantry-rober.jpg" }
+      ],
+      "card": {
+        "title": "자동화 창고 운송·이동 설비",
+        "description": "위키 자료를 바탕으로 정리한 운송·이동 설비입니다. AMR과 AGV를 별도 항목으로 두고, 각 썸네일에서 원본 이미지를 열 수 있습니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2": "",
+        "body2Html": "",
+        "body2Type": "text",
+        "table2": null,
+        "imageId": "",
+        "image": "",
+        "editLocked": false
+      },
+      "table": {
+        "title": "운송·이동 설비 종류와 실제 사진",
+        "hasHeader": true,
+        "hasFirstColumnHeader": false,
+        "columnWidths": [19, 28, 29, 24],
+        "rows": [
+          ["설비", "사진에서 확인되는 형태", "위키 기준 역할", "이미지"],
+          ["AMR", "지도·센서로 주변 환경을 인식해 경로를 바꾸며 이동하는 자율이동로봇", "자재·완제품·팔레트의 유연한 구간 이송", "PROMAG 실제 운용 사진\nhttps://promag.pl/strefa-wiedzy/automatyzacja-transportu-dzieki-wozkom-amr/"],
+          ["AGV", "지정된 유도 경로를 따라 반복 이송하는 무인운반차", "정해진 공정·보관 구간의 반복 이송", "MB Intelligence 실제 설치 사진\nhttps://www.mbintell.com/shuttle"],
+          ["지게형 AMR", "포크로 팔레트를 들어 랙 통로를 주행하는 자율주행 지게차", "입고·적치·출고 및 층간 입출고 연계", "PROMAG 실제 운용 사진\nhttps://promag.pl/strefa-wiedzy/automatyzacja-transportu-dzieki-wozkom-amr/"],
+          ["엘리베이터 연동 AMR", "화물을 싣고 엘리베이터에 진입하는 이동 로봇", "층간 이동과 입출고 작업 연계", "Kumalift 실제 연동 사진\nhttps://monoque.jp/challenge/88/"],
+          ["4방향 셔틀", "랙 레일 위에서 팔레트를 전후·좌우로 이송하는 셔틀", "고밀도 보관 구간의 팔레트 이동", "MB Intelligence 실제 설치 사진\nhttps://www.mbintell.com/shuttle"],
+          ["팔레트 롤러 컨베이어", "롤러 위에서 팔레트를 일정 경로로 연속 이송하는 설비", "입고·출고·AS/RS 입출고 연결", "Mecalux 실제 설치 사진\nhttps://www.mecalux.com/warehouse-automation/pallet-conveyor"],
+          ["토트·박스 셔틀", "다층 랙 안에서 토트·트레이·상자를 운반하는 셔틀", "랙 내부 보관·반출과 피킹 연계", "TGW 실제 설치 사진\nhttps://www.tgw-group.com/us/our-portfolio/products/storage/stingray-shuttle/"],
+          ["스태커크레인", "고층 랙 사이 레일을 따라 수직·수평으로 움직이는 크레인", "자동 보관·반출과 재고 위치 관리", "Kinte 실제 설치 사진\nhttps://www.asrs-systems.com/sale-14507926-customized-height-heavy-stacker-crane-warehouse-dual-single-mast.html"],
+          ["옴니소터", "다단 선반·빈을 이용해 목적지별로 분류하는 설비", "주문·목적지별 상품 분류", "MCLOGI 실제 설치 사진\nhttps://www.mclogi.com/information/OmniSorter"],
+          ["갠트리 로봇", "천장 레일과 컨베이어 위에서 팔레트·상자를 취급하는 로봇", "지정 지점의 자동 이송·적재·취급", "RO-BER 실제 설치 사진\nhttps://www.ro-ber.de/products"]
+        ]
+      },
+      "thumbnailColumn": 3,
+      "thumbnailImageIds": [
+        "",
+        "transport-amr-promag",
+        "transport-fourway-shuttle-mb",
+        "transport-amr-promag",
+        "transport-elevator-amr-kumalift",
+        "transport-fourway-shuttle-mb",
+        "transport-pallet-conveyor-mecalux",
+        "transport-shuttle-tgw",
+        "transport-asrs-stacker-kinte",
+        "transport-omni-sorter-mclogi",
+        "transport-gantry-rober"
+      ]
+    },
+    {
+      "id": "terms-transport-equipment-v7",
+      "menuId": "custom-1787718566928",
+      "rowIndex": 1,
+      "cardIndex": 1,
+      "readingIndex": 2,
+      "showImageBlocks": false,
+      "images": [
+        { "id": "transport-amr-promag", "url": "assets/wms/transport-amr-promag.jpg" },
+        { "id": "transport-fourway-shuttle-mb", "url": "assets/wms/transport-fourway-shuttle-mb.jpg" },
+        { "id": "transport-pallet-conveyor-mecalux", "url": "assets/wms/transport-pallet-conveyor-mecalux.jpg" },
+        { "id": "transport-shuttle-tgw", "url": "assets/wms/transport-shuttle-tgw.jpg" },
+        { "id": "transport-asrs-stacker-kinte", "url": "assets/wms/transport-asrs-stacker-kinte.jpg" },
+        { "id": "transport-omni-sorter-mclogi", "url": "assets/wms/transport-omni-sorter-mclogi.png" },
+        { "id": "transport-elevator-amr-kumalift", "url": "assets/wms/transport-elevator-amr-kumalift.jpg" },
+        { "id": "transport-gantry-rober", "url": "assets/wms/transport-gantry-rober.jpg" }
+      ],
+      "card": {
+        "title": "자동화 창고 운송·이동 설비",
+        "description": "위키 자료를 바탕으로 정리한 운송·이동 설비입니다. AMR과 AGV를 별도 항목으로 두고, 각 썸네일에서 원본 이미지를 열 수 있습니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2": "",
+        "body2Html": "",
+        "body2Type": "text",
+        "table2": null,
+        "imageId": "",
+        "image": "",
+        "editLocked": false
+      },
+      "tableTemplateId": "terms-transport-equipment-v6",
+      "thumbnailColumn": 3,
+      "thumbnailImageIds": [
+        "",
+        "transport-amr-promag",
+        "transport-fourway-shuttle-mb",
+        "transport-amr-promag",
+        "transport-elevator-amr-kumalift",
+        "transport-fourway-shuttle-mb",
+        "transport-pallet-conveyor-mecalux",
+        "transport-shuttle-tgw",
+        "transport-asrs-stacker-kinte",
+        "transport-omni-sorter-mclogi",
+        "transport-gantry-rober"
+      ]
+    },
+    {
+      "id": "terms-transport-equipment-v8",
+      "menuId": "custom-1787718566928",
+      "rowIndex": 1,
+      "cardIndex": 1,
+      "readingIndex": 2,
+      "showImageBlocks": false,
+      "images": [
+        { "id": "transport-amr-omron-no-fork", "url": "assets/wms/transport-amr-omron-no-fork.jpg" },
+        { "id": "transport-agv-rocla-rack-aisle", "url": "assets/wms/transport-agv-rocla-rack-aisle.jpg" },
+        { "id": "transport-amr-promag", "url": "assets/wms/transport-amr-promag.jpg" },
+        { "id": "transport-fourway-shuttle-mb", "url": "assets/wms/transport-fourway-shuttle-mb.jpg" },
+        { "id": "transport-pallet-conveyor-mecalux", "url": "assets/wms/transport-pallet-conveyor-mecalux.jpg" },
+        { "id": "transport-shuttle-tgw", "url": "assets/wms/transport-shuttle-tgw.jpg" },
+        { "id": "transport-asrs-stacker-kinte", "url": "assets/wms/transport-asrs-stacker-kinte.jpg" },
+        { "id": "transport-omni-sorter-mclogi", "url": "assets/wms/transport-omni-sorter-mclogi.png" },
+        { "id": "transport-elevator-amr-kumalift", "url": "assets/wms/transport-elevator-amr-kumalift.jpg" },
+        { "id": "transport-gantry-rober", "url": "assets/wms/transport-gantry-rober.jpg" }
+      ],
+      "card": {
+        "title": "자동화 창고 운송·이동 설비",
+        "description": "위키 자료를 바탕으로 정리한 운송·이동 설비입니다. AMR과 AGV를 별도 항목으로 두고, 각 썸네일에서 원본 이미지를 열 수 있습니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2": "",
+        "body2Html": "",
+        "body2Type": "text",
+        "table2": null,
+        "imageId": "",
+        "image": "",
+        "editLocked": false
+      },
+      "table": {
+        "title": "운송·이동 설비 종류와 실제 사진",
+        "hasHeader": true,
+        "hasFirstColumnHeader": false,
+        "columnWidths": [19, 28, 29, 24],
+        "rows": [
+          ["설비", "사진에서 확인되는 형태", "위키 기준 역할", "이미지"],
+          ["AMR", "포크 없이 센서·지도 기반으로 주변을 인식하며 이동하는 자율이동로봇", "자재·완제품·상자의 유연한 구간 이송", ""],
+          ["AGV", "랙 구역 사이의 통로를 지정된 유도 경로로 이동하는 무인운반차", "정해진 공정·보관 구간의 반복 이송", ""],
+          ["지게형 AMR", "포크로 팔레트를 들어 랙 통로를 주행하는 자율주행 지게차", "입고·적치·출고 및 층간 입출고 연계", ""],
+          ["엘리베이터 연동 AMR", "화물을 싣고 엘리베이터에 진입하는 이동 로봇", "층간 이동과 입출고 작업 연계", ""],
+          ["4방향 셔틀", "랙 레일 위에서 팔레트를 전후·좌우로 이송하는 셔틀", "고밀도 보관 구간의 팔레트 이동", ""],
+          ["팔레트 롤러 컨베이어", "롤러 위에서 팔레트를 일정 경로로 연속 이송하는 설비", "입고·출고·AS/RS 입출고 연결", ""],
+          ["토트·박스 셔틀", "다층 랙 안에서 토트·트레이·상자를 운반하는 셔틀", "랙 내부 보관·반출과 피킹 연계", ""],
+          ["스태커크레인", "고층 랙 사이 레일을 따라 수직·수평으로 움직이는 크레인", "자동 보관·반출과 재고 위치 관리", ""],
+          ["옴니소터", "다단 선반·빈을 이용해 목적지별로 분류하는 설비", "주문·목적지별 상품 분류", ""],
+          ["갠트리 로봇", "천장 레일과 컨베이어 위에서 팔레트·상자를 취급하는 로봇", "지정 지점의 자동 이송·적재·취급", ""]
+        ]
+      },
+      "thumbnailColumn": 3,
+      "thumbnailImageIds": [
+        "",
+        "transport-amr-omron-no-fork",
+        "transport-agv-rocla-rack-aisle",
+        "transport-amr-promag",
+        "transport-elevator-amr-kumalift",
+        "transport-fourway-shuttle-mb",
+        "transport-pallet-conveyor-mecalux",
+        "transport-shuttle-tgw",
+        "transport-asrs-stacker-kinte",
+        "transport-omni-sorter-mclogi",
+        "transport-gantry-rober"
+      ]
+    },
+    {
+      "id": "terms-transport-equipment-v9",
+      "menuId": "custom-1787718566928",
+      "rowIndex": 1,
+      "cardIndex": 1,
+      "readingIndex": 2,
+      "showImageBlocks": false,
+      "images": [
+        { "id": "transport-amr-omron-no-fork", "url": "assets/wms/transport-amr-omron-no-fork.jpg" },
+        { "id": "transport-agv-rocla-rack-aisle", "url": "assets/wms/transport-agv-rocla-rack-aisle.jpg" },
+        { "id": "transport-amr-promag", "url": "assets/wms/transport-amr-promag.jpg" },
+        { "id": "transport-fourway-shuttle-mb", "url": "assets/wms/transport-fourway-shuttle-mb.jpg" },
+        { "id": "transport-pallet-conveyor-mecalux", "url": "assets/wms/transport-pallet-conveyor-mecalux.jpg" },
+        { "id": "transport-shuttle-tgw", "url": "assets/wms/transport-shuttle-tgw.jpg" },
+        { "id": "transport-asrs-stacker-kinte", "url": "assets/wms/transport-asrs-stacker-kinte.jpg" },
+        { "id": "transport-omni-sorter-mclogi", "url": "assets/wms/transport-omni-sorter-mclogi.png" },
+        { "id": "transport-elevator-amr-kumalift", "url": "assets/wms/transport-elevator-amr-kumalift.jpg" },
+        { "id": "transport-gantry-rober", "url": "assets/wms/transport-gantry-rober.jpg" }
+      ],
+      "card": {
+        "title": "자동화 창고 운송·이동 설비",
+        "description": "위키 자료를 바탕으로 정리한 운송·이동 설비입니다. AMR과 AGV를 별도 항목으로 두고, 각 썸네일에서 원본 이미지를 열 수 있습니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2": "",
+        "body2Html": "",
+        "body2Type": "text",
+        "table2": null,
+        "imageId": "",
+        "image": "",
+        "editLocked": false
+      },
+      "tableTemplateId": "terms-transport-equipment-v8",
+      "thumbnailColumn": 3,
+      "thumbnailImageIds": [
+        "",
+        "transport-amr-omron-no-fork",
+        "transport-agv-rocla-rack-aisle",
+        "transport-amr-promag",
+        "transport-elevator-amr-kumalift",
+        "transport-fourway-shuttle-mb",
+        "transport-pallet-conveyor-mecalux",
+        "transport-shuttle-tgw",
+        "transport-asrs-stacker-kinte",
+        "transport-omni-sorter-mclogi",
+        "transport-gantry-rober"
+      ]
+    },
+    {
+      "id": "terms-transport-equipment-v10",
+      "menuId": "custom-1787718566928",
+      "rowIndex": 1,
+      "cardIndex": 1,
+      "readingIndex": 2,
+      "showImageBlocks": false,
+      "images": [
+        { "id": "transport-amr-lidar-v2", "url": "assets/wms/transport-amr-lidar-v2.png" },
+        { "id": "transport-agv-guided-floor-v2", "url": "assets/wms/transport-agv-guided-floor-v2.png" },
+        { "id": "transport-amr-promag", "url": "assets/wms/transport-amr-promag.jpg" },
+        { "id": "transport-fourway-shuttle-mb", "url": "assets/wms/transport-fourway-shuttle-mb.jpg" },
+        { "id": "transport-pallet-conveyor-mecalux", "url": "assets/wms/transport-pallet-conveyor-mecalux.jpg" },
+        { "id": "transport-shuttle-tgw", "url": "assets/wms/transport-shuttle-tgw.jpg" },
+        { "id": "transport-asrs-stacker-kinte", "url": "assets/wms/transport-asrs-stacker-kinte.jpg" },
+        { "id": "transport-omni-sorter-mclogi", "url": "assets/wms/transport-omni-sorter-mclogi.png" },
+        { "id": "transport-elevator-amr-kumalift", "url": "assets/wms/transport-elevator-amr-kumalift.jpg" },
+        { "id": "transport-gantry-rober", "url": "assets/wms/transport-gantry-rober.jpg" }
+      ],
+      "card": {
+        "title": "자동화 창고 운송·이동 설비",
+        "description": "위키 자료를 바탕으로 정리한 운송·이동 설비입니다. AMR과 AGV를 별도 항목으로 두고, 각 썸네일에서 원본 이미지를 열 수 있습니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2": "",
+        "body2Html": "",
+        "body2Type": "text",
+        "table2": null,
+        "imageId": "",
+        "image": "",
+        "editLocked": false
+      },
+      "tableTemplateId": "terms-transport-equipment-v8",
+      "thumbnailColumn": 3,
+      "thumbnailImageIds": [
+        "",
+        "transport-amr-lidar-v2",
+        "transport-agv-guided-floor-v2",
+        "transport-amr-promag",
+        "transport-elevator-amr-kumalift",
+        "transport-fourway-shuttle-mb",
+        "transport-pallet-conveyor-mecalux",
+        "transport-shuttle-tgw",
+        "transport-asrs-stacker-kinte",
+        "transport-omni-sorter-mclogi",
+        "transport-gantry-rober"
+      ]
+    },
+    {
+      "id": "terms-transport-equipment-v11",
+      "menuId": "custom-1787718566928",
+      "rowIndex": 1,
+      "cardIndex": 1,
+      "readingIndex": 2,
+      "showImageBlocks": false,
+      "images": [
+        { "id": "transport-amr-lidar-360-v3", "url": "assets/wms/transport-amr-lidar-360-v3.png" },
+        { "id": "transport-agv-guided-floor-v3", "url": "assets/wms/transport-agv-guided-floor-v3.png" },
+        { "id": "transport-amr-promag", "url": "assets/wms/transport-amr-promag.jpg" },
+        { "id": "transport-fourway-shuttle-mb", "url": "assets/wms/transport-fourway-shuttle-mb.jpg" },
+        { "id": "transport-pallet-conveyor-mecalux", "url": "assets/wms/transport-pallet-conveyor-mecalux.jpg" },
+        { "id": "transport-shuttle-tgw", "url": "assets/wms/transport-shuttle-tgw.jpg" },
+        { "id": "transport-asrs-stacker-kinte", "url": "assets/wms/transport-asrs-stacker-kinte.jpg" },
+        { "id": "transport-omni-sorter-mclogi", "url": "assets/wms/transport-omni-sorter-mclogi.png" },
+        { "id": "transport-elevator-amr-kumalift", "url": "assets/wms/transport-elevator-amr-kumalift.jpg" },
+        { "id": "transport-gantry-rober", "url": "assets/wms/transport-gantry-rober.jpg" }
+      ],
+      "card": {
+        "title": "자동화 창고 운송·이동 설비",
+        "description": "위키 자료를 바탕으로 정리한 운송·이동 설비입니다. AMR과 AGV를 별도 항목으로 두고, 각 썸네일에서 원본 이미지를 열 수 있습니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2": "",
+        "body2Html": "",
+        "body2Type": "text",
+        "table2": null,
+        "imageId": "",
+        "image": "",
+        "editLocked": false
+      },
+      "tableTemplateId": "terms-transport-equipment-v8",
+      "thumbnailColumn": 3,
+      "thumbnailImageIds": [
+        "",
+        "transport-amr-lidar-360-v3",
+        "transport-agv-guided-floor-v3",
+        "transport-amr-promag",
+        "transport-elevator-amr-kumalift",
+        "transport-fourway-shuttle-mb",
+        "transport-pallet-conveyor-mecalux",
+        "transport-shuttle-tgw",
+        "transport-asrs-stacker-kinte",
+        "transport-omni-sorter-mclogi",
+        "transport-gantry-rober"
+      ]
+    },
+    {
+      "id": "terms-transport-equipment-v12",
+      "menuId": "custom-1787718566928",
+      "rowIndex": 1,
+      "cardIndex": 1,
+      "readingIndex": 2,
+      "showImageBlocks": false,
+      "images": [
+        { "id": "transport-amr-lidar-360-v3", "url": "assets/wms/transport-amr-lidar-360-v3.png" },
+        { "id": "transport-agv-guided-floor-v3", "url": "assets/wms/transport-agv-guided-floor-v3.png" }
+      ],
+      "card": {
+        "title": "자동화 창고 운송·이동 설비",
+        "description": "위키 자료를 바탕으로 정리한 운송·이동 설비입니다. AMR과 AGV를 별도 항목으로 두고, 각 썸네일에서 원본 이미지를 열 수 있습니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2": "",
+        "body2Html": "",
+        "body2Type": "text",
+        "table2": null,
+        "imageId": "",
+        "image": "",
+        "editLocked": false
+      },
+      "tableTemplateId": "terms-transport-equipment-v8",
+      "thumbnailColumn": 3,
+      "thumbnailImageIds": [
+        "",
+        "transport-amr-lidar-360-v3",
+        "transport-agv-guided-floor-v3",
+        "transport-amr-promag",
+        "transport-elevator-amr-kumalift",
+        "transport-fourway-shuttle-mb",
+        "transport-pallet-conveyor-mecalux",
+        "transport-shuttle-tgw",
+        "transport-asrs-stacker-kinte",
+        "transport-omni-sorter-mclogi",
+        "transport-gantry-rober"
+      ]
     }
   ]
 }

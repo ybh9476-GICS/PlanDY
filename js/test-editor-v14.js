@@ -147,6 +147,10 @@
     const cardClipboardLifetime = 24 * 60 * 60 * 1000;
     const copyPlainValue = (value) => JSON.parse(JSON.stringify(value));
     const normalizeContentBlocks = contentModel.normalizeBlocks;
+    const normalizeImageDisplayWidth = (value) => {
+        const width = Math.round(Number(value));
+        return Number.isFinite(width) && width > 0 ? width : 0;
+    };
 
     function getClipboardAssetIds(clipboard) {
         if (!Array.isArray(clipboard?.contentBlocks)) return [];
@@ -283,6 +287,103 @@
                 onChange(rows);
             } catch (error) {
                 showStorageWarning(error);
+            }
+        };
+
+        const imageResizeMargin = 16;
+        const getImageResizeBounds = (card, imageFrame) => {
+            const cardContent = card.querySelector('.test-card-content');
+            const contentStyle = cardContent ? getComputedStyle(cardContent) : null;
+            const cardPadding = contentStyle
+                ? (parseFloat(contentStyle.paddingLeft) || 0) + (parseFloat(contentStyle.paddingRight) || 0)
+                : 0;
+            const listWidth = testCardList.getBoundingClientRect().width;
+            const threeColumnCardWidth = Math.max(0, (listWidth - 32) / 3);
+            const threeColumnImageWidth = Math.max(0, threeColumnCardWidth - cardPadding - (imageResizeMargin * 2));
+            const currentCardImageWidth = Math.max(0, imageFrame.parentElement.getBoundingClientRect().width - (imageResizeMargin * 2));
+            return {
+                min: Math.min(threeColumnImageWidth, currentCardImageWidth),
+                max: currentCardImageWidth
+            };
+        };
+        const applyImageDisplayWidth = (imageFrame, displayWidth) => {
+            const width = normalizeImageDisplayWidth(displayWidth);
+            imageFrame.classList.toggle('test-card-image-size-set', Boolean(width));
+            if (width) imageFrame.style.width = `${width}px`;
+            else imageFrame.style.removeProperty('width');
+        };
+        const updateStoredImageDisplayWidth = (card, blockIndex, imageId, displayWidth) => {
+            if (!isEditorMode() || isCardEditLocked(card)) return;
+            const blocks = card.dataset.contentBlocks ? JSON.parse(card.dataset.contentBlocks) : [];
+            const block = blocks[blockIndex];
+            if (!block || block.type !== 'image' || block.imageId !== imageId) return;
+            const width = normalizeImageDisplayWidth(displayWidth);
+            if (width) block.displayWidth = width;
+            else delete block.displayWidth;
+            card.dataset.contentBlocks = JSON.stringify(blocks);
+            renderTestCard(card);
+            notifyChange();
+        };
+        const addImageResizeControls = (card, imageFrame, blockIndex, block) => {
+            if (isCardEditLocked(card)) return;
+            imageFrame.classList.add('test-card-image-resize-enabled');
+            const imageId = block.imageId;
+            const indicator = document.createElement('span');
+            indicator.className = 'test-image-size-indicator';
+            indicator.setAttribute('aria-hidden', 'true');
+            imageFrame.appendChild(indicator);
+            const startResize = (event, horizontalDirection, verticalDirection) => {
+                if (!isEditorMode() || isCardEditLocked(card) || event.button !== 0) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const image = imageFrame.querySelector('img');
+                const startX = event.clientX;
+                const startY = event.clientY;
+                const startWidth = imageFrame.getBoundingClientRect().width;
+                const bounds = getImageResizeBounds(card, imageFrame);
+                const aspectRatio = image?.naturalWidth && image?.naturalHeight ? image.naturalWidth / image.naturalHeight : 1;
+                let nextWidth = startWidth;
+                let moved = false;
+                imageFrame.classList.add('is-resizing');
+                const onMove = (moveEvent) => {
+                    moved = true;
+                    const horizontalDelta = (moveEvent.clientX - startX) * horizontalDirection;
+                    const verticalDelta = (moveEvent.clientY - startY) * verticalDirection * aspectRatio;
+                    const resizeDelta = Math.abs(horizontalDelta) >= Math.abs(verticalDelta) ? horizontalDelta : verticalDelta;
+                    nextWidth = Math.round(Math.min(bounds.max, Math.max(bounds.min, startWidth + resizeDelta)));
+                    applyImageDisplayWidth(imageFrame, nextWidth);
+                    indicator.textContent = `${nextWidth} × ${Math.round(nextWidth / aspectRatio)}`;
+                };
+                const finish = () => {
+                    document.removeEventListener('pointermove', onMove);
+                    document.removeEventListener('pointerup', finish);
+                    document.removeEventListener('pointercancel', finish);
+                    imageFrame.classList.remove('is-resizing');
+                    indicator.textContent = '';
+                    if (moved) updateStoredImageDisplayWidth(card, blockIndex, imageId, nextWidth);
+                };
+                document.addEventListener('pointermove', onMove);
+                document.addEventListener('pointerup', finish);
+                document.addEventListener('pointercancel', finish);
+            };
+            [['top-left', -1, -1], ['top-right', 1, -1], ['bottom-left', -1, 1], ['bottom-right', 1, 1]].forEach(([corner, horizontalDirection, verticalDirection]) => {
+                const handle = document.createElement('span');
+                handle.className = `test-card-image-resize-handle is-${corner}`;
+                handle.setAttribute('aria-hidden', 'true');
+                handle.addEventListener('pointerdown', (event) => startResize(event, horizontalDirection, verticalDirection));
+                imageFrame.appendChild(handle);
+            });
+            if (normalizeImageDisplayWidth(block.displayWidth)) {
+                const resetButton = document.createElement('button');
+                resetButton.type = 'button';
+                resetButton.className = 'test-image-size-reset-btn';
+                resetButton.textContent = '크기 초기화';
+                resetButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    updateStoredImageDisplayWidth(card, blockIndex, imageId, 0);
+                });
+                imageFrame.appendChild(resetButton);
             }
         };
 
@@ -704,7 +805,7 @@
                 contentBlocksContainer.replaceChildren();
                 renderTestText(title, card.dataset.title || '');
                 renderTestText(description, card.dataset.description || '');
-                contentBlocks.forEach((storedBlock) => {
+                contentBlocks.forEach((storedBlock, blockIndex) => {
                     const block = contentModel.normalizeBlock(storedBlock);
                     const blockElement = document.createElement('section');
                     blockElement.className = `test-card-content-block test-card-content-block-${block.type}`;
@@ -714,12 +815,14 @@
                         const image = document.createElement('img');
                         image.alt = '등록 이미지';
                         imageFrame.appendChild(image);
+                        applyImageDisplayWidth(imageFrame, block.displayWidth);
                         const originalButton = document.createElement('button');
                         originalButton.type = 'button';
                         originalButton.className = 'test-original-view-btn';
                         originalButton.textContent = '원본보기';
                         originalButton.addEventListener('click', () => image.src && openOriginalImage(image.src));
                         imageFrame.appendChild(originalButton);
+                        addImageResizeControls(card, imageFrame, blockIndex, block);
                         blockElement.appendChild(imageFrame);
                         loadImageBlob(block.imageId).then((blob) => { if (blob) image.src = URL.createObjectURL(blob); }).catch(showStorageWarning);
                     } else if (block.type === 'pdf' && block.pdfId) {
@@ -882,7 +985,38 @@
                     const cellName = isFirstRowHeader || isFirstColumnHeader ? 'th' : 'td';
                     const cell = document.createElement(cellName);
                     if (cellName === 'th') cell.scope = isFirstRowHeader ? 'col' : 'row';
-                    cell.textContent = value || '';
+                    const thumbnailId = rowIndex > 0 && Number(data.thumbnailColumn) === columnIndex
+                        ? data.thumbnailImageIds?.[rowIndex]
+                        : '';
+                    if (isFirstRowHeader && Number(data.thumbnailColumn) === columnIndex) {
+                        cell.textContent = '이미지';
+                    } else if (thumbnailId) {
+                        cell.classList.add('test-card-table-thumbnail-cell');
+                        const thumbnailFrame = document.createElement('div');
+                        thumbnailFrame.className = 'test-card-table-thumbnail-frame';
+                        const thumbnail = document.createElement('img');
+                        thumbnail.className = 'test-card-table-thumbnail';
+                        thumbnail.dataset.imageId = thumbnailId;
+                        thumbnail.alt = `${row?.[0] || '설비'} 사진`;
+                        thumbnail.loading = 'lazy';
+                        const originalButton = document.createElement('button');
+                        originalButton.type = 'button';
+                        originalButton.className = 'test-original-view-btn';
+                        originalButton.textContent = '원본보기';
+                        originalButton.disabled = true;
+                        originalButton.addEventListener('click', () => {
+                            if (thumbnail.src) openOriginalImage(thumbnail.src);
+                        });
+                        loadImageBlob(thumbnailId).then((blob) => {
+                            if (!blob) return;
+                            thumbnail.src = URL.createObjectURL(blob);
+                            originalButton.disabled = false;
+                        }).catch(showStorageWarning);
+                        thumbnailFrame.append(thumbnail, originalButton);
+                        cell.appendChild(thumbnailFrame);
+                    } else {
+                        cell.textContent = value || '';
+                    }
                     tr.appendChild(cell);
                 });
                 table.appendChild(tr);
@@ -1617,6 +1751,7 @@
                     const state = {
                         type: 'image',
                         imageId: savedBlock?.imageId || '',
+                        displayWidth: normalizeImageDisplayWidth(savedBlock?.displayWidth),
                         file: null,
                         preview: '',
                         clipboardSource: Boolean(savedBlock?.clipboardSource)
@@ -1910,7 +2045,7 @@
                                 const imageId = `clipboard-${createImageId()}`;
                                 await saveImageBlob(imageId, imageBlob);
                                 newClipboardAssetIds.push(imageId);
-                                clipboardBlocks.push({ type: 'image', imageId });
+                                clipboardBlocks.push({ type: 'image', imageId, ...(imageState.displayWidth ? { displayWidth: imageState.displayWidth } : {}) });
                                 continue;
                             }
                             const pdfState = contentPdfBlocks.find((item) => item.panel === element);
@@ -2809,7 +2944,7 @@
                                     newImageIds.push(imageId);
                                     committedImageStates.push({ state: imageState, imageId });
                                 }
-                                if (imageId) blocks.push({ type: 'image', imageId });
+                                if (imageId) blocks.push({ type: 'image', imageId, ...(imageState.displayWidth ? { displayWidth: imageState.displayWidth } : {}) });
                                 continue;
                             }
                             const googleDriveState = contentGoogleDriveBlocks.find((item) => item.panel === element);
