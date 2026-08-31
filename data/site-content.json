@@ -1,6 +1,44 @@
 {
   "schemaVersion": 1,
   "updatedAt": "2026-08-31T04:48:18.478Z",
+  "assets": [
+    {
+      "id": "wms-inbound-outbound-v2",
+      "kind": "image",
+      "mimeType": "image/png",
+      "url": "assets/wms/wms-inbound-to-outbound-process-v2.png"
+    },
+    {
+      "id": "e4e905a1-93bc-4b1c-9769-6085bbd70d5b",
+      "kind": "image",
+      "mimeType": "image/png",
+      "url": "assets/wms/wms-inbound-to-outbound-process-v2.png"
+    },
+    {
+      "id": "856282f3-3ac3-4705-a50d-b0012a10e6f0",
+      "kind": "image",
+      "mimeType": "image/png",
+      "url": "assets/wms/wms-inbound-to-outbound-process-v2.png"
+    },
+    {
+      "id": "a93c30c1-ce79-4fcf-aad2-f39a26c1ee3b",
+      "kind": "image",
+      "mimeType": "image/png",
+      "url": "assets/wms/automated-warehouse-rack-location-terms-v4.png"
+    },
+    {
+      "id": "47c1e2d2-164d-432a-82dc-0170bb6ffd90",
+      "kind": "image",
+      "mimeType": "image/png",
+      "url": "assets/wms/automated-warehouse-rack-location-terms-v4.png"
+    },
+    {
+      "id": "0acc43c9-0676-4161-8b7c-4fbe19d643d1",
+      "kind": "image",
+      "mimeType": "image/png",
+      "url": "assets/wms/automated-warehouse-rack-location-terms-v4.png"
+    }
+  ],
   "storage": {
     "menus": {
       "schemaVersion": 2,
