@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-31T04:48:18.478Z",
+  "updatedAt": "2026-08-31T07:30:25.093Z",
   "storage": {
     "menus": {
       "schemaVersion": 2,
@@ -88,8 +88,12 @@
               "contentBlocks": [
                 {
                   "type": "image",
-                  "imageId": "wms-inbound-outbound-v2",
-                  "displayWidth": 609
+                  "displayWidth": 609,
+                  "assetId": "2ee669452663af74b97834eb65034819e6fbc1d35450355ccf5ea5b41d66ac5e",
+                  "assetPath": "assets/content/2ee669452663af74b97834eb65034819e6fbc1d35450355ccf5ea5b41d66ac5e.png",
+                  "originalName": "wms-inbound-to-outbound-process-v2.png",
+                  "mimeType": "image/png",
+                  "size": 1904441
                 },
                 {
                   "type": "table",
@@ -637,8 +641,12 @@
               "contentBlocks": [
                 {
                   "type": "image",
-                  "imageId": "0acc43c9-0676-4161-8b7c-4fbe19d643d1",
-                  "displayWidth": 513
+                  "displayWidth": 513,
+                  "assetId": "3f6ed9349bf9f587ba2d931aa1d46d52fac61828fb66dea56a77bd2d4ab842b1",
+                  "assetPath": "assets/content/3f6ed9349bf9f587ba2d931aa1d46d52fac61828fb66dea56a77bd2d4ab842b1.png",
+                  "originalName": "automated-warehouse-rack-location-terms-v4.png",
+                  "mimeType": "image/png",
+                  "size": 1480083
                 },
                 {
                   "type": "table",
@@ -825,19 +833,6 @@
                       ]
                     ],
                     "thumbnailColumn": 3,
-                    "thumbnailImageIds": [
-                      "",
-                      "transport-amr-lidar-360-v3",
-                      "transport-agv-guided-floor-v3",
-                      "transport-amr-promag",
-                      "transport-elevator-amr-kumalift",
-                      "transport-fourway-shuttle-mb",
-                      "transport-pallet-conveyor-mecalux",
-                      "transport-shuttle-tgw",
-                      "transport-asrs-stacker-kinte",
-                      "transport-omni-sorter-mclogi",
-                      "transport-gantry-rober"
-                    ],
                     "rowHeights": [
                       36,
                       36,
@@ -850,6 +845,79 @@
                       36,
                       36,
                       36
+                    ],
+                    "thumbnailAssets": [
+                      null,
+                      {
+                        "assetId": "70adc908e79460b2b4ca32289ce207bfd5442dc4723f5431a8ae40e8140c4321",
+                        "assetPath": "assets/content/70adc908e79460b2b4ca32289ce207bfd5442dc4723f5431a8ae40e8140c4321.png",
+                        "originalName": "transport-amr-lidar-360-v3.png",
+                        "mimeType": "image/png",
+                        "size": 2311918
+                      },
+                      {
+                        "assetId": "d1e743d7858729e264cedc12bd05ca55990444a171ed9264adec73f54ac64bf7",
+                        "assetPath": "assets/content/d1e743d7858729e264cedc12bd05ca55990444a171ed9264adec73f54ac64bf7.png",
+                        "originalName": "transport-agv-guided-floor-v3.png",
+                        "mimeType": "image/png",
+                        "size": 1950845
+                      },
+                      {
+                        "assetId": "7ec7741a746280889eadbfc93b47e7607ebd733ad9665bdc4720a6d997e21300",
+                        "assetPath": "assets/content/7ec7741a746280889eadbfc93b47e7607ebd733ad9665bdc4720a6d997e21300.jpg",
+                        "originalName": "transport-amr-promag.jpg",
+                        "mimeType": "image/jpeg",
+                        "size": 85232
+                      },
+                      {
+                        "assetId": "2e6c9577bf249053d16fd2e9279f85a203855d38ba021a29f047925ef7d4066a",
+                        "assetPath": "assets/content/2e6c9577bf249053d16fd2e9279f85a203855d38ba021a29f047925ef7d4066a.jpg",
+                        "originalName": "transport-elevator-amr-kumalift.jpg",
+                        "mimeType": "image/jpeg",
+                        "size": 107746
+                      },
+                      {
+                        "assetId": "73d23e38a0dce94a40103264a1f3ae9e9367fb2bb91718da86c953f3904ad211",
+                        "assetPath": "assets/content/73d23e38a0dce94a40103264a1f3ae9e9367fb2bb91718da86c953f3904ad211.jpg",
+                        "originalName": "transport-fourway-shuttle-mb.jpg",
+                        "mimeType": "image/jpeg",
+                        "size": 798724
+                      },
+                      {
+                        "assetId": "ba597f04ecfa6f547843191a9ac8a5184fc4dd8e2d09edf11cad72f19585af23",
+                        "assetPath": "assets/content/ba597f04ecfa6f547843191a9ac8a5184fc4dd8e2d09edf11cad72f19585af23.jpg",
+                        "originalName": "transport-pallet-conveyor-mecalux.jpg",
+                        "mimeType": "image/jpeg",
+                        "size": 514578
+                      },
+                      {
+                        "assetId": "17f5fec7ddaf90bc7a6433bda73e075672729cd63b393e056a02184b721aaa2b",
+                        "assetPath": "assets/content/17f5fec7ddaf90bc7a6433bda73e075672729cd63b393e056a02184b721aaa2b.jpg",
+                        "originalName": "transport-shuttle-tgw.jpg",
+                        "mimeType": "image/jpeg",
+                        "size": 109213
+                      },
+                      {
+                        "assetId": "be021ade02979be7fc5044762f2560dd67a9f778ae0ca1bcfc333c987c941592",
+                        "assetPath": "assets/content/be021ade02979be7fc5044762f2560dd67a9f778ae0ca1bcfc333c987c941592.jpg",
+                        "originalName": "transport-asrs-stacker-kinte.jpg",
+                        "mimeType": "image/jpeg",
+                        "size": 717894
+                      },
+                      {
+                        "assetId": "8396ee79fd2acf97031c279e05fe445fe34544c5230d28c9c5de2e168a30ad19",
+                        "assetPath": "assets/content/8396ee79fd2acf97031c279e05fe445fe34544c5230d28c9c5de2e168a30ad19.png",
+                        "originalName": "transport-omni-sorter-mclogi.png",
+                        "mimeType": "image/png",
+                        "size": 265790
+                      },
+                      {
+                        "assetId": "a35a3683ced0b4fe6a0783cc88ee0206fd97d08ea4db361c0da258fab1d6cea4",
+                        "assetPath": "assets/content/a35a3683ced0b4fe6a0783cc88ee0206fd97d08ea4db361c0da258fab1d6cea4.jpg",
+                        "originalName": "transport-gantry-rober.jpg",
+                        "mimeType": "image/jpeg",
+                        "size": 813114
+                      }
                     ]
                   }
                 }

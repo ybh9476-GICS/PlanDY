@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "version": 1,
+  "byLegacyId": {
+    "wms-inbound-outbound-v2": {
+      "assetId": "2ee669452663af74b97834eb65034819e6fbc1d35450355ccf5ea5b41d66ac5e",
+      "assetPath": "assets/content/2ee669452663af74b97834eb65034819e6fbc1d35450355ccf5ea5b41d66ac5e.png",
+      "originalName": "wms-inbound-to-outbound-process-v2.png",
+      "mimeType": "image/png",
+      "size": 1904441
+    },
+    "automated-warehouse-rack-location-terms-v4": {
+      "assetId": "3f6ed9349bf9f587ba2d931aa1d46d52fac61828fb66dea56a77bd2d4ab842b1",
+      "assetPath": "assets/content/3f6ed9349bf9f587ba2d931aa1d46d52fac61828fb66dea56a77bd2d4ab842b1.png",
+      "originalName": "automated-warehouse-rack-location-terms-v4.png",
+      "mimeType": "image/png",
+      "size": 1480083
+    },
+    "transport-amr-lidar-360-v3": {
+      "assetId": "70adc908e79460b2b4ca32289ce207bfd5442dc4723f5431a8ae40e8140c4321",
+      "assetPath": "assets/content/70adc908e79460b2b4ca32289ce207bfd5442dc4723f5431a8ae40e8140c4321.png",
+      "originalName": "transport-amr-lidar-360-v3.png",
+      "mimeType": "image/png",
+      "size": 2311918
+    },
+    "transport-agv-guided-floor-v3": {
+      "assetId": "d1e743d7858729e264cedc12bd05ca55990444a171ed9264adec73f54ac64bf7",
+      "assetPath": "assets/content/d1e743d7858729e264cedc12bd05ca55990444a171ed9264adec73f54ac64bf7.png",
+      "originalName": "transport-agv-guided-floor-v3.png",
+      "mimeType": "image/png",
+      "size": 1950845
+    },
+    "transport-amr-promag": {
+      "assetId": "7ec7741a746280889eadbfc93b47e7607ebd733ad9665bdc4720a6d997e21300",
+      "assetPath": "assets/content/7ec7741a746280889eadbfc93b47e7607ebd733ad9665bdc4720a6d997e21300.jpg",
+      "originalName": "transport-amr-promag.jpg",
+      "mimeType": "image/jpeg",
+      "size": 85232
+    },
+    "transport-elevator-amr-kumalift": {
+      "assetId": "2e6c9577bf249053d16fd2e9279f85a203855d38ba021a29f047925ef7d4066a",
+      "assetPath": "assets/content/2e6c9577bf249053d16fd2e9279f85a203855d38ba021a29f047925ef7d4066a.jpg",
+      "originalName": "transport-elevator-amr-kumalift.jpg",
+      "mimeType": "image/jpeg",
+      "size": 107746
+    },
+    "transport-fourway-shuttle-mb": {
+      "assetId": "73d23e38a0dce94a40103264a1f3ae9e9367fb2bb91718da86c953f3904ad211",
+      "assetPath": "assets/content/73d23e38a0dce94a40103264a1f3ae9e9367fb2bb91718da86c953f3904ad211.jpg",
+      "originalName": "transport-fourway-shuttle-mb.jpg",
+      "mimeType": "image/jpeg",
+      "size": 798724
+    },
+    "transport-pallet-conveyor-mecalux": {
+      "assetId": "ba597f04ecfa6f547843191a9ac8a5184fc4dd8e2d09edf11cad72f19585af23",
+      "assetPath": "assets/content/ba597f04ecfa6f547843191a9ac8a5184fc4dd8e2d09edf11cad72f19585af23.jpg",
+      "originalName": "transport-pallet-conveyor-mecalux.jpg",
+      "mimeType": "image/jpeg",
+      "size": 514578
+    },
+    "transport-shuttle-tgw": {
+      "assetId": "17f5fec7ddaf90bc7a6433bda73e075672729cd63b393e056a02184b721aaa2b",
+      "assetPath": "assets/content/17f5fec7ddaf90bc7a6433bda73e075672729cd63b393e056a02184b721aaa2b.jpg",
+      "originalName": "transport-shuttle-tgw.jpg",
+      "mimeType": "image/jpeg",
+      "size": 109213
+    },
+    "transport-asrs-stacker-kinte": {
+      "assetId": "be021ade02979be7fc5044762f2560dd67a9f778ae0ca1bcfc333c987c941592",
+      "assetPath": "assets/content/be021ade02979be7fc5044762f2560dd67a9f778ae0ca1bcfc333c987c941592.jpg",
+      "originalName": "transport-asrs-stacker-kinte.jpg",
+      "mimeType": "image/jpeg",
+      "size": 717894
+    },
+    "transport-omni-sorter-mclogi": {
+      "assetId": "8396ee79fd2acf97031c279e05fe445fe34544c5230d28c9c5de2e168a30ad19",
+      "assetPath": "assets/content/8396ee79fd2acf97031c279e05fe445fe34544c5230d28c9c5de2e168a30ad19.png",
+      "originalName": "transport-omni-sorter-mclogi.png",
+      "mimeType": "image/png",
+      "size": 265790
+    },
+    "transport-gantry-rober": {
+      "assetId": "a35a3683ced0b4fe6a0783cc88ee0206fd97d08ea4db361c0da258fab1d6cea4",
+      "assetPath": "assets/content/a35a3683ced0b4fe6a0783cc88ee0206fd97d08ea4db361c0da258fab1d6cea4.jpg",
+      "originalName": "transport-gantry-rober.jpg",
+      "mimeType": "image/jpeg",
+      "size": 813114
+    }
+  },
+  "byCardTitle": {
+    "입고부터 출고까지의 WMS 흐름": {
+      "assetId": "2ee669452663af74b97834eb65034819e6fbc1d35450355ccf5ea5b41d66ac5e",
+      "assetPath": "assets/content/2ee669452663af74b97834eb65034819e6fbc1d35450355ccf5ea5b41d66ac5e.png",
+      "originalName": "wms-inbound-to-outbound-process-v2.png",
+      "mimeType": "image/png",
+      "size": 1904441
+    },
+    "자동화 창고 랙·로케이션 용어": {
+      "assetId": "3f6ed9349bf9f587ba2d931aa1d46d52fac61828fb66dea56a77bd2d4ab842b1",
+      "assetPath": "assets/content/3f6ed9349bf9f587ba2d931aa1d46d52fac61828fb66dea56a77bd2d4ab842b1.png",
+      "originalName": "automated-warehouse-rack-location-terms-v4.png",
+      "mimeType": "image/png",
+      "size": 1480083
+    }
+  }
+}

@@ -188,16 +188,22 @@
         }
     }
 
-    function downloadContent() {
+    async function downloadContent() {
         if (!isEditor()) return;
-        const blob = new Blob([JSON.stringify(createContentDocument(), null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'site-content.json';
-        link.click();
-        URL.revokeObjectURL(url);
-        alert('콘텐츠 JSON 파일을 내려받았습니다. 이 파일을 프로젝트의 data/site-content.json에 반영한 뒤 Git에 커밋하고 푸시하면 GitHub Pages에 게시할 수 있습니다.');
+        try {
+            const documentValue = createContentDocument();
+            await window.wmsLocalAttachments?.validateAssetReferences(documentValue);
+            const blob = new Blob([JSON.stringify(documentValue, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'site-content.json';
+            link.click();
+            URL.revokeObjectURL(url);
+            alert('콘텐츠 JSON 파일을 내려받았습니다. data/site-content.json과 assets/content, data/attachments.json을 함께 Git에 커밋·푸시해야 첨부파일까지 게시됩니다.');
+        } catch (error) {
+            alert(error.message || '첨부파일 확인 중 콘텐츠 JSON을 내보내지 못했습니다.');
+        }
     }
 
     function requestImport() {
@@ -210,6 +216,7 @@
         try {
             const documentValue = JSON.parse(await file.text());
             if (!isContentDocument(documentValue)) throw new Error('지원하지 않는 콘텐츠 JSON 형식입니다.');
+            await window.wmsLocalAttachments?.validateAssetReferences(documentValue);
             if (!confirm('현재 이 브라우저에 저장된 메뉴와 카드 초안을 선택한 JSON으로 바꿉니다. 계속할까요?')) return;
             applyContentDocument(documentValue);
             localStorage.setItem(appliedMarkerKey, 'true');

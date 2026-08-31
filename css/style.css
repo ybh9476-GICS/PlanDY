@@ -436,6 +436,17 @@ body[data-authenticated="false"] #helpModal { display: none !important; }
 .content-sync-buttons { display: flex; flex-wrap: wrap; gap: 0.45rem; }
 .content-sync-buttons button { border: 1px solid #2563eb; border-radius: 5px; padding: 0.42rem 0.62rem; background: #fff; color: #1d4ed8; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
 .content-sync-buttons button:hover { background: #dbeafe; }
+.attachment-manager-entry { margin-top: .75rem; padding: .85rem; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; }
+.attachment-manager-entry p { margin: .45rem 0 .7rem; color: #475569; font-size: 12px; line-height: 1.5; }
+.attachment-manager-entry button, .attachment-manager-tools button, .attachment-manager-row button { border: 1px solid #64748b; border-radius: 5px; padding: .42rem .62rem; background: #fff; color: #334155; font: inherit; font-size: 12px; cursor: pointer; }
+.attachment-manager-entry button:disabled { opacity: .5; cursor: not-allowed; }
+.attachment-manager-overlay { position: fixed; inset: 0; z-index: 10030; display: grid; place-items: center; padding: 1rem; background: rgba(15,23,42,.52); }
+.attachment-manager-dialog { width: min(900px, 100%); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1rem; border-radius: 12px; background: #fff; box-shadow: 0 18px 50px rgba(15,23,42,.25); }
+.attachment-manager-dialog header, .attachment-manager-dialog footer, .attachment-manager-tools, .attachment-manager-row { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+.attachment-manager-dialog header h2 { margin: 0; }.attachment-manager-dialog header p { margin: .25rem 0 0; color:#64748b; font-size:12px; }.attachment-manager-dialog header>button { border:0; background:none; font-size:24px; cursor:pointer; }
+.attachment-manager-summary { margin: .9rem 0; padding: .7rem; border-radius: 7px; background:#eff6ff; color:#1e3a8a; font-weight:700; }
+.attachment-manager-tools { justify-content:flex-start; flex-wrap:wrap; margin-bottom:.75rem; }.attachment-manager-tools select { padding:.4rem; }
+.attachment-manager-list { display:grid; gap:.45rem; }.attachment-manager-row { padding:.65rem; border:1px solid #e2e8f0; border-radius:7px; }.attachment-manager-row>div:first-child { display:grid; gap:.2rem; min-width:0; }.attachment-manager-row span { color:#64748b; font-size:11px; overflow-wrap:anywhere; }.attachment-manager-row>div:last-child { display:flex; gap:.35rem; }.attachment-manager-row button.danger { border-color:#dc2626; color:#b91c1c; }.attachment-manager-dialog footer { justify-content:flex-end; margin-top:1rem; }
 
 @media (max-width: 720px) {
     .menu-add-fields { flex-wrap: wrap; }

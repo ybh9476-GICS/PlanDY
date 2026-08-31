@@ -133,12 +133,12 @@ const spaHtml = `<!DOCTYPE html>
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title">1F 선택층 현황 & 자재 인디케이터</h4>
                 <p class="card-desc">국가, 공장, 건물, 층 드롭다운 선택 시 상단에 원단, 테이프, 밴드, 단추, 포장재의 재고/여유공간이 인디케이터 바 형태로 즉시 조망됩니다.</p>
-                <img src="assets/wms/video_frames/video_step_1.jpg" alt="1F 선택층 현황" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.75rem;"/>
+                <img src="assets/content/99ac17822cca183bd7d447482ad77b622b4647cb4e9d44ca4f3e3d8555e87ccc.jpg" alt="1F 선택층 현황" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.75rem;"/>
             </div>
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title">3D 층간 E/V 연계 최적 경로 가이드</h4>
                 <p class="card-desc">1F 출입구부터 1F E/V, 2F E/V를 거쳐 2F 부자재 창고의 G2D 랙까지 이어지는 수평/수직 이동 동선을 3D 그린 라인 및 빌보드로 안내합니다.</p>
-                <img src="assets/wms/video_frames/video_step_5.jpg" alt="3D 최적 경로" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.75rem;"/>
+                <img src="assets/content/d0413614b3cbd060b3538d11f7dbafb532d97cfc455bf693c58fbf5cd006915c.jpg" alt="3D 최적 경로" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.75rem;"/>
             </div>
         </div>
 
@@ -218,7 +218,7 @@ const spaHtml = `<!DOCTYPE html>
         <div style="display:grid; grid-template-columns: 1.2fr 1fr; gap:1.5rem;">
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title">1F 창고 3D 조감도 (부자재 & 원자재)</h4>
-                <img src="assets/wms/image15.png" alt="1F 창고 조감도" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
+                <img src="assets/content/844c9f8f3f348ad8e58502382a71382956754cecccd6228cec3b5339f1e0a4e9.png" alt="1F 창고 조감도" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
             </div>
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title" style="margin-bottom:0.75rem;">건물 층 관리 리스트</h4>
@@ -277,7 +277,7 @@ const spaHtml = `<!DOCTYPE html>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem;">
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title">범위 생성 및 영역 조감</h4>
-                <img src="assets/wms/image15.png" alt="범위 영역 조감" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
+                <img src="assets/content/844c9f8f3f348ad8e58502382a71382956754cecccd6228cec3b5339f1e0a4e9.png" alt="범위 영역 조감" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
             </div>
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title" style="margin-bottom:0.75rem;">범위별 보관 품목 관리 표</h4>
@@ -322,7 +322,7 @@ const spaHtml = `<!DOCTYPE html>
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title">랙 선택 세부 정보 & 3D 뷰어 (B2C 랙 예시)</h4>
                 <p class="card-desc">랙(Rack) 클릭 시 좌측 뷰어에 단(Level)별 적재량 및 품목 상세 정보(Kangol 원단 스펙)가 실시간 표시됩니다.</p>
-                <img src="assets/wms/video_frames/video_step_5.jpg" alt="랙 3D 뷰어" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
+                <img src="assets/content/d0413614b3cbd060b3538d11f7dbafb532d97cfc455bf693c58fbf5cd006915c.jpg" alt="랙 3D 뷰어" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
             </div>
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title" style="margin-bottom:0.75rem;">B2C 랙 단(Level)별 ID 및 수량 현황</h4>
@@ -395,7 +395,7 @@ const spaHtml = `<!DOCTYPE html>
         <div style="display:grid; grid-template-columns: 1.2fr 1fr; gap:1.5rem;">
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title">실시간 3D 경로 탐색 결과 뷰어</h4>
-                <img src="assets/wms/video_frames/video_step_5.jpg" alt="실시간 3D 경로 뷰어" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
+                <img src="assets/content/d0413614b3cbd060b3538d11f7dbafb532d97cfc455bf693c58fbf5cd006915c.jpg" alt="실시간 3D 경로 뷰어" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
             </div>
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title" style="margin-bottom:0.75rem;">경로 기점 및 Location 명세</h4>

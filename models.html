@@ -161,13 +161,18 @@
         <div id="menuManagerList" class="menu-manager-list"></div>
         <section class="content-sync-actions permission-editor-only" aria-label="콘텐츠 JSON 관리">
             <strong>콘텐츠 JSON</strong>
-            <p>메뉴와 카드 초안을 파일로 내보내거나 가져옵니다. 내보낸 파일을 프로젝트의 <code>data/site-content.json</code>에 반영해 Git에 커밋하면 GitHub Pages에 게시할 수 있습니다.</p>
+            <p>메뉴와 카드 초안을 파일로 내보내거나 가져옵니다. <code>data/site-content.json</code>, <code>data/attachments.json</code>, <code>assets/content</code>를 함께 Git에 반영하면 Netlify에도 첨부파일이 게시됩니다.</p>
             <div class="content-sync-buttons">
                 <button id="contentExportBtn" type="button">내보내기</button>
                 <button id="contentImportBtn" type="button">가져오기</button>
                 <button id="contentRestoreBtn" type="button">게시본 불러오기</button>
             </div>
             <input id="contentImportInput" type="file" accept="application/json,.json" hidden>
+        </section>
+        <section class="attachment-manager-entry permission-editor-only" aria-label="첨부파일 관리">
+            <strong>첨부파일 관리</strong>
+            <p>로컬 프로젝트에 저장된 이미지·PDF의 사용 여부를 확인하고 미사용 파일을 안전하게 정리합니다.</p>
+            <button id="attachmentManagerBtn" type="button">첨부파일 검사·정리</button>
         </section>
     </div>
 </div>
@@ -217,12 +222,12 @@
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title">1F 선택층 현황 & 자재 인디케이터</h4>
                 <p class="card-desc">국가, 공장, 건물, 층 드롭다운 선택 시 상단에 원단, 테이프, 밴드, 단추, 포장재의 재고/여유공간이 인디케이터 바 형태로 즉시 조망됩니다.</p>
-                <img src="assets/wms/video_frames/video_step_1.jpg" alt="1F 선택층 현황" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.75rem;"/>
+                <img src="assets/content/99ac17822cca183bd7d447482ad77b622b4647cb4e9d44ca4f3e3d8555e87ccc.jpg" alt="1F 선택층 현황" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.75rem;"/>
             </div>
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title">3D 층간 E/V 연계 최적 경로 가이드</h4>
                 <p class="card-desc">1F 출입구부터 1F E/V, 2F E/V를 거쳐 2F 부자재 창고의 G2D 랙까지 이어지는 수평/수직 이동 동선을 3D 그린 라인 및 빌보드로 안내합니다.</p>
-                <img src="assets/wms/video_frames/video_step_5.jpg" alt="3D 최적 경로" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.75rem;"/>
+                <img src="assets/content/d0413614b3cbd060b3538d11f7dbafb532d97cfc455bf693c58fbf5cd006915c.jpg" alt="3D 최적 경로" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.75rem;"/>
             </div>
         </div>
 
@@ -303,7 +308,7 @@
         <div style="display:grid; grid-template-columns: 1.2fr 1fr; gap:1.5rem;">
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title">1F 창고 3D 조감도 (부자재 & 원자재)</h4>
-                <img src="assets/wms/image15.png" alt="1F 창고 조감도" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
+                <img src="assets/content/844c9f8f3f348ad8e58502382a71382956754cecccd6228cec3b5339f1e0a4e9.png" alt="1F 창고 조감도" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
             </div>
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title" style="margin-bottom:0.75rem;">건물 층 관리 리스트</h4>
@@ -362,7 +367,7 @@
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem;">
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title">범위 생성 및 영역 조감</h4>
-                <img src="assets/wms/image15.png" alt="범위 영역 조감" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
+                <img src="assets/content/844c9f8f3f348ad8e58502382a71382956754cecccd6228cec3b5339f1e0a4e9.png" alt="범위 영역 조감" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
             </div>
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title" style="margin-bottom:0.75rem;">범위별 보관 품목 관리 표</h4>
@@ -407,7 +412,7 @@
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title">랙 선택 세부 정보 & 3D 뷰어 (B2C 랙 예시)</h4>
                 <p class="card-desc">랙(Rack) 클릭 시 좌측 뷰어에 단(Level)별 적재량 및 품목 상세 정보(Kangol 원단 스펙)가 실시간 표시됩니다.</p>
-                <img src="assets/wms/video_frames/video_step_5.jpg" alt="랙 3D 뷰어" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
+                <img src="assets/content/d0413614b3cbd060b3538d11f7dbafb532d97cfc455bf693c58fbf5cd006915c.jpg" alt="랙 3D 뷰어" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
             </div>
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title" style="margin-bottom:0.75rem;">B2C 랙 단(Level)별 ID 및 수량 현황</h4>
@@ -508,7 +513,7 @@
                 </div>
 
                 <div style="position:relative; width:100%; border-radius:0.5rem; overflow:hidden; border:1px solid #334155;">
-                    <img src="assets/wms/video_frames/video_step_1.jpg" alt="3D 저작 캔버스 뷰포트" style="width:100%; display:block; filter: brightness(0.95);"/>
+                    <img src="assets/content/99ac17822cca183bd7d447482ad77b622b4647cb4e9d44ca4f3e3d8555e87ccc.jpg" alt="3D 저작 캔버스 뷰포트" style="width:100%; display:block; filter: brightness(0.95);"/>
                     <!-- Interactive 3D Editing Gizmo Overlay Graphic -->
                     <div style="position:absolute; top:20%; left:35%; border:2px dashed #38bdf8; background:rgba(56,189,248,0.15); width:180px; height:110px; border-radius:4px; display:flex; flex-direction:column; justify-content:space-between; padding:6px; box-shadow:0 0 15px rgba(56,189,248,0.4);">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -702,7 +707,7 @@
         <div style="display:grid; grid-template-columns: 1.2fr 1fr; gap:1.5rem;">
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title">실시간 3D 경로 탐색 결과 뷰어</h4>
-                <img src="assets/wms/video_frames/video_step_5.jpg" alt="실시간 3D 경로 뷰어" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
+                <img src="assets/content/d0413614b3cbd060b3538d11f7dbafb532d97cfc455bf693c58fbf5cd006915c.jpg" alt="실시간 3D 경로 뷰어" style="width:100%; border-radius:0.5rem; border:1px solid #e5e7eb; margin-top:0.5rem;"/>
             </div>
             <div class="card" style="margin-bottom:0;">
                 <h4 class="card-title" style="margin-bottom:0.75rem;">경로 기점 및 Location 명세</h4>
@@ -821,6 +826,7 @@
 
 <script src="js/role-permissions.js?v=local-accounts-v2"></script>
 <script src="js/content-sync.js?v=card-patch-v13"></script>
+<script src="js/local-attachments.js?v=local-assets-v1"></script>
 <script src="js/card-content-model.js?v=text-model-v2"></script>
 <script src="js/menu-tree-model.js?v=menu-tree-v1"></script>
 <script src="js/app.js?v=card-patch-gate-v3"></script>
@@ -904,7 +910,8 @@
                                                 <li><strong>내보내기</strong>: 현재 메인 메뉴와 메뉴별 카드 내용을 JSON 파일로 내려받습니다.</li>
                                                 <li><strong>가져오기</strong>: 내려받은 JSON 파일을 선택해 현재 브라우저의 메뉴·카드 초안에 적용합니다.</li>
                                                 <li><strong>게시본 불러오기</strong>: GitHub에 게시된 기준 JSON 내용을 현재 브라우저에 불러옵니다.</li>
-                                                <li>내보낸 JSON 파일을 Git에 커밋·푸시하면 GitHub에도 같은 콘텐츠를 게시할 수 있습니다.</li>
+                                                <li>내보낸 JSON과 <code>data/attachments.json</code>, <code>assets/content</code>를 함께 Git에 커밋·푸시하면 Netlify에도 첨부파일이 게시됩니다.</li>
+                                                <li><span class="help-editor-tag">Editor</span> <strong>첨부파일 관리</strong>: 미사용 이미지·PDF를 휴지통으로 옮기고 복구하거나 영구 삭제합니다.</li>
                                             </ul>
                                         </li>
                                     </ul>

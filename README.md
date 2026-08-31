@@ -7,7 +7,8 @@ WMS(창고 관리 시스템) 디지털 트윈의 기획·데모 화면을 위한
 - 로컬 테스트 로그인과 `Viewer`·`Editor` 권한 전환
 - 개요, 층 관리, 범위 관리, 랙 관리, 저작도구, 경로 찾기, 시스템 설정, 테스트 메뉴
 - Editor 전용 카드 추가·수정·삭제·순서 변경
-- 텍스트·표·이미지 기반 카드 콘텐츠와 Mermaid 흐름도 표시
+- 텍스트·표·이미지·PDF 기반 카드 콘텐츠와 Mermaid 흐름도 표시
+- 이미지·PDF를 Git과 Netlify에 함께 게시할 수 있는 로컬 파일 저장 도우미
 - 메뉴, 검색, 도움말, 업데이트 등록 UI
 
 ## 시작하기
@@ -15,7 +16,6 @@ WMS(창고 관리 시스템) 디지털 트윈의 기획·데모 화면을 위한
 ### 준비 사항
 
 - Node.js 18 이상
-- Python 3 (로컬 미리 보기 서버용)
 
 ### 의존성 설치
 
@@ -25,13 +25,26 @@ npm ci
 
 ### 로컬에서 실행
 
+프로젝트 폴더의 `start-local-editor.cmd`를 두 번 클릭합니다. 또는 PowerShell에서 다음 명령을 실행합니다.
+
 ```powershell
-.\scripts\start-local-preview.ps1
+npm run dev
 ```
 
 브라우저에서 [http://127.0.0.1:4173](http://127.0.0.1:4173)을 엽니다.
 
-로그인은 로컬 테스트 전용입니다. 아이디와 비밀번호에 각각 영문·숫자 8자를 입력하면 로그인할 수 있으며, 처음 로그인한 권한은 `Viewer`입니다.
+로그인은 로컬 테스트 전용입니다. `edituser` 또는 `viewuser` 계정으로 로그인하며, 처음 로그인한 권한은 `Viewer`입니다.
+
+## 카드 첨부파일 등록과 게시
+
+1. 반드시 `start-local-editor.cmd`로 로컬 사이트를 실행합니다.
+2. Editor 권한에서 카드에 이미지 또는 PDF를 추가하고 `등록`을 누릅니다.
+3. 파일은 `assets/content`에 저장되고, 파일 목록은 `data/attachments.json`에 기록됩니다.
+4. 메뉴 관리에서 콘텐츠 JSON을 내보내 `data/site-content.json`에 반영합니다.
+5. `data/site-content.json`, `data/attachments.json`, `assets/content` 변경을 모두 Git에 커밋·푸시합니다.
+6. Netlify가 GitHub 저장소와 연결되어 있으면 푸시 후 자동 배포됩니다.
+
+카드를 삭제해도 첨부파일은 즉시 삭제되지 않습니다. 같은 파일을 다른 카드가 사용할 수 있기 때문입니다. 메뉴 관리의 `첨부파일 검사·정리`에서 미사용 파일만 휴지통으로 옮기고, 필요하면 복구하거나 영구 삭제합니다. 같은 파일을 여러 번 등록하면 내용이 같은 파일은 한 번만 저장됩니다.
 
 ## 개발 명령어
 
@@ -58,6 +71,9 @@ css/test-editor.css        카드 편집기 스타일
 assets/                    화면 이미지·미디어
 tests/                     구조 회귀 테스트
 scripts/sync-pages.js      호환 HTML 동기화
+scripts/local-content-server.js 로컬 화면·첨부파일 저장 서버
+assets/content/            Git·Netlify에 게시할 카드 첨부파일
+data/attachments.json      첨부파일 목록
 ```
 
 ## GitHub에 변경 올리기

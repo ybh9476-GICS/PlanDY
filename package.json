@@ -2,9 +2,11 @@
   "name": "yupoong-wms-digital-twin",
   "private": true,
   "scripts": {
+    "dev": "node scripts/local-content-server.js",
     "sync:pages": "node scripts/sync-pages.js",
     "test:structure": "node tests/structure.test.js",
-    "test": "npm run test:structure"
+    "test:attachments": "node tests/local-attachments.test.js",
+    "test": "npm run test:structure && npm run test:attachments"
   },
   "dependencies": {
     "pdfjs-dist": "^6.2.108"

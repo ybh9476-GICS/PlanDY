@@ -30,12 +30,12 @@ const overviewInitialCardRows = [
             {
                 title: '1F 선택층 현황 및 재고 인디케이터',
                 description: '국가, 공장, 건물, 층 선택과 재고·가용 공간 정보를 확인합니다.',
-                image: 'assets/wms/video_frames/video_step_1.jpg'
+                image: 'assets/content/99ac17822cca183bd7d447482ad77b622b4647cb4e9d44ca4f3e3d8555e87ccc.jpg'
             },
             {
                 title: '3D 층간 E/V 경유 최적 경로 가이드',
                 description: '출입구부터 목적지까지의 수평·수직 이동 동선을 3D로 안내합니다.',
-                image: 'assets/wms/video_frames/video_step_5.jpg'
+                image: 'assets/content/d0413614b3cbd060b3538d11f7dbafb532d97cfc455bf693c58fbf5cd006915c.jpg'
             }
         ]
     },
@@ -83,7 +83,7 @@ const routeInitialCardRows = [
             {
                 title: '실시간 3D 경로 탐색 결과 뷰어',
                 description: '출발지부터 목적지까지의 최적 경로를 3D 화면에서 확인합니다.',
-                image: 'assets/wms/video_frames/video_step_5.jpg'
+                image: 'assets/content/d0413614b3cbd060b3538d11f7dbafb532d97cfc455bf693c58fbf5cd006915c.jpg'
             },
             {
                 title: '경로 기점 및 Location 명세',
@@ -112,7 +112,7 @@ const authoringInitialCardRows = [
         cards: [{
             title: '3D Canvas Viewport',
             description: '선택한 창고 모델과 랙 배치 상태를 3D 화면에서 확인합니다.',
-            image: 'assets/wms/video_frames/video_step_1.jpg'
+            image: 'assets/content/99ac17822cca183bd7d447482ad77b622b4647cb4e9d44ca4f3e3d8555e87ccc.jpg'
         }]
     },
     {

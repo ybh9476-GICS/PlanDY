@@ -809,7 +809,7 @@
                     const block = contentModel.normalizeBlock(storedBlock);
                     const blockElement = document.createElement('section');
                     blockElement.className = `test-card-content-block test-card-content-block-${block.type}`;
-                    if (block.type === 'image' && block.imageId) {
+                    if (block.type === 'image' && (block.assetPath || block.imageId)) {
                         const imageFrame = document.createElement('div');
                         imageFrame.className = 'test-card-image-frame';
                         const image = document.createElement('img');
@@ -824,8 +824,9 @@
                         imageFrame.appendChild(originalButton);
                         addImageResizeControls(card, imageFrame, blockIndex, block);
                         blockElement.appendChild(imageFrame);
-                        loadImageBlob(block.imageId).then((blob) => { if (blob) image.src = URL.createObjectURL(blob); }).catch(showStorageWarning);
-                    } else if (block.type === 'pdf' && block.pdfId) {
+                        if (block.assetPath) image.src = block.assetPath;
+                        else loadImageBlob(block.imageId).then((blob) => { if (blob) image.src = URL.createObjectURL(blob); }).catch(showStorageWarning);
+                    } else if (block.type === 'pdf' && (block.assetPath || block.pdfId)) {
                         const pdfFrame = document.createElement('div');
                         pdfFrame.className = 'test-card-pdf-frame';
                         const preview = document.createElement('canvas');
@@ -837,7 +838,10 @@
                         originalButton.textContent = '원본보기';
                         pdfFrame.append(preview, originalButton);
                         blockElement.appendChild(pdfFrame);
-                        loadImageBlob(block.pdfId).then((blob) => {
+                        const loadPdf = block.assetPath && window.wmsLocalAttachments
+                            ? window.wmsLocalAttachments.loadBlob(block.assetPath)
+                            : loadImageBlob(block.pdfId);
+                        loadPdf.then((blob) => {
                             if (!blob) return;
                             renderPdfPage(preview, blob, 1).catch(showStorageWarning);
                             originalButton.addEventListener('click', () => openOriginalPdf(blob, block.fileName));
@@ -985,18 +989,21 @@
                     const cellName = isFirstRowHeader || isFirstColumnHeader ? 'th' : 'td';
                     const cell = document.createElement(cellName);
                     if (cellName === 'th') cell.scope = isFirstRowHeader ? 'col' : 'row';
+                    const thumbnailAsset = rowIndex > 0 && Number(data.thumbnailColumn) === columnIndex
+                        ? data.thumbnailAssets?.[rowIndex]
+                        : null;
                     const thumbnailId = rowIndex > 0 && Number(data.thumbnailColumn) === columnIndex
                         ? data.thumbnailImageIds?.[rowIndex]
                         : '';
                     if (isFirstRowHeader && Number(data.thumbnailColumn) === columnIndex) {
                         cell.textContent = '이미지';
-                    } else if (thumbnailId) {
+                    } else if (thumbnailAsset?.assetPath || thumbnailId) {
                         cell.classList.add('test-card-table-thumbnail-cell');
                         const thumbnailFrame = document.createElement('div');
                         thumbnailFrame.className = 'test-card-table-thumbnail-frame';
                         const thumbnail = document.createElement('img');
                         thumbnail.className = 'test-card-table-thumbnail';
-                        thumbnail.dataset.imageId = thumbnailId;
+                        if (thumbnailId) thumbnail.dataset.imageId = thumbnailId;
                         thumbnail.alt = `${row?.[0] || '설비'} 사진`;
                         thumbnail.loading = 'lazy';
                         const originalButton = document.createElement('button');
@@ -1007,7 +1014,10 @@
                         originalButton.addEventListener('click', () => {
                             if (thumbnail.src) openOriginalImage(thumbnail.src);
                         });
-                        loadImageBlob(thumbnailId).then((blob) => {
+                        if (thumbnailAsset?.assetPath) {
+                            thumbnail.src = thumbnailAsset.assetPath;
+                            originalButton.disabled = false;
+                        } else loadImageBlob(thumbnailId).then((blob) => {
                             if (!blob) return;
                             thumbnail.src = URL.createObjectURL(blob);
                             originalButton.disabled = false;
@@ -1751,6 +1761,11 @@
                     const state = {
                         type: 'image',
                         imageId: savedBlock?.imageId || '',
+                        assetId: savedBlock?.assetId || '',
+                        assetPath: savedBlock?.assetPath || '',
+                        originalName: savedBlock?.originalName || '',
+                        mimeType: savedBlock?.mimeType || '',
+                        size: Number(savedBlock?.size) || 0,
                         displayWidth: normalizeImageDisplayWidth(savedBlock?.displayWidth),
                         file: null,
                         preview: '',
@@ -1779,13 +1794,24 @@
                             const instruction = document.createElement('p');
                             instruction.textContent = '이미지를 선택하거나 이 영역에 끌어 놓으세요.';
                             panel.append(input, instruction);
+                            window.wmsLocalAttachments?.configureFileInput(input, instruction);
                         }
                         panel.appendChild(actions);
                     };
-                    const setFile = (file) => {
+                    const setFile = async (file) => {
                         if (!file || !file.type.startsWith('image/')) return;
+                        if (window.wmsLocalAttachments && !(await window.wmsLocalAttachments.status()).available) {
+                            showCardNotice('첨부파일 등록은 로컬 편집 환경에서만 사용할 수 있습니다.', true);
+                            return;
+                        }
                         if (state.preview.startsWith('blob:')) URL.revokeObjectURL(state.preview);
                         state.file = file;
+                        state.imageId = '';
+                        state.assetId = '';
+                        state.assetPath = '';
+                        state.originalName = file.name || '';
+                        state.mimeType = file.type || '';
+                        state.size = file.size || 0;
                         state.preview = URL.createObjectURL(file);
                         editTouched = true;
                         render();
@@ -1805,7 +1831,8 @@
                         editTouched = true;
                     });
                     imageBlocks.push(state);
-                    if (state.imageId) loadImageBlob(state.imageId).then((blob) => { if (blob) { state.preview = URL.createObjectURL(blob); render(); } }).catch(showStorageWarning);
+                    if (state.assetPath) { state.preview = state.assetPath; }
+                    else if (state.imageId) loadImageBlob(state.imageId).then((blob) => { if (blob) { state.preview = URL.createObjectURL(blob); render(); } }).catch(showStorageWarning);
                     render();
                     state.panel = panel;
                     return { state, panel };
@@ -1815,6 +1842,11 @@
                         type: 'pdf',
                         pdfId: savedBlock?.pdfId || '',
                         fileName: savedBlock?.fileName || '',
+                        assetId: savedBlock?.assetId || '',
+                        assetPath: savedBlock?.assetPath || '',
+                        originalName: savedBlock?.originalName || '',
+                        mimeType: savedBlock?.mimeType || '',
+                        size: Number(savedBlock?.size) || 0,
                         file: null,
                         preview: '',
                         clipboardSource: Boolean(savedBlock?.clipboardSource)
@@ -1839,16 +1871,27 @@
                             const instruction = document.createElement('p');
                             instruction.textContent = 'PDF 파일을 선택하거나 이 영역에 놓으세요. 카드에는 첫 페이지가 표시됩니다.';
                             panel.append(input, instruction);
+                            window.wmsLocalAttachments?.configureFileInput(input, instruction);
                         }
                         const actions = document.createElement('div');
                         actions.className = 'test-content-block-actions';
                         actions.innerHTML = '<button type="button" data-pdf-action="up">위로</button><button type="button" data-pdf-action="down">아래로</button><button type="button" data-pdf-action="remove">삭제</button>';
                         panel.appendChild(actions);
                     };
-                    const setFile = (file) => {
+                    const setFile = async (file) => {
                         if (!file || (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name))) return;
+                        if (window.wmsLocalAttachments && !(await window.wmsLocalAttachments.status()).available) {
+                            showCardNotice('첨부파일 등록은 로컬 편집 환경에서만 사용할 수 있습니다.', true);
+                            return;
+                        }
                         if (state.preview.startsWith('blob:')) URL.revokeObjectURL(state.preview);
                         state.file = file;
+                        state.pdfId = '';
+                        state.assetId = '';
+                        state.assetPath = '';
+                        state.originalName = file.name || '';
+                        state.mimeType = file.type || 'application/pdf';
+                        state.size = file.size || 0;
                         state.blob = file;
                         state.fileName = file.name;
                         state.preview = URL.createObjectURL(file);
@@ -1867,7 +1910,8 @@
                         editTouched = true;
                     });
                     contentPdfBlocks.push(state);
-                    if (state.pdfId) loadImageBlob(state.pdfId).then((blob) => { if (blob) { state.blob = blob; state.preview = URL.createObjectURL(blob); render(); } }).catch(showStorageWarning);
+                    if (state.assetPath && window.wmsLocalAttachments) window.wmsLocalAttachments.loadBlob(state.assetPath).then((blob) => { state.blob = blob; state.preview = URL.createObjectURL(blob); render(); }).catch(showStorageWarning);
+                    else if (state.pdfId) loadImageBlob(state.pdfId).then((blob) => { if (blob) { state.blob = blob; state.preview = URL.createObjectURL(blob); render(); } }).catch(showStorageWarning);
                     render();
                     state.panel = panel;
                     return { state, panel };
@@ -2012,8 +2056,8 @@
                     headerField.textContent.trim() ||
                     descriptionField.textContent.trim() ||
                     bodySlots.some((slot) => slot.active) ||
-                    contentImageBlocks.some((state) => state.panel?.isConnected && (state.file || state.imageId)) ||
-                    contentPdfBlocks.some((state) => state.panel?.isConnected && (state.file || state.pdfId)) ||
+                    contentImageBlocks.some((state) => state.panel?.isConnected && (state.file || state.assetPath || state.imageId)) ||
+                    contentPdfBlocks.some((state) => state.panel?.isConnected && (state.file || state.assetPath || state.pdfId)) ||
                     contentGoogleDriveBlocks.some((state) => state.panel?.isConnected && parseGoogleDriveDocumentUrl(state.url))
                 );
                 const refreshClipboardActions = () => {
@@ -2039,6 +2083,14 @@
                             }
                             const imageState = contentImageBlocks.find((item) => item.panel === element);
                             if (imageState) {
+                                if (imageState.assetPath && !imageState.file) {
+                                    clipboardBlocks.push({
+                                        type: 'image', assetId: imageState.assetId, assetPath: imageState.assetPath,
+                                        originalName: imageState.originalName, mimeType: imageState.mimeType, size: imageState.size,
+                                        ...(imageState.displayWidth ? { displayWidth: imageState.displayWidth } : {})
+                                    });
+                                    continue;
+                                }
                                 if (!imageState.file && !imageState.imageId) continue;
                                 const imageBlob = imageState.file || await loadImageBlob(imageState.imageId);
                                 if (!imageBlob) throw new Error('복사할 이미지 데이터를 찾을 수 없습니다.');
@@ -2050,6 +2102,14 @@
                             }
                             const pdfState = contentPdfBlocks.find((item) => item.panel === element);
                             if (pdfState) {
+                                if (pdfState.assetPath && !pdfState.file) {
+                                    clipboardBlocks.push({
+                                        type: 'pdf', assetId: pdfState.assetId, assetPath: pdfState.assetPath,
+                                        originalName: pdfState.originalName, mimeType: pdfState.mimeType, size: pdfState.size,
+                                        fileName: pdfState.fileName || pdfState.originalName || '등록 PDF'
+                                    });
+                                    continue;
+                                }
                                 if (!pdfState.file && !pdfState.pdfId) continue;
                                 const pdfBlob = pdfState.file || await loadImageBlob(pdfState.pdfId);
                                 if (!pdfBlob) throw new Error('복사할 PDF 데이터를 찾을 수 없습니다.');
@@ -2126,11 +2186,11 @@
                             contentArea.appendChild(slot.panel);
                             return;
                         }
-                        if (block.type === 'image' && block.imageId) {
-                            const imageBlock = createImageBlock({ imageId: block.imageId, clipboardSource: true });
+                        if (block.type === 'image' && (block.assetPath || block.imageId)) {
+                            const imageBlock = createImageBlock({ ...block, clipboardSource: Boolean(block.imageId && !block.assetPath) });
                             contentArea.appendChild(imageBlock.panel);
-                        } else if (block.type === 'pdf' && block.pdfId) {
-                            const pdfBlock = createPdfBlock({ ...block, clipboardSource: true });
+                        } else if (block.type === 'pdf' && (block.assetPath || block.pdfId)) {
+                            const pdfBlock = createPdfBlock({ ...block, clipboardSource: Boolean(block.pdfId && !block.assetPath) });
                             contentArea.appendChild(pdfBlock.panel);
                         } else if (block.type === 'googleDrive') {
                             const googleDriveBlock = createGoogleDriveBlock(block);
@@ -2924,6 +2984,7 @@
                     const blocks = [];
                     const newImageIds = [];
                     const committedImageStates = [];
+                    const committedLocalAssetStates = [];
                     try {
                         for (const element of Array.from(contentArea.children)) {
                             const slot = bodySlots.find((item) => item.panel === element);
@@ -2936,15 +2997,28 @@
                             const imageState = contentImageBlocks.find((item) => item.panel === element);
                             if (imageState) {
                                 let imageId = imageState.imageId;
-                                if (imageState.file || (imageState.clipboardSource && imageState.imageId)) {
-                                    const imageBlob = imageState.file || await loadImageBlob(imageState.imageId);
+                                let localAsset = null;
+                                if (imageState.file) {
+                                    if (!window.wmsLocalAttachments) throw new Error('로컬 첨부파일 저장 도우미를 찾을 수 없습니다. start-local-editor.cmd로 실행해 주세요.');
+                                    localAsset = await window.wmsLocalAttachments.upload(imageState.file);
+                                    committedLocalAssetStates.push({ state: imageState, asset: localAsset });
+                                } else if (imageState.clipboardSource && imageState.imageId) {
+                                    const imageBlob = await loadImageBlob(imageState.imageId);
                                     if (!imageBlob) throw new Error('붙여넣을 이미지 데이터를 찾을 수 없습니다.');
                                     imageId = createImageId();
                                     await saveImageBlob(imageId, imageBlob);
                                     newImageIds.push(imageId);
                                     committedImageStates.push({ state: imageState, imageId });
                                 }
-                                if (imageId) blocks.push({ type: 'image', imageId, ...(imageState.displayWidth ? { displayWidth: imageState.displayWidth } : {}) });
+                                const assetPath = localAsset?.path || imageState.assetPath;
+                                if (assetPath) blocks.push({
+                                    type: 'image', assetId: localAsset?.id || imageState.assetId, assetPath,
+                                    originalName: localAsset?.originalName || imageState.originalName,
+                                    mimeType: localAsset?.mimeType || imageState.mimeType,
+                                    size: localAsset?.size || imageState.size,
+                                    ...(imageState.displayWidth ? { displayWidth: imageState.displayWidth } : {})
+                                });
+                                else if (imageId) blocks.push({ type: 'image', imageId, ...(imageState.displayWidth ? { displayWidth: imageState.displayWidth } : {}) });
                                 continue;
                             }
                             const googleDriveState = contentGoogleDriveBlocks.find((item) => item.panel === element);
@@ -2957,15 +3031,28 @@
                             const pdfState = contentPdfBlocks.find((item) => item.panel === element);
                             if (!pdfState) continue;
                             let pdfId = pdfState.pdfId;
-                            if (pdfState.file || (pdfState.clipboardSource && pdfState.pdfId)) {
-                                const pdfBlob = pdfState.file || await loadImageBlob(pdfState.pdfId);
+                            let localAsset = null;
+                            if (pdfState.file) {
+                                if (!window.wmsLocalAttachments) throw new Error('로컬 첨부파일 저장 도우미를 찾을 수 없습니다. start-local-editor.cmd로 실행해 주세요.');
+                                localAsset = await window.wmsLocalAttachments.upload(pdfState.file);
+                                committedLocalAssetStates.push({ state: pdfState, asset: localAsset });
+                            } else if (pdfState.clipboardSource && pdfState.pdfId) {
+                                const pdfBlob = await loadImageBlob(pdfState.pdfId);
                                 if (!pdfBlob) throw new Error('붙여넣을 PDF 데이터를 찾을 수 없습니다.');
                                 pdfId = createImageId();
                                 await saveImageBlob(pdfId, pdfBlob);
                                 newImageIds.push(pdfId);
                                 committedImageStates.push({ state: pdfState, imageId: pdfId, assetKey: 'pdfId' });
                             }
-                            if (pdfId) blocks.push({ type: 'pdf', pdfId, fileName: pdfState.fileName || '등록 PDF' });
+                            const assetPath = localAsset?.path || pdfState.assetPath;
+                            if (assetPath) blocks.push({
+                                type: 'pdf', assetId: localAsset?.id || pdfState.assetId, assetPath,
+                                originalName: localAsset?.originalName || pdfState.originalName,
+                                mimeType: localAsset?.mimeType || pdfState.mimeType,
+                                size: localAsset?.size || pdfState.size,
+                                fileName: pdfState.fileName || localAsset?.originalName || pdfState.originalName || '등록 PDF'
+                            });
+                            else if (pdfId) blocks.push({ type: 'pdf', pdfId, fileName: pdfState.fileName || '등록 PDF' });
                         }
                     } catch (error) {
                         newImageIds.forEach((imageId) => removeImageBlob(imageId).catch(() => {}));
@@ -2976,6 +3063,17 @@
                     committedImageStates.forEach(({ state, imageId }) => {
                         if (state.type === 'pdf') state.pdfId = imageId;
                         else state.imageId = imageId;
+                        state.clipboardSource = false;
+                    });
+                    committedLocalAssetStates.forEach(({ state, asset }) => {
+                        state.assetId = asset.id;
+                        state.assetPath = asset.path;
+                        state.originalName = asset.originalName;
+                        state.mimeType = asset.mimeType;
+                        state.size = asset.size;
+                        state.file = null;
+                        state.imageId = '';
+                        state.pdfId = '';
                         state.clipboardSource = false;
                     });
                     const retainedAssetIds = new Set(blocks.flatMap((block) => block.type === 'image' ? [block.imageId] : (block.type === 'pdf' ? [block.pdfId] : [])));

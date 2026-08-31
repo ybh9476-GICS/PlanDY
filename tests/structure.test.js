@@ -12,6 +12,7 @@ const appFeatures = fs.readFileSync(path.join(root, 'js', 'app-features.js'), 'u
 const rolePermissions = fs.readFileSync(path.join(root, 'js', 'role-permissions.js'), 'utf8');
 const cardContentModel = fs.readFileSync(path.join(root, 'js', 'card-content-model.js'), 'utf8');
 const contentSync = fs.readFileSync(path.join(root, 'js', 'content-sync.js'), 'utf8');
+const localAttachments = fs.readFileSync(path.join(root, 'js', 'local-attachments.js'), 'utf8');
 const testEditor = fs.readFileSync(path.join(root, 'js', 'test-editor-v14.js'), 'utf8');
 const testEditorCss = fs.readFileSync(path.join(root, 'css', 'test-editor.css'), 'utf8');
 const compatibilityPages = [
@@ -24,11 +25,11 @@ const expectedTabs = ['overview', 'floor', 'zone', 'rack', 'editor', 'route', 's
 const actualTabs = [...source.matchAll(/<section id="view-([^"]+)"/g)].map((match) => match[1]);
 assert.deepStrictEqual(actualTabs, expectedTabs, 'The menu panels changed unexpectedly.');
 
-for (const asset of ['css/style.css', 'css/test-editor.css', 'js/role-permissions.js', 'js/content-sync.js', 'js/card-content-model.js', 'js/menu-tree-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
+for (const asset of ['css/style.css', 'css/test-editor.css', 'js/role-permissions.js', 'js/content-sync.js', 'js/local-attachments.js', 'js/card-content-model.js', 'js/menu-tree-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js', 'scripts/local-content-server.js', 'data/attachments.json', 'data/legacy-asset-map.json', 'start-local-editor.cmd']) {
     assert.ok(fs.existsSync(path.join(root, asset)), `Missing runtime asset: ${asset}`);
 }
 
-for (const script of ['js/role-permissions.js', 'js/content-sync.js', 'js/card-content-model.js', 'js/menu-tree-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js']) {
+for (const script of ['js/role-permissions.js', 'js/content-sync.js', 'js/local-attachments.js', 'js/card-content-model.js', 'js/menu-tree-model.js', 'js/app.js', 'js/app-features.js', 'js/test-editor-v14.js', 'scripts/local-content-server.js']) {
     const code = fs.readFileSync(path.join(root, script), 'utf8');
     new vm.Script(code, { filename: script });
 }
@@ -72,6 +73,32 @@ assert.ok(rolePermissions.includes("window.location.hash = '';"), 'Logout must c
 assert.ok(app.includes('window.wmsPermissions?.isAuthenticated?.() !== true'), 'Routing must block unauthenticated menu access.');
 assert.ok(source.indexOf('js/menu-tree-model.js') < source.indexOf('js/app.js'), 'The menu hierarchy model must load before the router.');
 assert.ok(source.includes('id="menuParentSelect"'), 'Menu management must allow a main or submenu parent to be selected.');
+assert.ok(source.includes('id="attachmentManagerBtn"'), 'The local attachment manager entry is missing.');
+assert.ok(source.includes('js/local-attachments.js'), 'The local attachment client must load on the page.');
+assert.ok(testEditor.includes('window.wmsLocalAttachments.upload'), 'New card attachments must use the local file helper.');
+assert.ok(testEditor.includes('assetPath'), 'Card blocks must preserve deployable attachment paths.');
+assert.ok(testEditor.includes('data.thumbnailAssets?.[rowIndex]'), 'Table thumbnails must support deployable attachment paths.');
+assert.ok(localAttachments.includes('migrateKnownLegacyReferences'), 'Legacy browser image references must have a path migration flow.');
+
+const attachmentManifest = JSON.parse(fs.readFileSync(path.join(root, 'data', 'attachments.json'), 'utf8'));
+const publishedContent = JSON.parse(fs.readFileSync(path.join(root, 'data', 'site-content.json'), 'utf8'));
+const referencedAssetIds = new Set();
+const collectAssetIds = (value) => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) return value.forEach(collectAssetIds);
+    Object.entries(value).forEach(([key, child]) => {
+        if (key === 'assetId' && typeof child === 'string') referencedAssetIds.add(child);
+        else collectAssetIds(child);
+    });
+};
+collectAssetIds(publishedContent);
+for (const [assetId, asset] of Object.entries(attachmentManifest.assets || {})) {
+    assert.strictEqual(asset.id, assetId, `Attachment manifest ID mismatch: ${assetId}`);
+    assert.ok(fs.existsSync(path.join(root, asset.path)), `Attachment file is missing: ${asset.path}`);
+}
+for (const assetId of referencedAssetIds) assert.ok(attachmentManifest.assets?.[assetId], `Published content references an unknown asset: ${assetId}`);
+assert.ok(!fs.existsSync(path.join(root, 'assets', 'wms')), 'The migrated legacy assets/wms directory must not remain.');
+assert.ok(!source.includes('assets/wms/'), 'Compatibility markup still references the removed assets/wms directory.');
 assert.ok(app.includes("schemaVersion: 2, menus, deletedBuiltinIds"), 'Hierarchical menu settings must persist their schema version.');
 assert.ok(app.includes('이 메뉴에는 하위 메뉴가 있어 삭제할 수 없습니다.'), 'Main menus with children must be protected from deletion.');
 assert.ok(app.includes('remove.disabled = menuHasChildren(menu.id)'), 'The delete control must explain unavailable parent deletion before execution.');
@@ -330,8 +357,10 @@ assert.ok(!testEditor.includes("if (testCardList.id === 'testCardList')"), 'Card
 assert.ok(testEditor.includes('const sharedClipboard = readCardClipboard();'), 'Paste visibility and execution must use the latest shared clipboard value.');
 assert.ok(testEditor.includes("clipboardBlocks.push({ type: 'pdf', pdfId, fileName:"), 'Card copy must preserve PDF blocks.');
 assert.ok(testEditor.includes('clipboardSource: Boolean(savedBlock?.clipboardSource)'), 'Pasted images must remain distinguishable from saved card images.');
-assert.ok(testEditor.includes("imageState.file || (imageState.clipboardSource && imageState.imageId)"), 'Pasted images must be cloned into independent card image IDs.');
-assert.ok(testEditor.includes("pdfState.file || (pdfState.clipboardSource && pdfState.pdfId)"), 'Pasted PDFs must be cloned into independent asset IDs.');
+assert.ok(testEditor.includes('else if (imageState.clipboardSource && imageState.imageId)'), 'Legacy pasted images must be cloned into independent card image IDs.');
+assert.ok(testEditor.includes('else if (pdfState.clipboardSource && pdfState.pdfId)'), 'Legacy pasted PDFs must be cloned into independent asset IDs.');
+assert.ok(testEditor.includes('imageState.assetPath && !imageState.file'), 'Path-based copied images must reuse their deduplicated project asset.');
+assert.ok(testEditor.includes('pdfState.assetPath && !pdfState.file'), 'Path-based copied PDFs must reuse their deduplicated project asset.');
 assert.ok(testEditor.includes('!cardHasStoredContent(card)'), 'Paste must remain restricted to empty cards.');
 assert.ok(testEditorCss.includes('.test-card-edit-paste'), 'Card paste button styling was removed.');
 assert.ok(testEditorCss.includes('.test-card-edit-copy'), 'Card copy button styling was removed.');

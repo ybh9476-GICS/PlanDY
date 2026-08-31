@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "assets": {
+    "59f2c193a0db3227ac30e86473872ec8f4140b23e407c83de35de3a508f6130e": {
+      "id": "59f2c193a0db3227ac30e86473872ec8f4140b23e407c83de35de3a508f6130e",
+      "path": "assets/content/59f2c193a0db3227ac30e86473872ec8f4140b23e407c83de35de3a508f6130e.png",
+      "originalName": "제안용 배치도 이미지.png",
+      "aliases": [
+        "제안용 배치도 이미지.png"
+      ],
+      "mimeType": "image/png",
+      "size": 1483710,
+      "status": "active",
+      "createdAt": "2026-08-31T07:16:59.917Z"
+    },
+    "2ee669452663af74b97834eb65034819e6fbc1d35450355ccf5ea5b41d66ac5e": {
+      "id": "2ee669452663af74b97834eb65034819e6fbc1d35450355ccf5ea5b41d66ac5e",
+      "path": "assets/content/2ee669452663af74b97834eb65034819e6fbc1d35450355ccf5ea5b41d66ac5e.png",
+      "originalName": "wms-inbound-to-outbound-process-v2.png",
+      "aliases": [
+        "wms-inbound-to-outbound-process-v2.png"
+      ],
+      "mimeType": "image/png",
+      "size": 1904441,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z"
+    },
+    "3f6ed9349bf9f587ba2d931aa1d46d52fac61828fb66dea56a77bd2d4ab842b1": {
+      "id": "3f6ed9349bf9f587ba2d931aa1d46d52fac61828fb66dea56a77bd2d4ab842b1",
+      "path": "assets/content/3f6ed9349bf9f587ba2d931aa1d46d52fac61828fb66dea56a77bd2d4ab842b1.png",
+      "originalName": "automated-warehouse-rack-location-terms-v4.png",
+      "aliases": [
+        "automated-warehouse-rack-location-terms-v4.png"
+      ],
+      "mimeType": "image/png",
+      "size": 1480083,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z"
+    },
+    "70adc908e79460b2b4ca32289ce207bfd5442dc4723f5431a8ae40e8140c4321": {
+      "id": "70adc908e79460b2b4ca32289ce207bfd5442dc4723f5431a8ae40e8140c4321",
+      "path": "assets/content/70adc908e79460b2b4ca32289ce207bfd5442dc4723f5431a8ae40e8140c4321.png",
+      "originalName": "transport-amr-lidar-360-v3.png",
+      "aliases": [
+        "transport-amr-lidar-360-v3.png"
+      ],
+      "mimeType": "image/png",
+      "size": 2311918,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z"
+    },
+    "d1e743d7858729e264cedc12bd05ca55990444a171ed9264adec73f54ac64bf7": {
+      "id": "d1e743d7858729e264cedc12bd05ca55990444a171ed9264adec73f54ac64bf7",
+      "path": "assets/content/d1e743d7858729e264cedc12bd05ca55990444a171ed9264adec73f54ac64bf7.png",
+      "originalName": "transport-agv-guided-floor-v3.png",
+      "aliases": [
+        "transport-agv-guided-floor-v3.png"
+      ],
+      "mimeType": "image/png",
+      "size": 1950845,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z"
+    },
+    "7ec7741a746280889eadbfc93b47e7607ebd733ad9665bdc4720a6d997e21300": {
+      "id": "7ec7741a746280889eadbfc93b47e7607ebd733ad9665bdc4720a6d997e21300",
+      "path": "assets/content/7ec7741a746280889eadbfc93b47e7607ebd733ad9665bdc4720a6d997e21300.jpg",
+      "originalName": "transport-amr-promag.jpg",
+      "aliases": [
+        "transport-amr-promag.jpg"
+      ],
+      "mimeType": "image/jpeg",
+      "size": 85232,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z"
+    },
+    "2e6c9577bf249053d16fd2e9279f85a203855d38ba021a29f047925ef7d4066a": {
+      "id": "2e6c9577bf249053d16fd2e9279f85a203855d38ba021a29f047925ef7d4066a",
+      "path": "assets/content/2e6c9577bf249053d16fd2e9279f85a203855d38ba021a29f047925ef7d4066a.jpg",
+      "originalName": "transport-elevator-amr-kumalift.jpg",
+      "aliases": [
+        "transport-elevator-amr-kumalift.jpg"
+      ],
+      "mimeType": "image/jpeg",
+      "size": 107746,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z"
+    },
+    "73d23e38a0dce94a40103264a1f3ae9e9367fb2bb91718da86c953f3904ad211": {
+      "id": "73d23e38a0dce94a40103264a1f3ae9e9367fb2bb91718da86c953f3904ad211",
+      "path": "assets/content/73d23e38a0dce94a40103264a1f3ae9e9367fb2bb91718da86c953f3904ad211.jpg",
+      "originalName": "transport-fourway-shuttle-mb.jpg",
+      "aliases": [
+        "transport-fourway-shuttle-mb.jpg"
+      ],
+      "mimeType": "image/jpeg",
+      "size": 798724,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z"
+    },
+    "ba597f04ecfa6f547843191a9ac8a5184fc4dd8e2d09edf11cad72f19585af23": {
+      "id": "ba597f04ecfa6f547843191a9ac8a5184fc4dd8e2d09edf11cad72f19585af23",
+      "path": "assets/content/ba597f04ecfa6f547843191a9ac8a5184fc4dd8e2d09edf11cad72f19585af23.jpg",
+      "originalName": "transport-pallet-conveyor-mecalux.jpg",
+      "aliases": [
+        "transport-pallet-conveyor-mecalux.jpg"
+      ],
+      "mimeType": "image/jpeg",
+      "size": 514578,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z"
+    },
+    "17f5fec7ddaf90bc7a6433bda73e075672729cd63b393e056a02184b721aaa2b": {
+      "id": "17f5fec7ddaf90bc7a6433bda73e075672729cd63b393e056a02184b721aaa2b",
+      "path": "assets/content/17f5fec7ddaf90bc7a6433bda73e075672729cd63b393e056a02184b721aaa2b.jpg",
+      "originalName": "transport-shuttle-tgw.jpg",
+      "aliases": [
+        "transport-shuttle-tgw.jpg"
+      ],
+      "mimeType": "image/jpeg",
+      "size": 109213,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z"
+    },
+    "be021ade02979be7fc5044762f2560dd67a9f778ae0ca1bcfc333c987c941592": {
+      "id": "be021ade02979be7fc5044762f2560dd67a9f778ae0ca1bcfc333c987c941592",
+      "path": "assets/content/be021ade02979be7fc5044762f2560dd67a9f778ae0ca1bcfc333c987c941592.jpg",
+      "originalName": "transport-asrs-stacker-kinte.jpg",
+      "aliases": [
+        "transport-asrs-stacker-kinte.jpg"
+      ],
+      "mimeType": "image/jpeg",
+      "size": 717894,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z"
+    },
+    "8396ee79fd2acf97031c279e05fe445fe34544c5230d28c9c5de2e168a30ad19": {
+      "id": "8396ee79fd2acf97031c279e05fe445fe34544c5230d28c9c5de2e168a30ad19",
+      "path": "assets/content/8396ee79fd2acf97031c279e05fe445fe34544c5230d28c9c5de2e168a30ad19.png",
+      "originalName": "transport-omni-sorter-mclogi.png",
+      "aliases": [
+        "transport-omni-sorter-mclogi.png"
+      ],
+      "mimeType": "image/png",
+      "size": 265790,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z"
+    },
+    "a35a3683ced0b4fe6a0783cc88ee0206fd97d08ea4db361c0da258fab1d6cea4": {
+      "id": "a35a3683ced0b4fe6a0783cc88ee0206fd97d08ea4db361c0da258fab1d6cea4",
+      "path": "assets/content/a35a3683ced0b4fe6a0783cc88ee0206fd97d08ea4db361c0da258fab1d6cea4.jpg",
+      "originalName": "transport-gantry-rober.jpg",
+      "aliases": [
+        "transport-gantry-rober.jpg"
+      ],
+      "mimeType": "image/jpeg",
+      "size": 813114,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z"
+    },
+    "844c9f8f3f348ad8e58502382a71382956754cecccd6228cec3b5339f1e0a4e9": {
+      "id": "844c9f8f3f348ad8e58502382a71382956754cecccd6228cec3b5339f1e0a4e9",
+      "path": "assets/content/844c9f8f3f348ad8e58502382a71382956754cecccd6228cec3b5339f1e0a4e9.png",
+      "originalName": "image15.png",
+      "aliases": [
+        "image15.png"
+      ],
+      "mimeType": "image/png",
+      "size": 1443477,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z",
+      "protected": true
+    },
+    "99ac17822cca183bd7d447482ad77b622b4647cb4e9d44ca4f3e3d8555e87ccc": {
+      "id": "99ac17822cca183bd7d447482ad77b622b4647cb4e9d44ca4f3e3d8555e87ccc",
+      "path": "assets/content/99ac17822cca183bd7d447482ad77b622b4647cb4e9d44ca4f3e3d8555e87ccc.jpg",
+      "originalName": "video_step_1.jpg",
+      "aliases": [
+        "video_step_1.jpg"
+      ],
+      "mimeType": "image/jpeg",
+      "size": 375109,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z",
+      "protected": true
+    },
+    "d0413614b3cbd060b3538d11f7dbafb532d97cfc455bf693c58fbf5cd006915c": {
+      "id": "d0413614b3cbd060b3538d11f7dbafb532d97cfc455bf693c58fbf5cd006915c",
+      "path": "assets/content/d0413614b3cbd060b3538d11f7dbafb532d97cfc455bf693c58fbf5cd006915c.jpg",
+      "originalName": "video_step_5.jpg",
+      "aliases": [
+        "video_step_5.jpg"
+      ],
+      "mimeType": "image/jpeg",
+      "size": 487036,
+      "status": "active",
+      "createdAt": "2026-08-31T07:30:25.094Z",
+      "protected": true
+    }
+  }
+}

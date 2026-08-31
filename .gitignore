@@ -11,3 +11,6 @@ yarn-error.log*
 # Operating-system metadata
 .DS_Store
 Thumbs.db
+
+# Recoverable local attachment trash
+.local-attachment-trash/
