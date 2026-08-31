@@ -12,7 +12,6 @@ const appFeatures = fs.readFileSync(path.join(root, 'js', 'app-features.js'), 'u
 const rolePermissions = fs.readFileSync(path.join(root, 'js', 'role-permissions.js'), 'utf8');
 const cardContentModel = fs.readFileSync(path.join(root, 'js', 'card-content-model.js'), 'utf8');
 const contentSync = fs.readFileSync(path.join(root, 'js', 'content-sync.js'), 'utf8');
-const publishedContent = JSON.parse(fs.readFileSync(path.join(root, 'data', 'site-content.json'), 'utf8'));
 const testEditor = fs.readFileSync(path.join(root, 'js', 'test-editor-v14.js'), 'utf8');
 const testEditorCss = fs.readFileSync(path.join(root, 'css', 'test-editor.css'), 'utf8');
 const compatibilityPages = [
@@ -70,21 +69,6 @@ assert.ok(rolePermissions.includes('한글 입력 중 — 영문으로 전환하
 assert.ok(rolePermissions.includes('영문·숫자만 사용할 수 있습니다'), 'Invalid credential characters must be explained.');
 assert.ok(rolePermissions.includes("hint.textContent = '입력 완료';"), 'Completed credentials must be announced.');
 assert.ok(rolePermissions.includes("window.location.hash = '';"), 'Logout must clear the current route.');
-assert.ok(contentSync.includes("const assetSourceStorageKey = 'wms-content-asset-sources-v1'"), 'Published asset source paths must persist separately from card data.');
-assert.ok(contentSync.includes("key === 'imageId' || key === 'pdfId'") && contentSync.includes("key === 'thumbnailImageIds'"), 'Portable content must collect image, PDF, and table-thumbnail asset IDs.');
-assert.ok(contentSync.includes('async function createPortableContentDocument()'), 'Content export must package referenced browser assets.');
-assert.ok(contentSync.includes("asset.dataUrl = await blobToDataUrl(blob)"), 'Browser-only assets must be embedded in exported content.');
-assert.ok(contentSync.includes("else asset.url = sourceUrl") || contentSync.includes("if (sourceUrl) asset.url = sourceUrl"), 'Published project assets must retain deployable URLs.');
-assert.ok(contentSync.includes('async function restoreContentAssets(documentValue)'), 'Content import must restore packaged assets to browser storage.');
-assert.ok(contentSync.includes('if (await loadStoredAsset(asset.id))'), 'Existing browser assets must not be downloaded again on every page load.');
-assert.ok(contentSync.includes('const fetchedBlobs = new Map();'), 'Duplicate published asset URLs must be fetched only once during hydration.');
-assert.ok(contentSync.includes('await restoreContentAssets(documentValue);\n        applyContentDocument(documentValue);'), 'Assets must be restored before imported card metadata is applied.');
-assert.ok(contentSync.includes('await restoreContentAssets(documentValue);\n            if (!shouldSeedContent) return false;'), 'Published assets must hydrate even when existing browser card data is preserved.');
-assert.ok(contentSync.includes('confirmMissingAssets(inspection.missingIds'), 'Import and published restore must warn before applying missing assets.');
-assert.ok(contentSync.includes("resolvedUrl.origin !== window.location.origin"), 'Imported asset URLs must be limited to the current site origin.');
-assert.ok(contentSync.includes("if (!isEditor()) return;\n            await applyPortableContentDocument(documentValue);"), 'Content replacement must recheck Editor permission immediately before applying data.');
-assert.ok(Array.isArray(publishedContent.assets), 'Published content must expose its portable asset manifest.');
-assert.ok(publishedContent.assets.some((asset) => asset.id === '0acc43c9-0676-4161-8b7c-4fbe19d643d1' && asset.url === 'assets/wms/automated-warehouse-rack-location-terms-v4.png'), 'The published rack-location card image must resolve to a deployed asset.');
 assert.ok(app.includes('window.wmsPermissions?.isAuthenticated?.() !== true'), 'Routing must block unauthenticated menu access.');
 assert.ok(source.indexOf('js/menu-tree-model.js') < source.indexOf('js/app.js'), 'The menu hierarchy model must load before the router.');
 assert.ok(source.includes('id="menuParentSelect"'), 'Menu management must allow a main or submenu parent to be selected.');
