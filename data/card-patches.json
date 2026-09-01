@@ -1,4 +1,47 @@
 {
   "schemaVersion": 1,
-  "patches": []
+  "patches": [
+    {
+      "id": "three-test-warehouse-floor-plan-v3",
+      "menuId": "custom-1788157191456",
+      "readingIndex": 1,
+      "rowIndex": 1,
+      "cardIndex": 0,
+      "card": {
+        "title": "3D 창고 레이아웃",
+        "description": "평면도 배치와 기준정보에 따라 생성된 랙과 재고를 3D로 확인합니다.",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2Type": "text",
+        "table2": null,
+        "body2": "",
+        "body2Html": "",
+        "imageId": "",
+        "image": "",
+        "editLocked": true,
+        "lockSource": "system",
+        "lockMessage": "Three.js 3D 창고 카드로 수정할 수 없습니다.",
+        "contentBlocks": [
+          {
+            "type": "warehouse3d",
+            "dataSource": "data/warehouse-demo.json",
+            "googleSheet": {
+              "documentId": "1pl6qVIVAxwIDmQ18EbSD-8a_CngilPD3mm_KrImK4Tk",
+              "sheets": {
+                "floorPlan": "평면도",
+                "zones": "구역설정",
+                "rackTypes": "랙타입 마스터",
+                "racks": "랙배치",
+                "locations": "로케이션 마스터",
+                "items": "품목 마스터",
+                "inventory": "재고 현황"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
 }

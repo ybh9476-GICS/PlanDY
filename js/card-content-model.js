@@ -33,6 +33,7 @@
     registerBlockType({ type: 'pdf', label: 'PDF' });
     registerBlockType({ type: 'googleDrive', label: 'Google Drive' });
     registerBlockType({ type: 'diagram', label: 'Diagram', editable: false });
+    registerBlockType({ type: 'warehouse3d', label: '3D Warehouse', editable: false });
 
     function getBlockType(type) {
         return definitions.get(aliases.get(type)) || null;

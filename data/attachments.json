@@ -195,6 +195,18 @@
       "status": "active",
       "createdAt": "2026-08-31T07:30:25.094Z",
       "protected": true
+    },
+    "7c102d44e65cda3573949231002fe90e20f42a8c66b33b91479d3a2a728fd3c4": {
+      "id": "7c102d44e65cda3573949231002fe90e20f42a8c66b33b91479d3a2a728fd3c4",
+      "path": "assets/content/7c102d44e65cda3573949231002fe90e20f42a8c66b33b91479d3a2a728fd3c4.png",
+      "originalName": "ci.png",
+      "aliases": [
+        "ci.png"
+      ],
+      "mimeType": "image/png",
+      "size": 10859,
+      "status": "active",
+      "createdAt": "2026-09-01T04:46:30.185Z"
     }
   }
 }

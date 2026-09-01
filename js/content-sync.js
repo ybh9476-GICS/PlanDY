@@ -10,6 +10,10 @@
         authoringCards: 'wms-authoring-cards-v1',
         testCards: 'wms-test-menu-cards-v1'
     };
+    const projectContentApi = 'api/local-content';
+    let projectStatusPromise;
+    let projectSaveTimer;
+    let projectSaveQueue = Promise.resolve();
     let resolveCardPatchReady;
     let cardPatchReadySettled = false;
     window.wmsCardPatchReady = new Promise((resolve) => {
@@ -44,6 +48,7 @@
     }
 
     async function applyPendingCardPatches() {
+        if (window.location.protocol === 'file:') return false;
         const response = await fetch(`${cardPatchUrl}?v=${Date.now()}`, { cache: 'no-store' });
         if (!response.ok) return false;
         const documentValue = await response.json();
@@ -54,10 +59,13 @@
             if (!patch?.id || localStorage.getItem(`wms-card-patch-applied-v1:${patch.id}`)) continue;
             const images = Array.isArray(patch.images) ? patch.images : (patch.image ? [patch.image] : []);
             const tableSource = patch.table || documentValue.patches.find((candidate) => candidate?.id === patch.tableTemplateId)?.table;
-            if (!patch.card || images.length === 0 || !tableSource) continue;
+            const explicitBlocks = Array.isArray(patch.card?.contentBlocks) ? patch.card.contentBlocks : null;
+            if (!patch.card || (explicitBlocks === null && (images.length === 0 || !tableSource))) continue;
             // 자동 등록 대상만 만들거나 갱신한다. 다른 메뉴와 카드 행은 그대로 보존한다.
             const state = readStoredValue(storageKeys.customCards) || {};
-            const rows = Array.isArray(state[patch.menuId]) ? state[patch.menuId] : (state[patch.menuId] = []);
+            // 빈 브라우저는 게시 콘텐츠를 먼저 불러와야 하므로 아직 없는 메뉴에는 패치를 적용하지 않는다.
+            if (!Array.isArray(state[patch.menuId])) continue;
+            const rows = state[patch.menuId];
             for (const generatedCard of patch.cleanupGeneratedCards || []) {
                 for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex -= 1) {
                     const rowCards = rows[rowIndex]?.cards;
@@ -105,7 +113,7 @@
             row.cards[targetCardIndex] = {
                 ...card,
                 ...patch.card,
-                contentBlocks: [
+                contentBlocks: explicitBlocks || [
                     ...(patch.showImageBlocks === false ? [] : images.map((image) => ({ type: 'image', imageId: image.id }))),
                     {
                         type: 'table',
@@ -153,6 +161,62 @@
         };
     }
 
+    async function requestProjectContent(path, options = {}) {
+        const response = await fetch(`${projectContentApi}/${path}`, { cache: 'no-store', ...options });
+        const value = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(value.error || '프로젝트 콘텐츠 저장에 실패했습니다.');
+        return value;
+    }
+
+    async function getProjectSaveStatus() {
+        if (!/^https?:$/.test(window.location.protocol)) return { available: false, localOnly: true };
+        if (!projectStatusPromise) {
+            projectStatusPromise = requestProjectContent('status').catch(() => ({ available: false, localOnly: true }));
+        }
+        return projectStatusPromise;
+    }
+
+    function setProjectSaveStatus(message, state = '') {
+        const element = document.getElementById('contentProjectSaveStatus');
+        if (!element) return;
+        element.textContent = message;
+        element.dataset.state = state;
+    }
+
+    async function saveProjectContent() {
+        if (!isEditor()) throw new Error('Editor에서만 프로젝트 콘텐츠를 저장할 수 있습니다.');
+        if (!(await getProjectSaveStatus()).available) throw new Error('프로젝트 자동 저장은 start-local-editor.cmd로 연 로컬 화면에서만 사용할 수 있습니다.');
+        setProjectSaveStatus('프로젝트에 저장 중…', 'saving');
+        const documentValue = createContentDocument();
+        await window.wmsLocalAttachments?.validateAssetReferences(documentValue);
+        const result = await requestProjectContent('save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(documentValue)
+        });
+        localStorage.setItem(appliedMarkerKey, String(result.updatedAt || documentValue.updatedAt));
+        const time = new Date(result.updatedAt || Date.now()).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setProjectSaveStatus(`프로젝트 저장 완료 · ${time}`, 'saved');
+        return result;
+    }
+
+    function queueProjectSave(showAlert = false) {
+        const pending = projectSaveQueue.catch(() => {}).then(() => saveProjectContent());
+        projectSaveQueue = pending;
+        pending.catch((error) => {
+            setProjectSaveStatus(error.message || '프로젝트 자동 저장에 실패했습니다.', 'error');
+            if (showAlert) alert(error.message || '프로젝트 콘텐츠를 저장하지 못했습니다.');
+        });
+        return pending;
+    }
+
+    function scheduleProjectSave() {
+        if (!isEditor()) return;
+        clearTimeout(projectSaveTimer);
+        setProjectSaveStatus('변경 사항 저장 대기…', 'saving');
+        projectSaveTimer = setTimeout(() => queueProjectSave(false), 300);
+    }
+
     function applyContentDocument(documentValue) {
         if (!isContentDocument(documentValue)) throw new Error('지원하지 않는 콘텐츠 JSON 형식입니다.');
         Object.entries(storageKeys).forEach(([name, key]) => {
@@ -167,6 +231,9 @@
     }
 
     async function fetchPublishedContent() {
+        if (window.location.protocol === 'file:' && isContentDocument(window.WMS_PUBLISHED_CONTENT)) {
+            return window.WMS_PUBLISHED_CONTENT;
+        }
         const response = await fetch(`${contentUrl}?v=${Date.now()}`, { cache: 'no-store' });
         if (!response.ok) throw new Error('게시용 콘텐츠 파일을 찾을 수 없습니다.');
         const documentValue = await response.json();
@@ -176,10 +243,13 @@
 
     async function seedEmptyBrowserFromPublishedContent() {
         try {
-            if (hasLocalContent() || localStorage.getItem(appliedMarkerKey)) return false;
+            const isFileMode = window.location.protocol === 'file:';
+            if (!isFileMode && (hasLocalContent() || localStorage.getItem(appliedMarkerKey))) return false;
             const documentValue = await fetchPublishedContent();
+            const publishedVersion = String(documentValue.updatedAt || documentValue.schemaVersion || '1');
+            if (isFileMode && hasLocalContent() && localStorage.getItem(appliedMarkerKey) === publishedVersion) return false;
             applyContentDocument(documentValue);
-            localStorage.setItem(appliedMarkerKey, 'true');
+            localStorage.setItem(appliedMarkerKey, publishedVersion);
             window.location.reload();
             return true;
         } catch (_) {
@@ -238,13 +308,21 @@
         }
     }
 
-    window.wmsContentSync = { createContentDocument, applyContentDocument, fetchPublishedContent };
+    window.wmsContentSync = { createContentDocument, applyContentDocument, fetchPublishedContent, saveProjectContent, scheduleProjectSave };
 
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('contentExportBtn')?.addEventListener('click', downloadContent);
         document.getElementById('contentImportBtn')?.addEventListener('click', requestImport);
         document.getElementById('contentRestoreBtn')?.addEventListener('click', restorePublishedContent);
-        applyPendingCardPatches().then(async (changed) => {
+        const projectSaveButton = document.getElementById('contentProjectSaveBtn');
+        projectSaveButton?.addEventListener('click', () => queueProjectSave(true));
+        getProjectSaveStatus().then((value) => {
+            if (projectSaveButton) projectSaveButton.disabled = !value.available;
+            setProjectSaveStatus(value.available
+                ? '카드·메뉴 등록 시 프로젝트에 자동 저장됩니다.'
+                : '로컬 편집기로 실행하면 프로젝트 자동 저장을 사용할 수 있습니다.', value.available ? 'ready' : 'unavailable');
+        });
+        applyPendingCardPatches().catch(() => false).then(async (changed) => {
             if (changed) {
                 window.location.reload();
                 return;

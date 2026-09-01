@@ -1,4 +1,5 @@
-{
+(function () {
+    window.WMS_PUBLISHED_CONTENT = {
   "schemaVersion": 1,
   "updatedAt": "2026-09-01T05:38:11.602Z",
   "storage": {
@@ -1619,4 +1620,5 @@
       }
     ]
   }
-}
+};
+}());

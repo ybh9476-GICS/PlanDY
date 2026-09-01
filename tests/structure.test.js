@@ -75,6 +75,11 @@ assert.ok(source.indexOf('js/menu-tree-model.js') < source.indexOf('js/app.js'),
 assert.ok(source.includes('id="menuParentSelect"'), 'Menu management must allow a main or submenu parent to be selected.');
 assert.ok(source.includes('id="attachmentManagerBtn"'), 'The local attachment manager entry is missing.');
 assert.ok(source.includes('js/local-attachments.js'), 'The local attachment client must load on the page.');
+assert.ok(source.includes('id="contentProjectSaveBtn"') && source.includes('id="contentProjectSaveStatus"'), 'The project content save controls are missing.');
+assert.ok(contentSync.includes("projectContentApi = 'api/local-content'"), 'The local project content endpoint is missing.');
+assert.ok(contentSync.includes('if (!isEditor()) throw new Error'), 'Project content saving must recheck Editor permission.');
+assert.ok(contentSync.includes('scheduleProjectSave'), 'Project content autosave scheduling is missing.');
+assert.ok((app.match(/scheduleProjectSave/g) || []).length >= 5 && testEditor.includes('scheduleProjectSave'), 'Menu and card completion events must schedule project content saving.');
 assert.ok(testEditor.includes('window.wmsLocalAttachments.upload'), 'New card attachments must use the local file helper.');
 assert.ok(testEditor.includes('assetPath'), 'Card blocks must preserve deployable attachment paths.');
 assert.ok(testEditor.includes('data.thumbnailAssets?.[rowIndex]'), 'Table thumbnails must support deployable attachment paths.');
@@ -82,6 +87,7 @@ assert.ok(localAttachments.includes('migrateKnownLegacyReferences'), 'Legacy bro
 
 const attachmentManifest = JSON.parse(fs.readFileSync(path.join(root, 'data', 'attachments.json'), 'utf8'));
 const publishedContent = JSON.parse(fs.readFileSync(path.join(root, 'data', 'site-content.json'), 'utf8'));
+const publishedContentScript = fs.readFileSync(path.join(root, 'data', 'site-content.js'), 'utf8');
 const referencedAssetIds = new Set();
 const collectAssetIds = (value) => {
     if (!value || typeof value !== 'object') return;
@@ -222,6 +228,11 @@ assert.ok(testEditor.includes('test-body-editor-panel'), 'Body editor panels wer
 assert.ok(testEditor.includes('test-edit-content-blocks'), 'Dynamic content block container was removed.');
 assert.ok(testEditor.includes('contentBlocks'), 'Content block storage was removed.');
 assert.ok(source.indexOf('js/card-content-model.js') < source.indexOf('js/app.js'), 'The card content model must load before application initialization.');
+assert.ok(source.includes('data/site-content.js'), 'File-mode published content script must load from the page.');
+assert.ok(source.indexOf('data/site-content.js') < source.indexOf('js/content-sync.js'), 'Published content must load before content synchronization.');
+assert.ok(publishedContentScript.includes('window.WMS_PUBLISHED_CONTENT'), 'Generated file-mode content must expose the published document.');
+assert.ok(contentSync.includes("window.location.protocol === 'file:'"), 'File mode must use embedded published content without fetch.');
+assert.ok(contentSync.includes('applyPendingCardPatches().catch(() => false).then'), 'A card patch fetch failure must not prevent published content initialization.');
 assert.ok(cardContentModel.includes('function registerBlockType(definition)'), 'Future card block formats must use the shared registry.');
 assert.ok(cardContentModel.includes("aliases: ['plainText', 'text2']"), 'Legacy text aliases must be confined to the compatibility model.');
 assert.ok(cardContentModel.includes('formatVersion: Math.max(textFormatVersion'), 'Canonical Text blocks must include an explicit format version without downgrading future data.');

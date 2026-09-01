@@ -161,12 +161,14 @@
         <div id="menuManagerList" class="menu-manager-list"></div>
         <section class="content-sync-actions permission-editor-only" aria-label="콘텐츠 JSON 관리">
             <strong>콘텐츠 JSON</strong>
-            <p>메뉴와 카드 초안을 파일로 내보내거나 가져옵니다. <code>data/site-content.json</code>, <code>data/attachments.json</code>, <code>assets/content</code>를 함께 Git에 반영하면 Netlify에도 첨부파일이 게시됩니다.</p>
+            <p>로컬 편집기로 실행하면 카드·메뉴 등록 후 <code>data/site-content.json</code>과 <code>data/site-content.js</code>가 자동 갱신됩니다. Git 반영은 별도입니다.</p>
             <div class="content-sync-buttons">
+                <button id="contentProjectSaveBtn" type="button">지금 프로젝트에 저장</button>
                 <button id="contentExportBtn" type="button">내보내기</button>
                 <button id="contentImportBtn" type="button">가져오기</button>
                 <button id="contentRestoreBtn" type="button">게시본 불러오기</button>
             </div>
+            <p id="contentProjectSaveStatus" class="content-project-save-status" role="status">로컬 저장 상태를 확인 중입니다.</p>
             <input id="contentImportInput" type="file" accept="application/json,.json" hidden>
         </section>
         <section class="attachment-manager-entry permission-editor-only" aria-label="첨부파일 관리">
@@ -825,6 +827,7 @@
 </main>
 
 <script src="js/role-permissions.js?v=local-accounts-v2"></script>
+<script src="data/site-content.js?v=published-content-v1"></script>
 <script src="js/content-sync.js?v=card-patch-v13"></script>
 <script src="js/local-attachments.js?v=local-assets-v1"></script>
 <script src="js/card-content-model.js?v=text-model-v2"></script>

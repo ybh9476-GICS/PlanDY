@@ -213,6 +213,7 @@ let deletedBuiltinIds = [];
 let menus = loadMenus();
 function saveMenus() {
     localStorage.setItem(menuStorageKey, JSON.stringify({ schemaVersion: 2, menus, deletedBuiltinIds }));
+    window.wmsContentSync?.scheduleProjectSave?.();
 }
 function getMenu(id) { return window.WmsMenuTreeModel.getMenu(menus, id); }
 function getRootMenus() { return window.WmsMenuTreeModel.getRootMenus(menus); }
@@ -249,6 +250,7 @@ function loadCustomCardState() {
 
 function saveCustomCardState(state) {
     localStorage.setItem(customCardStorageKey, JSON.stringify(state));
+    window.wmsContentSync?.scheduleProjectSave?.();
 }
 
 function loadOverviewCardRows() {
@@ -338,7 +340,10 @@ function initializeOverviewCardArea() {
             cardList,
             addButton,
             initialRows: migration ? migration.rows : overviewInitialCardRows,
-            onChange: (rows) => localStorage.setItem(overviewCardStorageKey, JSON.stringify(rows)),
+            onChange: (rows) => {
+                localStorage.setItem(overviewCardStorageKey, JSON.stringify(rows));
+                window.wmsContentSync?.scheduleProjectSave?.();
+            },
             structuredContent: true
         });
     };
@@ -373,7 +378,10 @@ function initializeRouteCardArea() {
             cardList,
             addButton,
             initialRows: migration ? migration.rows : routeInitialCardRows,
-            onChange: (rows) => localStorage.setItem(routeCardStorageKey, JSON.stringify(rows)),
+            onChange: (rows) => {
+                localStorage.setItem(routeCardStorageKey, JSON.stringify(rows));
+                window.wmsContentSync?.scheduleProjectSave?.();
+            },
             structuredContent: true
         });
     };
@@ -408,7 +416,10 @@ function initializeAuthoringCardArea() {
             cardList,
             addButton,
             initialRows: migration ? migration.rows : authoringInitialCardRows,
-            onChange: (rows) => localStorage.setItem(authoringCardStorageKey, JSON.stringify(rows)),
+            onChange: (rows) => {
+                localStorage.setItem(authoringCardStorageKey, JSON.stringify(rows));
+                window.wmsContentSync?.scheduleProjectSave?.();
+            },
             structuredContent: true
         });
     };

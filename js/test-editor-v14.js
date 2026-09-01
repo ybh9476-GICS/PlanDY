@@ -802,6 +802,7 @@
                 lockButton.setAttribute('aria-pressed', String(isManualCardLocked(card)));
             }
             if (Array.isArray(contentBlocks)) {
+                window.wmsWarehouse3D?.disposeWithin?.(contentBlocksContainer);
                 contentBlocksContainer.replaceChildren();
                 renderTestText(title, card.dataset.title || '');
                 renderTestText(description, card.dataset.description || '');
@@ -881,6 +882,29 @@
                         } else {
                             diagram.classList.remove('mermaid');
                             diagram.classList.add('test-card-diagram-fallback');
+                        }
+                    } else if (block.type === 'warehouse3d') {
+                        const warehouseMount = document.createElement('div');
+                        warehouseMount.className = 'warehouse-3d-shell';
+                        warehouseMount.setAttribute('data-warehouse-3d-mount', '');
+                        blockElement.appendChild(warehouseMount);
+                        const mountWarehouse = () => {
+                            if (!warehouseMount.isConnected || warehouseMount.dataset.mounted === 'true' || !window.wmsWarehouse3D) return;
+                            warehouseMount.dataset.mounted = 'true';
+                            window.wmsWarehouse3D.mount(warehouseMount, block);
+                        };
+                        if (window.wmsWarehouse3D) mountWarehouse();
+                        else {
+                            window.addEventListener('wms-warehouse-3d-ready', mountWarehouse, { once: true });
+                            if (!document.querySelector('script[data-wms-warehouse-3d]')) {
+                                const warehouseScript = document.createElement('script');
+                                warehouseScript.src = 'js/warehouse-3d.js?v=warehouse-footer-source-status-v16';
+                                warehouseScript.dataset.wmsWarehouse3d = 'true';
+                                warehouseScript.addEventListener('error', () => {
+                                    warehouseMount.innerHTML = '<div class="warehouse-3d-error"><strong>3D 창고 스크립트를 불러오지 못했습니다.</strong></div>';
+                                }, { once: true });
+                                document.head.appendChild(warehouseScript);
+                            }
                         }
                     }
                     contentBlocksContainer.appendChild(blockElement);
@@ -3235,7 +3259,10 @@
         cardList: testCardList,
         addButton: testAddCardBtn,
         initialRows: loadTestCardRows(),
-        onChange: (rows) => localStorage.setItem(testCardStorageKey, JSON.stringify(rows)),
+        onChange: (rows) => {
+            localStorage.setItem(testCardStorageKey, JSON.stringify(rows));
+            window.wmsContentSync?.scheduleProjectSave?.();
+        },
         structuredContent: true,
         supportsTripleCards: true
     });

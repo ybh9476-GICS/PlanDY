@@ -1,0 +1,1051 @@
+(function () {
+    const threeModuleUrl = 'https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.min.js';
+    const mountedControllers = new WeakMap();
+    let threeModulePromise;
+
+    function loadThree() {
+        if (!threeModulePromise) threeModulePromise = import(threeModuleUrl);
+        return threeModulePromise;
+    }
+
+    const googleSheetDefinitions = Object.freeze({
+        floorPlan: { sheetName: '평면도', range: 'A4:AZ60', headers: ['Y\\X'] },
+        rackTypes: { sheetName: '랙타입 마스터', range: 'A4:J', headers: ['랙타입코드', '랙타입명', '베이폭(mm)', '깊이(mm)', '전체높이(mm)', '단수', '단당높이(mm)'] },
+        zones: { sheetName: '구역설정', range: 'A4:H', headers: ['구역코드', '구역명', '용도', '기본랙타입코드'] },
+        racks: { sheetName: '랙배치', range: 'A4:K', headers: ['랙코드', '구역코드', '랙타입코드', '시작X(m)', '시작Y(m)', '방향', '베이수'] },
+        locations: { sheetName: '로케이션 마스터', range: 'A4:H', headers: ['로케이션코드', '랙코드', '베이번호', '단번호', '최대수량'] },
+        items: { sheetName: '품목 마스터', range: 'A4:I', headers: ['품목코드', '품목명', '분류', '표시색상', '가로(mm)', '세로(mm)', '높이(mm)'] },
+        inventory: { sheetName: '재고 현황', range: 'A4:G', headers: ['로케이션코드', '품목코드', '재고수량', '최대수량', '재고상태'] }
+    });
+
+    function parseCsv(csvText) {
+        const rows = [];
+        let row = [];
+        let cell = '';
+        let quoted = false;
+        const text = String(csvText || '').replace(/^\uFEFF/, '');
+        for (let index = 0; index < text.length; index += 1) {
+            const character = text[index];
+            if (quoted) {
+                if (character === '"' && text[index + 1] === '"') {
+                    cell += '"';
+                    index += 1;
+                } else if (character === '"') quoted = false;
+                else cell += character;
+                continue;
+            }
+            if (character === '"') quoted = true;
+            else if (character === ',') {
+                row.push(cell.trim());
+                cell = '';
+            } else if (character === '\n' || character === '\r') {
+                if (character === '\r' && text[index + 1] === '\n') index += 1;
+                row.push(cell.trim());
+                if (row.some((value) => value !== '')) rows.push(row);
+                row = [];
+                cell = '';
+            } else cell += character;
+        }
+        row.push(cell.trim());
+        if (row.some((value) => value !== '')) rows.push(row);
+        return rows;
+    }
+
+    function csvToRecords(csvText, requiredHeaders, sheetName) {
+        const rows = parseCsv(csvText);
+        const headerIndex = rows.findIndex((row) => requiredHeaders.every((header) => row.includes(header)));
+        if (headerIndex < 0) throw new Error(`${sheetName}: 필수 헤더를 찾지 못했습니다. (${requiredHeaders.join(', ')})`);
+        const headers = rows[headerIndex].map((header) => String(header || '').trim());
+        return rows.slice(headerIndex + 1)
+            .filter((row) => row.some((value) => value !== ''))
+            .map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ''])));
+    }
+
+    function toNumber(value, fallback = 0) {
+        const text = String(value ?? '').replace(/,/g, '').trim();
+        if (!text) return fallback;
+        const number = Number(text);
+        return Number.isFinite(number) ? number : fallback;
+    }
+
+    function isEnabled(value) {
+        return !['N', 'NO', 'FALSE', '0', '미사용'].includes(String(value ?? '').trim().toUpperCase());
+    }
+
+    function convertGoogleSheetCsv(csvByKey, options = {}) {
+        const records = {};
+        Object.entries(googleSheetDefinitions).forEach(([key, definition]) => {
+            const sheetName = options.sheets?.[key] || definition.sheetName;
+            records[key] = csvToRecords(csvByKey[key], definition.headers, sheetName);
+        });
+
+        const floorPlanByRack = new Map();
+        records.floorPlan.forEach((row) => {
+            const y = Number(row['Y\\X']);
+            if (!Number.isFinite(y)) return;
+            Object.entries(row).forEach(([header, value]) => {
+                if (header === 'Y\\X') return;
+                const x = Number(header);
+                const rackCode = String(value || '').trim();
+                if (!Number.isFinite(x) || !rackCode) return;
+                const placement = floorPlanByRack.get(rackCode) || { minX: x, maxX: x, minY: y, maxY: y, cellCount: 0 };
+                placement.minX = Math.min(placement.minX, x);
+                placement.maxX = Math.max(placement.maxX, x);
+                placement.minY = Math.min(placement.minY, y);
+                placement.maxY = Math.max(placement.maxY, y);
+                placement.cellCount += 1;
+                floorPlanByRack.set(rackCode, placement);
+            });
+        });
+
+        const zones = records.zones
+            .filter((row) => row['구역코드'])
+            .map((row) => ({
+                code: row['구역코드'],
+                name: row['구역명'],
+                purpose: row['용도'],
+                defaultRackTypeCode: row['기본랙타입코드'],
+                aisleWidth: toNumber(row['통로폭(mm)']),
+                temperatureClass: row['온도구분'] || '',
+                priority: toNumber(row['작업우선순위']),
+                description: row['설명'] || ''
+            }));
+        const rackTypes = records.rackTypes
+            .filter((row) => row['랙타입코드'])
+            .map((row) => ({
+                code: row['랙타입코드'],
+                name: row['랙타입명'],
+                bayWidth: toNumber(row['베이폭(mm)']),
+                depth: toNumber(row['깊이(mm)']),
+                height: toNumber(row['전체높이(mm)']),
+                levels: toNumber(row['단수']),
+                levelHeight: toNumber(row['단당높이(mm)']),
+                depthCount: toNumber(row['깊이수'], 1),
+                maxWeight: toNumber(row['단당최대중량(kg)']),
+                color: row['표시색상'] || '#64748b'
+            }));
+        let floorPlanAppliedCount = 0;
+        const enabledRackRows = records.racks.filter((row) => row['랙코드'] && isEnabled(row['사용여부']));
+        const usesFloorPlan = floorPlanByRack.size > 0;
+        const unplacedRackCodes = usesFloorPlan
+            ? enabledRackRows.map((row) => String(row['랙코드']).trim()).filter((code) => !floorPlanByRack.has(code))
+            : [];
+        const racks = enabledRackRows
+            .filter((row) => !usesFloorPlan || floorPlanByRack.has(String(row['랙코드']).trim()))
+            .map((row) => {
+                const code = String(row['랙코드']).trim();
+                const placement = floorPlanByRack.get(code);
+                const storedDirection = ['세로', 'VERTICAL', 'V'].includes(String(row['방향'] || '').trim().toUpperCase()) ? 'vertical' : 'horizontal';
+                let direction = storedDirection;
+                if (placement) {
+                    const width = placement.maxX - placement.minX + 1;
+                    const depth = placement.maxY - placement.minY + 1;
+                    if (width !== depth) direction = depth > width ? 'vertical' : 'horizontal';
+                    floorPlanAppliedCount += 1;
+                }
+                return {
+                    code,
+                    zoneCode: row['구역코드'],
+                    rackTypeCode: row['랙타입코드'],
+                    startX: placement ? placement.minX * 1000 : toNumber(row['시작X(m)']) * 1000,
+                    startY: placement ? placement.minY * 1000 : toNumber(row['시작Y(m)']) * 1000,
+                    direction,
+                    bayCount: toNumber(row['베이수']),
+                    doubleSided: String(row['양면여부'] || '').trim().toUpperCase() === 'Y',
+                    layoutSource: placement ? 'floorPlan' : 'rackPlacement'
+                };
+            });
+        const items = records.items
+            .filter((row) => row['품목코드'])
+            .map((row) => ({
+                code: row['품목코드'],
+                name: row['품목명'],
+                category: row['분류'],
+                color: row['표시색상'] || '#ef4444',
+                width: toNumber(row['가로(mm)']),
+                depth: toNumber(row['세로(mm)']),
+                height: toNumber(row['높이(mm)']),
+                storageType: row['보관유형'] || '',
+                unit: row['단위'] || ''
+            }));
+        const locations = records.locations
+            .filter((row) => row['로케이션코드'])
+            .map((row) => ({
+                locationCode: row['로케이션코드'],
+                rackCode: row['랙코드'],
+                bay: toNumber(row['베이번호']),
+                level: toNumber(row['단번호']),
+                depth: toNumber(row['깊이번호'], 1),
+                capacity: toNumber(row['최대수량']),
+                status: row['상태'] || '',
+                note: row['비고'] || ''
+            }));
+        const locationsByCode = new Map(locations.map((location) => [location.locationCode, location]));
+        const statusMap = { 정상: 'normal', 주의: 'warning', 보류: 'hold', 불량: 'defect' };
+        const visibleRackCodes = new Set(racks.map((rack) => rack.code));
+        const inventory = records.inventory
+            .filter((row) => {
+                const location = locationsByCode.get(row['로케이션코드']);
+                return row['로케이션코드'] && row['품목코드'] && toNumber(row['재고수량']) > 0
+                    && (!usesFloorPlan || visibleRackCodes.has(location?.rackCode));
+            })
+            .map((row) => {
+                const location = locationsByCode.get(row['로케이션코드']) || {};
+                const rawStatus = String(row['재고상태'] || '').trim();
+                return {
+                    locationCode: row['로케이션코드'],
+                    rackCode: location.rackCode || '',
+                    bay: location.bay || 0,
+                    level: location.level || 0,
+                    depth: location.depth || 1,
+                    itemCode: row['품목코드'],
+                    quantity: toNumber(row['재고수량']),
+                    capacity: toNumber(row['최대수량'], location.capacity || 0),
+                    status: statusMap[rawStatus] || rawStatus.toLowerCase() || 'normal'
+                };
+            });
+
+        const rackTypeByCode = new Map(rackTypes.map((type) => [type.code, type]));
+        const floorPlanMaxX = Math.max(0, ...Object.keys(records.floorPlan[0] || {}).map(Number).filter(Number.isFinite));
+        const floorPlanMaxY = Math.max(0, ...records.floorPlan.map((row) => Number(row['Y\\X'])).filter(Number.isFinite));
+        let floorWidth = Math.max(10000, (floorPlanMaxX + 1) * 1000);
+        let floorDepth = Math.max(10000, (floorPlanMaxY + 1) * 1000);
+        racks.forEach((rack) => {
+            const type = rackTypeByCode.get(rack.rackTypeCode);
+            if (!type) return;
+            const length = type.bayWidth * rack.bayCount;
+            const width = rack.direction === 'vertical' ? type.depth : length;
+            const depth = rack.direction === 'vertical' ? length : type.depth;
+            floorWidth = Math.max(floorWidth, rack.startX + width + 4000);
+            floorDepth = Math.max(floorDepth, rack.startY + depth + 4000);
+        });
+        return {
+            schemaVersion: 1,
+            meta: {
+                name: options.name || 'Google Sheets 기준정보 창고',
+                unit: 'mm',
+                floorWidth: Math.ceil(floorWidth / 1000) * 1000,
+                floorDepth: Math.ceil(floorDepth / 1000) * 1000,
+                source: 'googleSheets',
+                documentId: options.documentId || '',
+                floorPlanAppliedCount,
+                unplacedRackCodes,
+                unmappedFloorRackCodes: [...floorPlanByRack.keys()].filter((code) => !racks.some((rack) => rack.code === code))
+            },
+            zones, rackTypes, racks, locations, items, inventory
+        };
+    }
+
+    function googleTableToCsv(table) {
+        const escapeCell = (value) => {
+            const text = String(value ?? '');
+            return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+        };
+        const headers = (table?.cols || []).map((column) => escapeCell(column?.label || column?.id || ''));
+        const rows = (table?.rows || []).map((row) => (table?.cols || []).map((_, index) => {
+            const cell = row?.c?.[index];
+            return escapeCell(cell?.v ?? '');
+        }).join(','));
+        return [headers.join(','), ...rows].join('\n');
+    }
+
+    function getGoogleSheetQueryUrl(documentId, sheetName, range, callbackName) {
+        if (!/^[A-Za-z0-9_-]{20,}$/.test(String(documentId || ''))) throw new Error('Google 스프레드시트 문서 ID가 올바르지 않습니다.');
+        return `https://docs.google.com/spreadsheets/d/${documentId}/gviz/tq?tqx=responseHandler:${callbackName}&sheet=${encodeURIComponent(sheetName)}&range=${encodeURIComponent(range)}&headers=1&_=${Date.now()}`;
+    }
+
+    function loadGoogleSheetTable(documentId, sheetName, range, signal) {
+        return new Promise((resolve, reject) => {
+            const callbackName = `__wmsGoogleSheet_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+            const script = document.createElement('script');
+            let settled = false;
+            const cleanup = () => {
+                script.remove();
+                delete window[callbackName];
+                clearTimeout(timeout);
+            };
+            const finish = (callback, value) => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                callback(value);
+            };
+            window[callbackName] = (response) => {
+                if (response?.status !== 'ok' || !response?.table) {
+                    finish(reject, new Error(`${sheetName} 시트를 읽지 못했습니다. 공유 권한과 시트명을 확인해 주세요.`));
+                    return;
+                }
+                finish(resolve, googleTableToCsv(response.table));
+            };
+            script.async = true;
+            script.referrerPolicy = 'no-referrer';
+            script.src = getGoogleSheetQueryUrl(documentId, sheetName, range, callbackName);
+            script.addEventListener('error', () => finish(reject, new Error(`${sheetName} 시트 연결에 실패했습니다.`)), { once: true });
+            signal.addEventListener('abort', () => finish(reject, new DOMException('요청이 취소되었습니다.', 'AbortError')), { once: true });
+            const timeout = setTimeout(() => finish(reject, new Error(`${sheetName} 시트 응답 시간이 초과되었습니다.`)), 20000);
+            document.head.appendChild(script);
+        });
+    }
+
+    async function loadGoogleSheetData(config, signal) {
+        const documentId = config?.documentId;
+        const entries = await Promise.all(Object.entries(googleSheetDefinitions).map(async ([key, definition]) => {
+            const sheetName = config?.sheets?.[key] || definition.sheetName;
+            const csv = await loadGoogleSheetTable(documentId, sheetName, definition.range, signal);
+            return [key, csv];
+        }));
+        return convertGoogleSheetCsv(Object.fromEntries(entries), config);
+    }
+
+    function validateWarehouseData(data) {
+        const errors = [];
+        if (!data || typeof data !== 'object') return ['기준정보 파일이 비어 있습니다.'];
+        ['zones', 'rackTypes', 'racks', 'items', 'inventory'].forEach((key) => {
+            if (!Array.isArray(data[key])) errors.push(`${key} 목록이 없습니다.`);
+        });
+        if (errors.length) return errors;
+        const zoneCodes = new Set(data.zones.map((zone) => zone.code));
+        const rackTypeCodes = new Set(data.rackTypes.map((type) => type.code));
+        const itemCodes = new Set(data.items.map((item) => item.code));
+        const rackCodes = new Set();
+        data.racks.forEach((rack) => {
+            if (!rack.code) errors.push('랙코드가 비어 있습니다.');
+            else if (rackCodes.has(rack.code)) errors.push(`중복 랙코드: ${rack.code}`);
+            else rackCodes.add(rack.code);
+            if (!zoneCodes.has(rack.zoneCode)) errors.push(`${rack.code}: 존재하지 않는 구역 ${rack.zoneCode}`);
+            if (!rackTypeCodes.has(rack.rackTypeCode)) errors.push(`${rack.code}: 존재하지 않는 랙타입 ${rack.rackTypeCode}`);
+            if (!(Number(rack.bayCount) > 0)) errors.push(`${rack.code}: 베이수가 올바르지 않습니다.`);
+        });
+        data.inventory.forEach((stock) => {
+            if (!rackCodes.has(stock.rackCode)) errors.push(`${stock.locationCode}: 존재하지 않는 랙 ${stock.rackCode}`);
+            if (!itemCodes.has(stock.itemCode)) errors.push(`${stock.locationCode}: 존재하지 않는 품목 ${stock.itemCode}`);
+        });
+        return errors;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+        })[character]);
+    }
+
+    const slotColorPalette = Object.freeze({
+        empty: '#94a3b8',
+        low: '#22c55e',
+        medium: '#f59e0b',
+        high: '#ef4444',
+        normal: '#22c55e',
+        warning: '#f59e0b',
+        hold: '#a855f7',
+        defect: '#ef4444',
+        unknown: '#475569'
+    });
+
+    function getSlotVisualKey(slot, mode = 'utilization') {
+        if (!slot?.occupied) return 'empty';
+        if (mode === 'status') {
+            const status = String(slot.stock?.status || '').trim().toLowerCase();
+            return ['normal', 'warning', 'hold', 'defect'].includes(status) ? status : 'unknown';
+        }
+        const capacity = Number(slot.stock?.capacity || slot.location?.capacity || 0);
+        if (!(capacity > 0)) return 'unknown';
+        const rate = Math.max(0, Number(slot.stock?.quantity || 0) / capacity);
+        if (rate < 0.5) return 'low';
+        if (rate < 0.8) return 'medium';
+        return 'high';
+    }
+
+    function createShell(container) {
+        container.className = 'warehouse-3d-shell';
+        container.innerHTML = `
+            <div class="warehouse-3d-toolbar">
+                <div class="warehouse-3d-toolbar-main">
+                    <label>구역 <select class="warehouse-3d-zone-filter"><option value="">전체</option></select></label>
+                    <label class="warehouse-3d-search-label">검색 <input class="warehouse-3d-search" type="search" placeholder="랙·품목 코드 또는 이름"></label>
+                    <button class="warehouse-3d-reset" type="button">화면 초기화</button>
+                    <button class="warehouse-3d-reload" type="button" hidden>시트 새로고침</button>
+                    <button class="warehouse-3d-fullscreen" type="button" aria-pressed="false">전체화면</button>
+                </div>
+                <span class="warehouse-3d-count" role="status"></span>
+            </div>
+            <div class="warehouse-3d-main">
+                <div class="warehouse-3d-viewport" aria-label="3D 창고 화면">
+                    <div class="warehouse-3d-loading" role="status">3D 창고 기준정보를 불러오는 중입니다.</div>
+                    <div class="warehouse-3d-camera-views" role="group" aria-label="카메라 구도" hidden>
+                        <button type="button" data-warehouse-camera-view="quarter" aria-label="쿼터 뷰: 30도 등각으로 보기" aria-pressed="true" title="쿼터 뷰">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 7.3v9.4L12 21l7.5-4.3V7.3L12 3Z"/><path d="m4.8 7.5 7.2 4.1 7.2-4.1M12 11.6V21"/></svg>
+                        </button>
+                        <button type="button" data-warehouse-camera-view="top" aria-label="탑 뷰: 중앙 위에서 보기" aria-pressed="false" title="탑 뷰">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M8 8h8v8H8zM12 1.5V4M12 20v2.5"/></svg>
+                        </button>
+                        <button type="button" data-warehouse-camera-view="front" aria-label="프론트 뷰: 정면에서 보기" aria-pressed="false" title="프론트 뷰">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M4 10h16M4 15h16M8 5v14M16 5v14"/></svg>
+                        </button>
+                        <button type="button" data-warehouse-camera-view="side" aria-label="사이드 뷰: 측면에서 보기" aria-pressed="false" title="사이드 뷰">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h12v14H6zM10 5v14M10 10h8M10 15h8"/><path d="m3 12 2-2m-2 2 2 2"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <aside class="warehouse-3d-inspector" aria-live="polite">
+                    <h5>선택 정보</h5>
+                    <p>랙이나 적재 상자를 선택하면 상세 정보가 표시됩니다.</p>
+                </aside>
+            </div>
+            <div class="warehouse-3d-legend" aria-label="선택한 재고 보기의 색상 범례">
+                <div class="warehouse-3d-view-toggle" role="group" aria-label="재고 색상 보기 기준">
+                    <span>보기</span>
+                    <button type="button" data-warehouse-view="utilization" aria-pressed="true">적재율</button>
+                    <button type="button" data-warehouse-view="status" aria-pressed="false">재고 상태</button>
+                </div>
+                <div class="warehouse-3d-legend-items"></div>
+                <span class="warehouse-3d-source-status" role="status">기준정보를 확인하는 중입니다.</span>
+            </div>`;
+        return {
+            viewport: container.querySelector('.warehouse-3d-viewport'),
+            loading: container.querySelector('.warehouse-3d-loading'),
+            inspector: container.querySelector('.warehouse-3d-inspector'),
+            zoneFilter: container.querySelector('.warehouse-3d-zone-filter'),
+            search: container.querySelector('.warehouse-3d-search'),
+            reset: container.querySelector('.warehouse-3d-reset'),
+            reload: container.querySelector('.warehouse-3d-reload'),
+            fullscreen: container.querySelector('.warehouse-3d-fullscreen'),
+            viewButtons: [...container.querySelectorAll('[data-warehouse-view]')],
+            cameraViews: container.querySelector('.warehouse-3d-camera-views'),
+            cameraViewButtons: [...container.querySelectorAll('[data-warehouse-camera-view]')],
+            legendItems: container.querySelector('.warehouse-3d-legend-items'),
+            sourceStatus: container.querySelector('.warehouse-3d-source-status'),
+            count: container.querySelector('.warehouse-3d-count')
+        };
+    }
+
+    function showError(shell, messages) {
+        shell.loading.className = 'warehouse-3d-error';
+        shell.loading.innerHTML = `<strong>3D 창고를 표시하지 못했습니다.</strong><ul>${messages.map((message) => `<li>${escapeHtml(message)}</li>`).join('')}</ul>`;
+    }
+
+    function createLabelSprite(THREE, text) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 72;
+        const context = canvas.getContext('2d');
+        context.fillStyle = 'rgba(5, 15, 30, 0.92)';
+        context.strokeStyle = '#3b82f6';
+        context.lineWidth = 3;
+        context.fillRect(3, 3, 250, 66);
+        context.strokeRect(3, 3, 250, 66);
+        context.fillStyle = '#ffffff';
+        context.font = '700 32px sans-serif';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText(text, 128, 36);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(3.2, 0.9, 1);
+        sprite.renderOrder = 10;
+        return sprite;
+    }
+
+    function startWarehouseScene(THREE, shell, data, signal) {
+        const mm = (value) => Number(value || 0) / 1000;
+        const floorWidth = mm(data.meta?.floorWidth || 52000);
+        const floorDepth = mm(data.meta?.floorDepth || 58000);
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#07111f');
+
+        const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 250);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.shadowMap.enabled = true;
+        renderer.domElement.tabIndex = 0;
+        renderer.domElement.setAttribute('aria-label', '기준정보 기반 3D 창고');
+        shell.viewport.replaceChildren(renderer.domElement, shell.cameraViews);
+        shell.cameraViews.hidden = false;
+
+        scene.add(new THREE.HemisphereLight('#dbeafe', '#0f172a', 2.2));
+        const sun = new THREE.DirectionalLight('#ffffff', 2.8);
+        sun.position.set(25, 45, 20);
+        sun.castShadow = true;
+        scene.add(sun);
+        const fillLight = new THREE.DirectionalLight('#dbeafe', 1.35);
+        fillLight.position.set(floorWidth * 0.85, 28, floorDepth * 0.85);
+        fillLight.target.position.set(floorWidth / 2, 2.5, floorDepth / 2);
+        fillLight.castShadow = false;
+        scene.add(fillLight, fillLight.target);
+
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(floorWidth, floorDepth),
+            new THREE.MeshPhysicalMaterial({
+                color: '#17603f',
+                roughness: 0.24,
+                metalness: 0.06,
+                clearcoat: 0.82,
+                clearcoatRoughness: 0.12
+            })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.set(floorWidth / 2, -0.02, floorDepth / 2);
+        floor.receiveShadow = true;
+        scene.add(floor);
+        const grid = new THREE.GridHelper(Math.max(floorWidth, floorDepth), Math.ceil(Math.max(floorWidth, floorDepth)), '#78a98b', '#2f7454');
+        grid.position.set(floorWidth / 2, 0, floorDepth / 2);
+        scene.add(grid);
+
+        const rackTypeByCode = new Map(data.rackTypes.map((type) => [type.code, type]));
+        const itemByCode = new Map(data.items.map((item) => [item.code, item]));
+        const zoneByCode = new Map(data.zones.map((zone) => [zone.code, zone]));
+        const slotKey = (rackCode, bay, level, depth) => `${rackCode}|${bay}|${level}|${depth}`;
+        const locationBySlot = new Map((data.locations || []).map((location) => [
+            slotKey(location.rackCode, location.bay, location.level, location.depth || 1),
+            location
+        ]));
+        const inventoryBySlot = new Map(data.inventory.map((stock) => [
+            slotKey(stock.rackCode, stock.bay, stock.level, stock.depth || 1),
+            stock
+        ]));
+        const inventoryByRack = new Map();
+        data.inventory.forEach((stock) => {
+            if (!inventoryByRack.has(stock.rackCode)) inventoryByRack.set(stock.rackCode, []);
+            inventoryByRack.get(stock.rackCode).push(stock);
+        });
+
+        const rackEntries = [];
+        const clickTargets = [];
+        const slotMeshEntries = [];
+        const geometryCache = new Map();
+        const materialCache = new Map();
+        const getGeometry = (width, height, depth) => {
+            const key = `${width}:${height}:${depth}`;
+            if (!geometryCache.has(key)) geometryCache.set(key, new THREE.BoxGeometry(width, height, depth));
+            return geometryCache.get(key);
+        };
+        const getChamferedBoxGeometry = (width, height, depth) => {
+            const chamfer = Math.min(0.055, Math.max(0.012, Math.min(width, height, depth) * 0.045));
+            const key = `chamfer:${width}:${height}:${depth}:${chamfer}`;
+            if (!geometryCache.has(key)) {
+                const halfWidth = Math.max(chamfer * 2, width / 2 - chamfer);
+                const halfHeight = Math.max(chamfer * 2, height / 2 - chamfer);
+                const cornerCut = chamfer * 0.85;
+                const shape = new THREE.Shape();
+                shape.moveTo(-halfWidth + cornerCut, -halfHeight);
+                shape.lineTo(halfWidth - cornerCut, -halfHeight);
+                shape.lineTo(halfWidth, -halfHeight + cornerCut);
+                shape.lineTo(halfWidth, halfHeight - cornerCut);
+                shape.lineTo(halfWidth - cornerCut, halfHeight);
+                shape.lineTo(-halfWidth + cornerCut, halfHeight);
+                shape.lineTo(-halfWidth, halfHeight - cornerCut);
+                shape.lineTo(-halfWidth, -halfHeight + cornerCut);
+                shape.closePath();
+                const geometry = new THREE.ExtrudeGeometry(shape, {
+                    depth: Math.max(0.001, depth - chamfer * 2),
+                    steps: 1,
+                    curveSegments: 1,
+                    bevelEnabled: true,
+                    bevelSegments: 1,
+                    bevelSize: chamfer,
+                    bevelThickness: chamfer
+                });
+                geometry.center();
+                geometry.computeVertexNormals();
+                geometryCache.set(key, geometry);
+            }
+            return geometryCache.get(key);
+        };
+        const getMaterial = (color, options = {}) => {
+            const materialOptions = {
+                roughness: 0.38,
+                metalness: 0.12,
+                clearcoat: 0.45,
+                clearcoatRoughness: 0.28,
+                ...options
+            };
+            const key = [
+                color,
+                materialOptions.transparent ? 't' : 'o',
+                materialOptions.opacity ?? 1,
+                materialOptions.roughness,
+                materialOptions.metalness,
+                materialOptions.clearcoat,
+                materialOptions.clearcoatRoughness
+            ].join(':');
+            if (!materialCache.has(key)) materialCache.set(key, new THREE.MeshPhysicalMaterial({ color, ...materialOptions }));
+            return materialCache.get(key);
+        };
+        const addBox = (group, size, position, color, userData, options = {}) => {
+            const mesh = new THREE.Mesh(getGeometry(size[0], size[1], size[2]), getMaterial(color, options));
+            mesh.position.set(position[0], position[1], position[2]);
+            mesh.castShadow = options.castShadow !== false;
+            mesh.receiveShadow = true;
+            if (userData) mesh.userData = userData;
+            group.add(mesh);
+            return mesh;
+        };
+
+        data.racks.forEach((rack) => {
+            const type = rackTypeByCode.get(rack.rackTypeCode);
+            if (!type) return;
+            const bayWidth = mm(type.bayWidth);
+            const depth = mm(type.depth);
+            const height = mm(type.height);
+            const levelHeight = mm(type.levelHeight) || height / Math.max(1, type.levels);
+            const length = bayWidth * rack.bayCount;
+            const group = new THREE.Group();
+            group.name = rack.code;
+            const rackFrameColor = '#8b95a5';
+            const rackFrameMaterial = {
+                roughness: 0.2,
+                metalness: 0.78,
+                clearcoat: 0.62,
+                clearcoatRoughness: 0.14
+            };
+            const rackData = { kind: 'rack', rack, type, zone: zoneByCode.get(rack.zoneCode) };
+            const postSize = Math.min(0.1, Math.max(0.055, bayWidth * 0.045));
+            for (let bay = 0; bay <= rack.bayCount; bay += 1) {
+                const x = bay * bayWidth;
+                addBox(group, [postSize, height, postSize], [x, height / 2, 0], rackFrameColor, rackData, rackFrameMaterial);
+                addBox(group, [postSize, height, postSize], [x, height / 2, depth], rackFrameColor, rackData, rackFrameMaterial);
+            }
+            for (let level = 0; level <= type.levels; level += 1) {
+                const y = Math.min(height, level * levelHeight);
+                addBox(group, [length, 0.08, 0.09], [length / 2, y, 0], rackFrameColor, rackData, rackFrameMaterial);
+                addBox(group, [length, 0.08, 0.09], [length / 2, y, depth], rackFrameColor, rackData, rackFrameMaterial);
+                if (level < type.levels) addBox(
+                    group,
+                    [length, 0.035, depth],
+                    [length / 2, y + 0.03, depth / 2],
+                    '#334155',
+                    rackData,
+                    {
+                        castShadow: false,
+                        roughness: 0.38,
+                        metalness: 0.62,
+                        clearcoat: 0.35,
+                        clearcoatRoughness: 0.22
+                    }
+                );
+            }
+            const stocks = inventoryByRack.get(rack.code) || [];
+            const depthCount = Math.max(1, Math.round(Number(type.depthCount) || 1));
+            const slotDepth = depth / depthCount;
+            const boxWidth = Math.max(0.08, bayWidth * 0.92);
+            const boxHeight = Math.max(0.08, levelHeight * 0.82);
+            const boxDepth = Math.max(0.08, slotDepth * 0.9);
+            const slots = [];
+            for (let bay = 1; bay <= rack.bayCount; bay += 1) {
+                for (let level = 1; level <= type.levels; level += 1) {
+                    for (let depthIndex = 1; depthIndex <= depthCount; depthIndex += 1) {
+                        const key = slotKey(rack.code, bay, level, depthIndex);
+                        const stock = inventoryBySlot.get(key);
+                        const location = locationBySlot.get(key);
+                        const item = stock ? itemByCode.get(stock.itemCode) : null;
+                        const occupied = Boolean(stock && Number(stock.quantity) > 0);
+                        slots.push({
+                            kind: 'slot',
+                            locationCode: location?.locationCode || `${rack.code}-B${String(bay).padStart(2, '0')}-L${String(level).padStart(2, '0')}-D${String(depthIndex).padStart(2, '0')}`,
+                            rack,
+                            type,
+                            zone: zoneByCode.get(rack.zoneCode),
+                            bay,
+                            level,
+                            depth: depthIndex,
+                            location,
+                            stock,
+                            item,
+                            occupied,
+                            position: [
+                                (bay - 0.5) * bayWidth,
+                                (level - 1) * levelHeight + boxHeight / 2 + 0.06,
+                                (depthIndex - 0.5) * slotDepth
+                            ]
+                        });
+                    }
+                }
+            }
+            const createSlotInstances = (slotList, empty) => {
+                if (!slotList.length) return;
+                const material = getMaterial('#ffffff', empty
+                    ? {
+                        transparent: true,
+                        opacity: 0.5,
+                        depthWrite: false,
+                        roughness: 0.18,
+                        metalness: 0.14,
+                        clearcoat: 0.9,
+                        clearcoatRoughness: 0.08
+                    }
+                    : {
+                        transparent: false,
+                        opacity: 1,
+                        roughness: 0.12,
+                        metalness: 0.16,
+                        clearcoat: 1,
+                        clearcoatRoughness: 0.04
+                    });
+                const mesh = new THREE.InstancedMesh(getChamferedBoxGeometry(boxWidth, boxHeight, boxDepth), material, slotList.length);
+                const matrix = new THREE.Matrix4();
+                slotList.forEach((slot, index) => {
+                    matrix.makeTranslation(slot.position[0], slot.position[1], slot.position[2]);
+                    mesh.setMatrixAt(index, matrix);
+                    mesh.setColorAt(index, new THREE.Color(slotColorPalette[getSlotVisualKey(slot, 'utilization')]));
+                });
+                mesh.instanceMatrix.needsUpdate = true;
+                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+                mesh.castShadow = !empty;
+                mesh.receiveShadow = true;
+                mesh.userData = { kind: 'slotInstances', slots: slotList };
+                group.add(mesh);
+                clickTargets.push(mesh);
+                slotMeshEntries.push({ mesh, slots: slotList });
+            };
+            createSlotInstances(slots.filter((slot) => !slot.occupied), true);
+            createSlotInstances(slots.filter((slot) => slot.occupied), false);
+            const pick = addBox(group, [length, height, depth], [length / 2, height / 2, depth / 2], '#ffffff', rackData, { transparent: true, opacity: 0.001, castShadow: false });
+            pick.material.depthWrite = false;
+            clickTargets.push(pick);
+            const label = createLabelSprite(THREE, rack.code);
+            label.position.set(length / 2, height + 0.65, depth / 2);
+            group.add(label);
+            const startX = mm(rack.startX);
+            const startZ = mm(rack.startY);
+            if (rack.direction === 'vertical') {
+                group.position.set(startX + depth, 0, startZ);
+                group.rotation.y = -Math.PI / 2;
+            } else group.position.set(startX, 0, startZ);
+            scene.add(group);
+            rackEntries.push({
+                rack, type, group, stocks, slots,
+                searchText: `${rack.code} ${rack.zoneCode} ${zoneByCode.get(rack.zoneCode)?.name || ''} ${stocks.map((stock) => `${stock.itemCode} ${itemByCode.get(stock.itemCode)?.name || ''}`).join(' ')}`.toLowerCase()
+            });
+        });
+
+        data.zones.forEach((zone) => {
+            const option = document.createElement('option');
+            option.value = zone.code;
+            option.textContent = `${zone.code} · ${zone.name}`;
+            shell.zoneFilter.appendChild(option);
+        });
+
+        let yaw = Math.PI / 4;
+        let pitch = Math.PI / 6;
+        let distance = Math.max(floorWidth, floorDepth) * 1.08;
+        const target = new THREE.Vector3(floorWidth / 2, 2.5, floorDepth / 2);
+        let animationFrame = 0;
+        let destroyed = false;
+        const updateCamera = () => {
+            const horizontal = distance * Math.cos(pitch);
+            camera.position.set(target.x + horizontal * Math.sin(yaw), target.y + distance * Math.sin(pitch), target.z + horizontal * Math.cos(yaw));
+            camera.lookAt(target);
+        };
+        const render = () => {
+            animationFrame = 0;
+            if (!destroyed && renderer.domElement.isConnected) renderer.render(scene, camera);
+        };
+        const requestRender = () => {
+            if (!animationFrame && !destroyed) animationFrame = requestAnimationFrame(render);
+        };
+        const cameraViewPresets = {
+            quarter: { yaw: Math.PI / 4, pitch: Math.PI / 6, distanceScale: 1.08, targetY: 2.5 },
+            top: { yaw: 0, pitch: Math.PI / 2 - 0.01, distanceScale: 1.82, targetY: 0 },
+            front: { yaw: 0, pitch: 0.08, distanceScale: 1.08, targetY: 2.5 },
+            side: { yaw: Math.PI / 2, pitch: 0.08, distanceScale: 1.08, targetY: 2.5 }
+        };
+        const setActiveCameraView = (viewName = '') => {
+            shell.cameraViewButtons.forEach((button) => {
+                button.setAttribute('aria-pressed', String(button.dataset.warehouseCameraView === viewName));
+            });
+        };
+        const applyCameraView = (viewName) => {
+            const preset = cameraViewPresets[viewName] || cameraViewPresets.quarter;
+            yaw = preset.yaw;
+            pitch = preset.pitch;
+            distance = Math.max(floorWidth, floorDepth) * preset.distanceScale;
+            target.set(floorWidth / 2, preset.targetY, floorDepth / 2);
+            updateCamera();
+            setActiveCameraView(viewName);
+            requestRender();
+            renderer.domElement.focus();
+        };
+        shell.cameraViewButtons.forEach((button) => {
+            button.addEventListener('click', () => applyCameraView(button.dataset.warehouseCameraView), { signal });
+        });
+        const legendsByMode = {
+            utilization: [
+                ['empty', '비어 있음'],
+                ['low', '1~49%'],
+                ['medium', '50~79%'],
+                ['high', '80~100%'],
+                ['unknown', '용량 미설정']
+            ],
+            status: [
+                ['empty', '비어 있음'],
+                ['normal', '정상'],
+                ['warning', '주의'],
+                ['hold', '보류'],
+                ['defect', '불량'],
+                ['unknown', '상태 미설정']
+            ]
+        };
+        let viewMode = 'utilization';
+        const applyViewMode = (nextMode) => {
+            viewMode = nextMode === 'status' ? 'status' : 'utilization';
+            slotMeshEntries.forEach(({ mesh, slots }) => {
+                slots.forEach((slot, index) => {
+                    const visualKey = getSlotVisualKey(slot, viewMode);
+                    mesh.setColorAt(index, new THREE.Color(slotColorPalette[visualKey]));
+                });
+                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+            });
+            shell.viewButtons.forEach((button) => {
+                button.setAttribute('aria-pressed', String(button.dataset.warehouseView === viewMode));
+            });
+            shell.legendItems.innerHTML = legendsByMode[viewMode]
+                .map(([key, label]) => `<span><i class="is-${key}"></i>${label}</span>`)
+                .join('');
+            requestRender();
+        };
+        shell.viewButtons.forEach((button) => {
+            button.addEventListener('click', () => applyViewMode(button.dataset.warehouseView), { signal });
+        });
+        applyViewMode('utilization');
+        const resize = () => {
+            const width = Math.max(320, shell.viewport.clientWidth);
+            const height = Math.max(360, shell.viewport.clientHeight);
+            renderer.setSize(width, height, false);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            requestRender();
+        };
+        updateCamera();
+        const resizeObserver = new ResizeObserver(resize);
+        resizeObserver.observe(shell.viewport);
+        resize();
+
+        let pointerStart;
+        renderer.domElement.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0 && event.button !== 2) return;
+            event.preventDefault();
+            const viewDirection = new THREE.Vector3();
+            camera.getWorldDirection(viewDirection);
+            viewDirection.y = 0;
+            viewDirection.normalize();
+            const viewRight = new THREE.Vector3().crossVectors(viewDirection, camera.up).normalize();
+            pointerStart = {
+                x: event.clientX,
+                y: event.clientY,
+                yaw,
+                pitch,
+                distance,
+                target: target.clone(),
+                viewDirection,
+                viewRight,
+                mode: event.button === 2 ? 'rotate' : 'pan',
+                button: event.button,
+                pointerId: event.pointerId
+            };
+            renderer.domElement.setPointerCapture(event.pointerId);
+        }, { signal });
+        renderer.domElement.addEventListener('pointermove', (event) => {
+            if (!pointerStart || event.pointerId !== pointerStart.pointerId) return;
+            const deltaX = event.clientX - pointerStart.x;
+            const deltaY = event.clientY - pointerStart.y;
+            if (Math.hypot(deltaX, deltaY) > 2) setActiveCameraView('');
+            if (pointerStart.mode === 'rotate') {
+                yaw = pointerStart.yaw - deltaX * 0.008;
+                pitch = Math.max(0.02, Math.min(Math.PI / 2 - 0.02, pointerStart.pitch + deltaY * 0.006));
+            } else {
+                const panScale = Math.max(0.004, pointerStart.distance * 0.0015);
+                target.copy(pointerStart.target);
+                target.addScaledVector(pointerStart.viewRight, -deltaX * panScale);
+                target.addScaledVector(pointerStart.viewDirection, deltaY * panScale);
+                target.x = Math.max(0, Math.min(floorWidth, target.x));
+                target.z = Math.max(0, Math.min(floorDepth, target.z));
+            }
+            updateCamera();
+            requestRender();
+        }, { signal });
+        renderer.domElement.addEventListener('contextmenu', (event) => event.preventDefault(), { signal });
+        renderer.domElement.addEventListener('pointercancel', () => { pointerStart = null; }, { signal });
+        renderer.domElement.addEventListener('wheel', (event) => {
+            event.preventDefault();
+            setActiveCameraView('');
+            distance = Math.max(8, Math.min(140, distance * Math.exp(event.deltaY * 0.0012)));
+            updateCamera();
+            requestRender();
+        }, { signal, passive: false });
+
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        const showSelection = (selection) => {
+            if (selection.kind === 'slot') {
+                const statusLabels = { normal: '정상', warning: '주의', hold: '보류', defect: '불량' };
+                const capacity = Number(selection.stock?.capacity || selection.location?.capacity || 0);
+                const quantity = Number(selection.stock?.quantity || 0);
+                const rate = capacity > 0 ? Math.round((quantity / capacity) * 100) : null;
+                const itemText = selection.item
+                    ? `${escapeHtml(selection.item.code)} · ${escapeHtml(selection.item.name)}`
+                    : '빈 슬롯';
+                const statusText = selection.occupied
+                    ? (statusLabels[String(selection.stock?.status || '').toLowerCase()] || '상태 미설정')
+                    : '비어 있음';
+                shell.inspector.innerHTML = `<h5>${escapeHtml(selection.locationCode)}</h5><dl><dt>품목</dt><dd>${itemText}</dd><dt>랙</dt><dd>${escapeHtml(selection.rack.code)} / ${escapeHtml(selection.zone?.name || selection.rack.zoneCode)}</dd><dt>셀 위치</dt><dd>${selection.bay}베이 · ${selection.level}단 · 깊이 ${selection.depth}</dd><dt>수량</dt><dd>${quantity} / ${capacity || '미설정'}</dd><dt>적재율</dt><dd>${rate === null ? '용량 미설정' : `${rate}%`}</dd><dt>재고 상태</dt><dd>${escapeHtml(statusText)}</dd></dl>`;
+            } else {
+                shell.inspector.innerHTML = `<h5>${escapeHtml(selection.rack.code)}</h5><dl><dt>구역</dt><dd>${escapeHtml(selection.rack.zoneCode)} · ${escapeHtml(selection.zone?.name || '')}</dd><dt>랙타입</dt><dd>${escapeHtml(selection.type.name)}</dd><dt>배치 기준</dt><dd>${selection.rack.layoutSource === 'floorPlan' ? '평면도' : '랙배치'}</dd><dt>베이</dt><dd>${selection.rack.bayCount}개</dd><dt>단수·깊이</dt><dd>${selection.type.levels}단 · 깊이 ${Math.max(1, Number(selection.type.depthCount) || 1)}</dd><dt>규격</dt><dd>${(selection.type.bayWidth * selection.rack.bayCount / 1000).toFixed(1)}m × ${(selection.type.depth / 1000).toFixed(1)}m × ${(selection.type.height / 1000).toFixed(1)}m</dd><dt>등록 재고</dt><dd>${(inventoryByRack.get(selection.rack.code) || []).length}개 로케이션</dd></dl>`;
+            }
+        };
+        renderer.domElement.addEventListener('pointerup', (event) => {
+            if (!pointerStart || event.pointerId !== pointerStart.pointerId) return;
+            const moved = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
+            const button = pointerStart.button;
+            pointerStart = null;
+            if (button !== 0 || moved > 5) return;
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+            const hits = raycaster.intersectObjects(clickTargets, false).filter((hit) => hit.object.visible && hit.object.parent?.visible !== false);
+            const slotHit = hits.find((candidate) => candidate.object.userData.kind === 'slotInstances');
+            if (slotHit && Number.isInteger(slotHit.instanceId)) {
+                const slot = slotHit.object.userData.slots[slotHit.instanceId];
+                if (slot) showSelection(slot);
+                return;
+            }
+            const hit = hits[0];
+            if (hit?.object.userData?.kind) showSelection(hit.object.userData);
+        }, { signal });
+
+        const applyFilters = () => {
+            const zone = shell.zoneFilter.value;
+            const query = shell.search.value.trim().toLowerCase();
+            let visibleCount = 0;
+            let visibleSlots = 0;
+            let visibleOccupiedSlots = 0;
+            rackEntries.forEach((entry) => {
+                const visible = (!zone || entry.rack.zoneCode === zone) && (!query || entry.searchText.includes(query));
+                entry.group.visible = visible;
+                if (visible) {
+                    visibleCount += 1;
+                    visibleSlots += entry.slots.length;
+                    visibleOccupiedSlots += entry.slots.filter((slot) => slot.occupied).length;
+                }
+            });
+            shell.count.textContent = `랙 ${visibleCount} / ${rackEntries.length} · 적재 셀 ${visibleOccupiedSlots} / ${visibleSlots}`;
+            requestRender();
+        };
+        shell.zoneFilter.addEventListener('change', applyFilters, { signal });
+        shell.search.addEventListener('input', applyFilters, { signal });
+        shell.reset.addEventListener('click', () => {
+            applyCameraView('quarter');
+        }, { signal });
+        applyFilters();
+        requestRender();
+
+        return () => {
+            destroyed = true;
+            if (animationFrame) cancelAnimationFrame(animationFrame);
+            resizeObserver.disconnect();
+            geometryCache.forEach((geometry) => geometry.dispose());
+            materialCache.forEach((material) => material.dispose());
+            scene.traverse((object) => {
+                if (object.material?.map) object.material.map.dispose();
+                if (object.type === 'Sprite' && object.material) object.material.dispose();
+            });
+            renderer.dispose();
+        };
+    }
+
+    async function mount(container, options = {}) {
+        mountedControllers.get(container)?.dispose();
+        const abortController = new AbortController();
+        const shell = createShell(container);
+        let disposeScene = () => {};
+        const controller = {
+            dispose() {
+                abortController.abort();
+                disposeScene();
+                mountedControllers.delete(container);
+            }
+        };
+        mountedControllers.set(container, controller);
+        const syncFullscreenButton = () => {
+            const active = document.fullscreenElement === container;
+            shell.fullscreen.textContent = active ? '전체화면 종료' : '전체화면';
+            shell.fullscreen.setAttribute('aria-pressed', String(active));
+        };
+        shell.fullscreen.disabled = !document.fullscreenEnabled || typeof container.requestFullscreen !== 'function';
+        if (shell.fullscreen.disabled) shell.fullscreen.title = '이 브라우저에서는 전체화면을 사용할 수 없습니다.';
+        shell.fullscreen.addEventListener('click', async () => {
+            try {
+                if (document.fullscreenElement === container) await document.exitFullscreen();
+                else await container.requestFullscreen({ navigationUI: 'hide' });
+            } catch (error) {
+                shell.sourceStatus.classList.add('is-warning');
+                shell.sourceStatus.textContent = `전체화면을 열지 못했습니다. — ${error?.message || '브라우저 권한을 확인해 주세요.'}`;
+            }
+        }, { signal: abortController.signal });
+        document.addEventListener('fullscreenchange', syncFullscreenButton, { signal: abortController.signal });
+        syncFullscreenButton();
+        if (options.googleSheet?.documentId) {
+            shell.reload.hidden = false;
+            shell.reload.addEventListener('click', () => mount(container, options), { signal: abortController.signal });
+            shell.sourceStatus.textContent = 'Google Sheets 기준정보를 불러오는 중입니다.';
+        }
+        try {
+            const source = options.dataSource || 'data/warehouse-demo.json';
+            const THREE = await loadThree();
+            let data;
+            let sheetError;
+            if (options.googleSheet?.documentId) {
+                try {
+                    data = await loadGoogleSheetData(options.googleSheet, abortController.signal);
+                } catch (error) {
+                    if (error?.name === 'AbortError') throw error;
+                    sheetError = error;
+                }
+            }
+            if (!data) {
+                const response = await fetch(source, { cache: 'no-store', signal: abortController.signal });
+                if (!response.ok) throw new Error(`기준정보 파일을 불러오지 못했습니다. (${response.status})`);
+                data = await response.json();
+            }
+            const errors = validateWarehouseData(data);
+            if (errors.length) {
+                showError(shell, errors.slice(0, 8));
+                return controller;
+            }
+            if (abortController.signal.aborted || !container.isConnected) return controller;
+            if (sheetError) {
+                shell.sourceStatus.classList.add('is-warning');
+                shell.sourceStatus.textContent = `Google Sheets 연결 실패 · 임시 데이터 표시 중 — ${sheetError.message}`;
+            } else if (options.googleSheet?.documentId) {
+                const loadedAt = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                shell.sourceStatus.classList.add('is-connected');
+                const unmappedCount = data.meta?.unmappedFloorRackCodes?.length || 0;
+                const unplacedCount = data.meta?.unplacedRackCodes?.length || 0;
+                if (unmappedCount) shell.sourceStatus.classList.add('is-warning');
+                shell.sourceStatus.textContent = `Google Sheets 연결됨 · ${loadedAt} · 평면도 배치 ${data.meta?.floorPlanAppliedCount || 0}개 · 재고 ${data.inventory.length}건${unplacedCount ? ` · 미배치 ${unplacedCount}개` : ''}${unmappedCount ? ` · 미등록 랙코드 ${unmappedCount}개` : ''}`;
+            } else shell.sourceStatus.textContent = '내장 임시 기준정보를 표시하고 있습니다.';
+            disposeScene = startWarehouseScene(THREE, shell, data, abortController.signal);
+        } catch (error) {
+            if (error?.name !== 'AbortError') showError(shell, [error?.message || '알 수 없는 오류가 발생했습니다.', '네트워크 연결과 Three.js 모듈 주소를 확인해 주세요.']);
+        }
+        return controller;
+    }
+
+    function disposeWithin(root) {
+        root?.querySelectorAll?.('.warehouse-3d-shell').forEach((container) => mountedControllers.get(container)?.dispose());
+    }
+
+    window.wmsWarehouse3D = Object.freeze({
+        mount,
+        disposeWithin,
+        validateWarehouseData,
+        parseCsv,
+        convertGoogleSheetCsv,
+        getSlotVisualKey,
+        getGoogleSheetQueryUrl,
+        googleTableToCsv
+    });
+    window.dispatchEvent(new Event('wms-warehouse-3d-ready'));
+}());

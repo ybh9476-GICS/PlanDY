@@ -3,10 +3,14 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/local-content-server.js",
+    "sync:content": "node scripts/sync-published-content.js",
     "sync:pages": "node scripts/sync-pages.js",
     "test:structure": "node tests/structure.test.js",
     "test:attachments": "node tests/local-attachments.test.js",
-    "test": "npm run test:structure && npm run test:attachments"
+    "test:content-save": "node tests/local-content-save.test.js",
+    "test:file-content": "node tests/file-content-mode.test.js",
+    "test:warehouse": "node tests/warehouse-data.test.js",
+    "test": "npm run test:structure && npm run test:attachments && npm run test:content-save && npm run test:file-content && npm run test:warehouse"
   },
   "dependencies": {
     "pdfjs-dist": "^6.2.108"

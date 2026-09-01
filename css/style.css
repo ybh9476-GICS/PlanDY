@@ -436,6 +436,11 @@ body[data-authenticated="false"] #helpModal { display: none !important; }
 .content-sync-buttons { display: flex; flex-wrap: wrap; gap: 0.45rem; }
 .content-sync-buttons button { border: 1px solid #2563eb; border-radius: 5px; padding: 0.42rem 0.62rem; background: #fff; color: #1d4ed8; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
 .content-sync-buttons button:hover { background: #dbeafe; }
+.content-sync-buttons button:disabled { opacity: .5; cursor: not-allowed; }
+.content-sync-actions .content-project-save-status { margin-bottom: 0; }
+.content-project-save-status[data-state="saved"] { color: #047857; }
+.content-project-save-status[data-state="error"] { color: #b91c1c; }
+.content-project-save-status[data-state="saving"] { color: #1d4ed8; }
 .attachment-manager-entry { margin-top: .75rem; padding: .85rem; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; }
 .attachment-manager-entry p { margin: .45rem 0 .7rem; color: #475569; font-size: 12px; line-height: 1.5; }
 .attachment-manager-entry button, .attachment-manager-tools button, .attachment-manager-row button { border: 1px solid #64748b; border-radius: 5px; padding: .42rem .62rem; background: #fff; color: #334155; font: inherit; font-size: 12px; cursor: pointer; }

@@ -8,6 +8,8 @@ const root = path.resolve(process.env.PLANDY_ROOT || path.resolve(__dirname, '..
 const contentDir = path.join(root, 'assets', 'content');
 const trashDir = path.join(root, '.local-attachment-trash');
 const manifestPath = path.join(root, 'data', 'attachments.json');
+const siteContentPath = path.join(root, 'data', 'site-content.json');
+const siteContentScriptPath = path.join(root, 'data', 'site-content.js');
 const host = '127.0.0.1';
 const port = Number(process.env.PLANDY_PORT || 4173);
 const maxBytes = 50 * 1024 * 1024;
@@ -51,6 +53,27 @@ async function writeJsonAtomic(filePath, value) {
     const temporary = `${filePath}.${process.pid}.${Date.now()}.tmp`;
     await fsp.writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
     await fsp.rename(temporary, filePath);
+}
+
+async function writeTextAtomic(filePath, value) {
+    const temporary = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    await fsp.writeFile(temporary, value, 'utf8');
+    await fsp.rename(temporary, filePath);
+}
+
+function serializePublishedContent(documentValue) {
+    const serialized = JSON.stringify(documentValue, null, 2)
+        .replace(/\u2028/g, '\\u2028')
+        .replace(/\u2029/g, '\\u2029');
+    return `(function () {\n    window.WMS_PUBLISHED_CONTENT = ${serialized};\n}());\n`;
+}
+
+function isContentDocument(value) {
+    if (!value || value.schemaVersion !== 1 || !value.storage || typeof value.storage !== 'object' || Array.isArray(value.storage)) return false;
+    const { menus, customCards, overviewCards, routeCards, authoringCards, testCards } = value.storage;
+    return (menus === undefined || (menus && typeof menus === 'object' && !Array.isArray(menus)))
+        && (customCards === undefined || (customCards && typeof customCards === 'object' && !Array.isArray(customCards)))
+        && [overviewCards, routeCards, authoringCards, testCards].every((rows) => rows === undefined || Array.isArray(rows));
 }
 
 function enqueueMutation(task) {
@@ -120,6 +143,38 @@ function collectReferences(value, result = new Set()) {
         else collectReferences(child, result);
     }
     return result;
+}
+
+function collectAssetPaths(value, result = new Set()) {
+    if (!value) return result;
+    if (Array.isArray(value)) { value.forEach((item) => collectAssetPaths(item, result)); return result; }
+    if (typeof value !== 'object') return result;
+    for (const [key, child] of Object.entries(value)) {
+        if (key === 'assetPath' && typeof child === 'string') result.add(child);
+        else collectAssetPaths(child, result);
+    }
+    return result;
+}
+
+async function saveSiteContent(documentValue) {
+    if (!isContentDocument(documentValue)) throw Object.assign(new Error('지원하지 않는 콘텐츠 JSON 형식입니다.'), { status: 400 });
+    const manifest = await readManifest();
+    const missingAssets = [];
+    for (const id of collectReferences(documentValue)) {
+        const asset = manifest.assets[id];
+        if (!asset || !asset.path || asset.status === 'trash' || !fs.existsSync(path.join(root, ...asset.path.split('/')))) missingAssets.push(id);
+    }
+    for (const assetPath of collectAssetPaths(documentValue)) {
+        if (!assetPath.startsWith('assets/content/')) continue;
+        const absolutePath = path.resolve(root, ...assetPath.split('/'));
+        if (!absolutePath.startsWith(`${contentDir}${path.sep}`) || !fs.existsSync(absolutePath)) missingAssets.push(assetPath);
+    }
+    if (missingAssets.length) throw Object.assign(new Error(`연결된 첨부파일 ${new Set(missingAssets).size}개를 프로젝트에서 찾을 수 없습니다.`), { status: 400 });
+    const nextDocument = { ...documentValue, updatedAt: new Date().toISOString() };
+    await fsp.mkdir(path.dirname(siteContentPath), { recursive: true });
+    await writeJsonAtomic(siteContentPath, nextDocument);
+    await writeTextAtomic(siteContentScriptPath, serializePublishedContent(nextDocument));
+    return { saved: true, updatedAt: nextDocument.updatedAt, referencedAssetCount: collectReferences(nextDocument).size };
 }
 
 async function getProjectReferences() {
@@ -217,6 +272,11 @@ async function serveStatic(request, response) {
 async function handle(request, response) {
     try {
         const pathname = new URL(request.url, `http://${host}`).pathname;
+        if (pathname === '/api/local-content/status' && request.method === 'GET') return json(response, 200, { available: true, localOnly: true });
+        if (pathname === '/api/local-content/save' && request.method === 'POST') {
+            const documentValue = JSON.parse((await readBody(request, 10 * 1024 * 1024)).toString() || '{}');
+            return json(response, 200, await enqueueMutation(() => saveSiteContent(documentValue)));
+        }
         if (pathname === '/api/local-attachments/status' && request.method === 'GET') return json(response, 200, { available: true, localOnly: true, maxImageBytes: 20*1024*1024, maxPdfBytes: 50*1024*1024 });
         if (pathname === '/api/local-attachments/upload' && request.method === 'POST') return enqueueMutation(() => upload(request, response));
         if (pathname.startsWith('/api/local-attachments/') && request.method === 'POST') {
@@ -239,4 +299,4 @@ async function start() {
 }
 
 if (require.main === module) start().catch((error) => { console.error(error); process.exitCode = 1; });
-module.exports = { detectMime, collectReferences, start, root, contentDir, trashDir, manifestPath };
+module.exports = { detectMime, collectReferences, collectAssetPaths, isContentDocument, serializePublishedContent, saveSiteContent, start, root, contentDir, trashDir, manifestPath, siteContentPath, siteContentScriptPath };

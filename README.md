@@ -40,9 +40,11 @@ npm run dev
 1. 반드시 `start-local-editor.cmd`로 로컬 사이트를 실행합니다.
 2. Editor 권한에서 카드에 이미지 또는 PDF를 추가하고 `등록`을 누릅니다.
 3. 파일은 `assets/content`에 저장되고, 파일 목록은 `data/attachments.json`에 기록됩니다.
-4. 메뉴 관리에서 콘텐츠 JSON을 내보내 `data/site-content.json`에 반영합니다.
-5. `data/site-content.json`, `data/attachments.json`, `assets/content` 변경을 모두 Git에 커밋·푸시합니다.
-6. Netlify가 GitHub 저장소와 연결되어 있으면 푸시 후 자동 배포됩니다.
+4. 카드 등록·수정·삭제·순서 변경이나 메뉴 변경이 완료되면 `data/site-content.json`과 파일 실행용 `data/site-content.js`가 자동으로 갱신됩니다.
+5. 메뉴 관리의 `콘텐츠 JSON` 아래에서 저장 상태를 확인하거나 `지금 프로젝트에 저장`을 눌러 수동으로 다시 저장할 수 있습니다.
+6. 자동 저장은 브라우저 저장 내용과 프로젝트 파일을 맞추며, Git 커밋·푸시는 자동으로 하지 않습니다.
+7. `data/site-content.json`, `data/site-content.js`, `data/attachments.json`, `assets/content` 변경을 모두 Git에 커밋·푸시합니다.
+8. Netlify가 GitHub 저장소와 연결되어 있으면 푸시 후 자동 배포됩니다.
 
 카드를 삭제해도 첨부파일은 즉시 삭제되지 않습니다. 같은 파일을 다른 카드가 사용할 수 있기 때문입니다. 메뉴 관리의 `첨부파일 검사·정리`에서 미사용 파일만 휴지통으로 옮기고, 필요하면 복구하거나 영구 삭제합니다. 같은 파일을 여러 번 등록하면 내용이 같은 파일은 한 번만 저장됩니다.
 
@@ -54,6 +56,9 @@ npm test
 
 # index.html 변경 후 호환 진입 페이지 동기화
 npm run sync:pages
+
+# data/site-content.json 변경 후 file:// 실행용 콘텐츠 동기화
+npm run sync:content
 ```
 
 `index.html`은 화면 마크업의 원본입니다. `home.html`, `overview.html` 등의 HTML 파일은 기존 경로 호환을 위한 동기화 산출물이므로, 원본을 수정한 뒤 반드시 `npm run sync:pages`를 실행합니다.

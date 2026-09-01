@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "name": "WMS 3D 창고 기준정보 예시",
+    "unit": "mm",
+    "floorWidth": 52000,
+    "floorDepth": 58000,
+    "gridSize": 1000,
+    "origin": "left-bottom"
+  },
+  "zones": [
+    { "code": "A01", "name": "팔레트 보관 A", "purpose": "완제품 보관", "color": "#7f1d1d" },
+    { "code": "A02", "name": "팔레트 보관 B", "purpose": "완제품 보관", "color": "#92400e" },
+    { "code": "B01", "name": "소형품 피킹 A", "purpose": "피킹", "color": "#0f766e" },
+    { "code": "B02", "name": "소형품 피킹 B", "purpose": "피킹", "color": "#1d4ed8" }
+  ],
+  "rackTypes": [
+    { "code": "PALLET-4L", "name": "팔레트 랙 4단", "bayWidth": 2700, "depth": 1100, "height": 6000, "levels": 4, "levelHeight": 1400, "maxWeight": 1000, "color": "#d95f59" },
+    { "code": "SHELF-5L", "name": "경량 선반 5단", "bayWidth": 1200, "depth": 600, "height": 2400, "levels": 5, "levelHeight": 400, "maxWeight": 150, "color": "#5b9bd5" },
+    { "code": "PALLET-3L-DBL", "name": "양면 팔레트 랙 3단", "bayWidth": 2700, "depth": 2200, "height": 5200, "levels": 3, "levelHeight": 1600, "maxWeight": 1200, "color": "#70ad47" }
+  ],
+  "racks": [
+    { "code": "W33", "zoneCode": "B01", "rackTypeCode": "SHELF-5L", "startX": 4000, "startY": 4000, "direction": "horizontal", "bayCount": 8 },
+    { "code": "W34", "zoneCode": "B01", "rackTypeCode": "SHELF-5L", "startX": 16000, "startY": 4000, "direction": "horizontal", "bayCount": 8 },
+    { "code": "W01", "zoneCode": "A01", "rackTypeCode": "PALLET-4L", "startX": 4000, "startY": 10000, "direction": "horizontal", "bayCount": 14 },
+    { "code": "W02", "zoneCode": "A01", "rackTypeCode": "PALLET-4L", "startX": 4000, "startY": 15000, "direction": "horizontal", "bayCount": 14 },
+    { "code": "W03", "zoneCode": "A01", "rackTypeCode": "PALLET-4L", "startX": 4000, "startY": 20000, "direction": "horizontal", "bayCount": 16 },
+    { "code": "W04", "zoneCode": "A02", "rackTypeCode": "PALLET-3L-DBL", "startX": 4000, "startY": 25000, "direction": "horizontal", "bayCount": 16 },
+    { "code": "W05", "zoneCode": "A02", "rackTypeCode": "PALLET-3L-DBL", "startX": 4000, "startY": 29000, "direction": "horizontal", "bayCount": 16 },
+    { "code": "W06", "zoneCode": "A02", "rackTypeCode": "PALLET-3L-DBL", "startX": 4000, "startY": 34000, "direction": "horizontal", "bayCount": 16 },
+    { "code": "W28", "zoneCode": "B01", "rackTypeCode": "SHELF-5L", "startX": 4000, "startY": 39000, "direction": "horizontal", "bayCount": 10 },
+    { "code": "W07", "zoneCode": "B01", "rackTypeCode": "SHELF-5L", "startX": 4000, "startY": 43000, "direction": "horizontal", "bayCount": 7 },
+    { "code": "W08", "zoneCode": "B01", "rackTypeCode": "SHELF-5L", "startX": 16000, "startY": 43000, "direction": "horizontal", "bayCount": 7 },
+    { "code": "W09", "zoneCode": "B02", "rackTypeCode": "SHELF-5L", "startX": 28000, "startY": 43000, "direction": "horizontal", "bayCount": 7 },
+    { "code": "W10", "zoneCode": "B02", "rackTypeCode": "SHELF-5L", "startX": 40000, "startY": 43000, "direction": "horizontal", "bayCount": 7 },
+    { "code": "W11", "zoneCode": "B01", "rackTypeCode": "SHELF-5L", "startX": 4000, "startY": 51000, "direction": "horizontal", "bayCount": 7 },
+    { "code": "W12", "zoneCode": "B01", "rackTypeCode": "SHELF-5L", "startX": 16000, "startY": 51000, "direction": "horizontal", "bayCount": 7 },
+    { "code": "W13", "zoneCode": "B02", "rackTypeCode": "SHELF-5L", "startX": 28000, "startY": 51000, "direction": "horizontal", "bayCount": 7 },
+    { "code": "W14", "zoneCode": "B02", "rackTypeCode": "SHELF-5L", "startX": 40000, "startY": 51000, "direction": "horizontal", "bayCount": 7 }
+  ],
+  "items": [
+    { "code": "P-1001", "name": "산업용 모터 A", "category": "완제품", "color": "#e74c3c", "width": 1000, "depth": 800, "height": 700 },
+    { "code": "P-1002", "name": "제어 패널 B", "category": "완제품", "color": "#f39c12", "width": 800, "depth": 600, "height": 500 },
+    { "code": "P-1003", "name": "펌프 어셈블리", "category": "완제품", "color": "#8e44ad", "width": 900, "depth": 700, "height": 650 },
+    { "code": "P-2001", "name": "볼트 세트 M10", "category": "부품", "color": "#3498db", "width": 300, "depth": 200, "height": 150 },
+    { "code": "P-2002", "name": "케이블 하네스", "category": "부품", "color": "#2ecc71", "width": 400, "depth": 300, "height": 200 },
+    { "code": "P-2003", "name": "센서 모듈", "category": "부품", "color": "#1abc9c", "width": 250, "depth": 180, "height": 120 },
+    { "code": "P-3001", "name": "보류 재고 샘플", "category": "보류품", "color": "#f1c40f", "width": 400, "depth": 300, "height": 250 },
+    { "code": "P-9001", "name": "불량 재고 샘플", "category": "불량품", "color": "#7f8c8d", "width": 400, "depth": 300, "height": 250 }
+  ],
+  "inventory": [
+    { "locationCode": "A01-W01-01-01-01", "rackCode": "W01", "bay": 1, "level": 1, "itemCode": "P-1001", "quantity": 1, "capacity": 1, "status": "normal" },
+    { "locationCode": "A01-W01-01-02-01", "rackCode": "W01", "bay": 1, "level": 2, "itemCode": "P-1002", "quantity": 1, "capacity": 1, "status": "normal" },
+    { "locationCode": "A01-W01-01-04-01", "rackCode": "W01", "bay": 1, "level": 4, "itemCode": "P-1003", "quantity": 1, "capacity": 1, "status": "warning" },
+    { "locationCode": "B01-W07-01-01-01", "rackCode": "W07", "bay": 1, "level": 1, "itemCode": "P-2001", "quantity": 8, "capacity": 12, "status": "normal" },
+    { "locationCode": "B01-W07-01-02-01", "rackCode": "W07", "bay": 1, "level": 2, "itemCode": "P-2002", "quantity": 12, "capacity": 12, "status": "warning" },
+    { "locationCode": "B01-W07-01-03-01", "rackCode": "W07", "bay": 1, "level": 3, "itemCode": "P-2003", "quantity": 5, "capacity": 12, "status": "normal" },
+    { "locationCode": "B01-W07-01-04-01", "rackCode": "W07", "bay": 1, "level": 4, "itemCode": "P-3001", "quantity": 4, "capacity": 12, "status": "hold" },
+    { "locationCode": "B01-W07-01-05-01", "rackCode": "W07", "bay": 1, "level": 5, "itemCode": "P-9001", "quantity": 2, "capacity": 12, "status": "defect" },
+    { "locationCode": "B02-W09-03-02-01", "rackCode": "W09", "bay": 3, "level": 2, "itemCode": "P-2002", "quantity": 6, "capacity": 12, "status": "normal" },
+    { "locationCode": "B02-W10-05-03-01", "rackCode": "W10", "bay": 5, "level": 3, "itemCode": "P-2003", "quantity": 10, "capacity": 12, "status": "warning" }
+  ]
+}
