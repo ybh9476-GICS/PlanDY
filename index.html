@@ -168,6 +168,20 @@
                 <button id="contentImportBtn" type="button">가져오기</button>
                 <button id="contentRestoreBtn" type="button">게시본 불러오기</button>
             </div>
+            <div class="content-sync-guide-wrap">
+                <table class="content-sync-guide">
+                    <caption>버튼 동작 안내</caption>
+                    <thead>
+                        <tr><th scope="col">버튼</th><th scope="col">방향</th><th scope="col">하는 일</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><th scope="row">지금 프로젝트에 저장</th><td>브라우저 화면 → 프로젝트 폴더</td><td>현재 편집 내용을 프로젝트의 정식 파일로 저장합니다.</td></tr>
+                        <tr><th scope="row">게시본 불러오기</th><td>프로젝트 폴더 → 브라우저 화면</td><td>프로젝트에 저장된 게시본을 현재 화면에 적용합니다.</td></tr>
+                        <tr><th scope="row">내보내기</th><td>브라우저 화면 → site-content.json 파일</td><td>현재 화면 내용을 JSON 파일로 내려받습니다.</td></tr>
+                        <tr><th scope="row">가져오기</th><td>site-content.json 파일 → 브라우저 화면</td><td>선택한 JSON 내용으로 현재 화면을 바꿉니다.</td></tr>
+                    </tbody>
+                </table>
+            </div>
             <p id="contentProjectSaveStatus" class="content-project-save-status" role="status">로컬 저장 상태를 확인 중입니다.</p>
             <input id="contentImportInput" type="file" accept="application/json,.json" hidden>
         </section>

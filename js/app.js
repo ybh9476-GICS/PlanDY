@@ -960,6 +960,34 @@ const mainContent = document.getElementById('main-content');
 const sidebarToggle = document.getElementById('sidebarToggle');
 let isCollapsed = false;
 
+function getVisibleContentArea() {
+    return Array.from(mainContent.querySelectorAll('.content-area')).find((area) => {
+        const style = window.getComputedStyle(area);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+    });
+}
+
+function forwardWheelToContent(event) {
+    if (event.defaultPrevented || event.ctrlKey) return;
+    const contentArea = getVisibleContentArea();
+    if (!contentArea) return;
+    event.preventDefault();
+    const amount = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? event.deltaY * 16 : event.deltaY;
+    contentArea.scrollBy({ top: amount, left: 0, behavior: 'auto' });
+}
+
+// The document itself is fixed-height. Move the active content panel when the
+// pointer is over the unused main background or the non-scrollable sidebar.
+mainContent.addEventListener('wheel', (event) => {
+    if (event.target.closest('.content-area')) return;
+    forwardWheelToContent(event);
+}, { passive: false });
+
+sidebar.addEventListener('wheel', (event) => {
+    if (event.target.closest('.nav-menu')) return;
+    forwardWheelToContent(event);
+}, { passive: false });
+
 function setCollapsedTextVisibility(collapsed) {
     document.querySelectorAll('.sidebar .hide-on-collapse').forEach(element => {
         if (collapsed) {

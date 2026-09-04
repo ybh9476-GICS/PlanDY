@@ -437,6 +437,14 @@ body[data-authenticated="false"] #helpModal { display: none !important; }
 .content-sync-buttons button { border: 1px solid #2563eb; border-radius: 5px; padding: 0.42rem 0.62rem; background: #fff; color: #1d4ed8; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
 .content-sync-buttons button:hover { background: #dbeafe; }
 .content-sync-buttons button:disabled { opacity: .5; cursor: not-allowed; }
+.content-sync-guide-wrap { margin-top: 0.8rem; overflow-x: auto; }
+.content-sync-guide { width: 100%; min-width: 560px; border-collapse: collapse; background: #fff; color: #334155; font-size: 12px; }
+.content-sync-guide caption { padding: 0.35rem 0; color: #1e3a8a; font-weight: 700; text-align: left; }
+.content-sync-guide th,
+.content-sync-guide td { padding: 0.48rem 0.55rem; border: 1px solid #bfdbfe; text-align: left; vertical-align: top; line-height: 1.45; }
+.content-sync-guide thead th { background: #dbeafe; color: #1e3a8a; }
+.content-sync-guide tbody th { width: 132px; color: #1d4ed8; white-space: nowrap; }
+.content-sync-guide td:nth-child(2) { width: 210px; color: #475569; white-space: nowrap; }
 .content-sync-actions .content-project-save-status { margin-bottom: 0; }
 .content-project-save-status[data-state="saved"] { color: #047857; }
 .content-project-save-status[data-state="error"] { color: #b91c1c; }

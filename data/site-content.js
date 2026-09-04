@@ -1,7 +1,7 @@
 (function () {
     window.WMS_PUBLISHED_CONTENT = {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-01T05:38:11.602Z",
+  "updatedAt": "2026-09-04T01:33:47.791Z",
   "storage": {
     "menus": {
       "schemaVersion": 2,
@@ -94,13 +94,13 @@
               "body2Html": "",
               "imageId": "",
               "image": "",
-              "editLocked": true,
-              "lockSource": "manual",
+              "editLocked": false,
+              "lockSource": "",
               "lockMessage": "",
               "contentBlocks": [
                 {
                   "type": "image",
-                  "displayWidth": 609,
+                  "displayWidth": 680,
                   "assetId": "2ee669452663af74b97834eb65034819e6fbc1d35450355ccf5ea5b41d66ac5e",
                   "assetPath": "assets/content/2ee669452663af74b97834eb65034819e6fbc1d35450355ccf5ea5b41d66ac5e.png",
                   "originalName": "wms-inbound-to-outbound-process-v2.png",
@@ -647,8 +647,8 @@
               "body2Html": "",
               "imageId": "",
               "image": "",
-              "editLocked": false,
-              "lockSource": "",
+              "editLocked": true,
+              "lockSource": "manual",
               "lockMessage": "",
               "contentBlocks": [
                 {
@@ -968,39 +968,6 @@
           "columnWidths": null,
           "cards": [
             {
-              "title": "기준 정보",
-              "description": "WMS 3D 창고 기준정보 템플릿",
-              "body": "",
-              "bodyHtml": "",
-              "bodyType": "text",
-              "table": null,
-              "body2Type": "text",
-              "table2": null,
-              "body2": "",
-              "body2Html": "",
-              "imageId": "",
-              "image": "",
-              "editLocked": false,
-              "lockSource": "",
-              "lockMessage": "",
-              "contentBlocks": [
-                {
-                  "type": "googleDrive",
-                  "documentType": "spreadsheets",
-                  "documentLabel": "Sheets",
-                  "documentId": "1pl6qVIVAxwIDmQ18EbSD-8a_CngilPD3mm_KrImK4Tk",
-                  "url": "https://docs.google.com/spreadsheets/d/1pl6qVIVAxwIDmQ18EbSD-8a_CngilPD3mm_KrImK4Tk/edit?usp=sharing",
-                  "title": ""
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "single",
-          "columnWidths": null,
-          "cards": [
-            {
               "title": "3D 창고 레이아웃",
               "description": "평면도 배치와 기준정보에 따라 생성된 랙과 재고를 3D로 확인합니다.",
               "body": "",
@@ -1034,6 +1001,60 @@
                   }
                 }
               ]
+            }
+          ]
+        },
+        {
+          "type": "double",
+          "columnWidths": [
+            50,
+            50
+          ],
+          "cards": [
+            {
+              "title": "기준 정보",
+              "description": "WMS 3D 창고 기준정보 템플릿",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": true,
+              "lockSource": "manual",
+              "lockMessage": "",
+              "contentBlocks": [
+                {
+                  "type": "googleDrive",
+                  "documentType": "spreadsheets",
+                  "documentLabel": "Sheets",
+                  "documentId": "1pl6qVIVAxwIDmQ18EbSD-8a_CngilPD3mm_KrImK4Tk",
+                  "url": "https://docs.google.com/spreadsheets/d/1pl6qVIVAxwIDmQ18EbSD-8a_CngilPD3mm_KrImK4Tk/edit?usp=sharing",
+                  "title": ""
+                }
+              ]
+            },
+            {
+              "title": "",
+              "description": "",
+              "body": "",
+              "bodyHtml": "",
+              "bodyType": "text",
+              "table": null,
+              "body2Type": "text",
+              "table2": null,
+              "body2": "",
+              "body2Html": "",
+              "imageId": "",
+              "image": "",
+              "editLocked": false,
+              "lockSource": "",
+              "lockMessage": "",
+              "contentBlocks": []
             }
           ]
         }

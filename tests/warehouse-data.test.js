@@ -46,14 +46,14 @@ assert.ok(menu, 'The 3D 테스트 menu is missing.');
 assert.strictEqual(menu.id, 'custom-1788157191456', 'The 3D 테스트 menu id changed unexpectedly.');
 const rows = published.storage.customCards[menu.id];
 const cards = rows.flatMap((row) => row.cards || []);
-assert.strictEqual(cards[0].title, '기준 정보', 'The first Google Sheets card must remain unchanged.');
-assert.strictEqual(cards[0].contentBlocks[0].type, 'googleDrive', 'The first card must remain a Google Drive card.');
-assert.strictEqual(cards[1].title, '3D 창고 레이아웃', 'The second card must be the 3D warehouse card.');
-assert.strictEqual(cards[1].editLocked, true, 'The 3D warehouse card must be read-only.');
-assert.strictEqual(cards[1].contentBlocks[0].type, 'warehouse3d', 'The second card must use the warehouse3d block.');
-assert.strictEqual(cards[1].contentBlocks[0].dataSource, 'data/warehouse-demo.json', 'The 3D warehouse data source changed unexpectedly.');
-const warehouseBlock = cards[1].contentBlocks[0];
-assert.strictEqual(warehouseBlock.googleSheet.documentId, cards[0].contentBlocks[0].documentId, 'The 3D card must use the first card Google Sheets document.');
+assert.strictEqual(cards[0].title, '3D 창고 레이아웃', 'The first card must be the 3D warehouse card.');
+assert.strictEqual(cards[0].editLocked, true, 'The 3D warehouse card must be read-only.');
+assert.strictEqual(cards[0].contentBlocks[0].type, 'warehouse3d', 'The first card must use the warehouse3d block.');
+assert.strictEqual(cards[0].contentBlocks[0].dataSource, 'data/warehouse-demo.json', 'The first card 3D warehouse data source changed unexpectedly.');
+assert.strictEqual(cards[1].title, '기준 정보', 'The second Google Sheets card must remain unchanged.');
+assert.strictEqual(cards[1].contentBlocks[0].type, 'googleDrive', 'The second card must remain a Google Drive card.');
+const warehouseBlock = cards[0].contentBlocks[0];
+assert.strictEqual(warehouseBlock.googleSheet.documentId, cards[1].contentBlocks[0].documentId, 'The 3D card must use the Google Sheets document.');
 assert.deepStrictEqual(
     Object.values(warehouseBlock.googleSheet.sheets).sort(),
     ['평면도', '구역설정', '랙타입 마스터', '랙배치', '로케이션 마스터', '품목 마스터', '재고 현황'].sort(),
@@ -83,7 +83,11 @@ assert.ok(warehouseRenderer.includes('container.requestFullscreen'), 'The wareho
 assert.ok(warehouseRenderer.includes('document.exitFullscreen'), 'The warehouse card must support leaving fullscreen.');
 assert.ok(cardRenderer.includes('warehouse-footer-source-status-v16'), 'The shared renderer must load the footer source status layout.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-shell:fullscreen'), 'Fullscreen warehouse layout styles are missing.');
+assert.ok(warehouseStyles.includes('height: 540px; min-height: 540px;'), 'The regular warehouse viewport must keep a stable height.');
+assert.ok(warehouseStyles.includes('.warehouse-3d-shell:fullscreen .warehouse-3d-main { flex: 1; height: auto; min-height: 0; }'), 'Fullscreen must override the regular warehouse height.');
 assert.ok(warehouseStyles.includes('cursor: default'), 'The 3D canvas must use the normal cursor.');
+assert.ok(warehouseRenderer.includes('if (!viewportWidth || !viewportHeight) return;'), 'A hidden warehouse viewport must not trigger a resize.');
+assert.ok(!warehouseRenderer.includes('warehouse-3d-reset'), 'The screen reset button must be removed.');
 assert.strictEqual((warehouseRenderer.match(/data-warehouse-camera-view=/g) || []).length, 4, 'The viewport must provide exactly four camera view buttons.');
 assert.ok(warehouseRenderer.includes('role="group" aria-label="카메라 구도"'), 'The camera view buttons must be grouped accessibly.');
 assert.ok(warehouseRenderer.includes('data-warehouse-camera-view="quarter"'), 'The 30-degree quarter view button is missing.');
@@ -91,11 +95,15 @@ assert.ok(warehouseRenderer.includes('data-warehouse-camera-view="top"'), 'The c
 assert.ok(warehouseRenderer.includes('data-warehouse-camera-view="front"'), 'The front view button is missing.');
 assert.ok(warehouseRenderer.includes('data-warehouse-camera-view="side"'), 'The side view button is missing.');
 assert.ok(warehouseRenderer.includes('<svg viewBox="0 0 24 24" aria-hidden="true">'), 'Camera view buttons must use inline icons.');
+assert.strictEqual((warehouseRenderer.match(/warehouse-3d-view-face/g) || []).length, 3, 'Top, front, and side view icons must each have one filled cube face.');
+assert.ok(warehouseStyles.includes('.warehouse-3d-camera-views .warehouse-3d-view-face { fill: currentColor; }'), 'Filled cube faces must follow the current button icon color.');
 assert.ok(warehouseRenderer.includes('quarter: { yaw: Math.PI / 4, pitch: Math.PI / 6'), 'Quarter view must use a 30-degree isometric elevation.');
 assert.ok(warehouseRenderer.includes('top: { yaw: 0, pitch: Math.PI / 2 - 0.01'), 'Top view must look down from the warehouse center.');
 assert.ok(warehouseRenderer.includes('front: { yaw: 0, pitch: 0.08'), 'Front view must use the front camera direction.');
 assert.ok(warehouseRenderer.includes('side: { yaw: Math.PI / 2, pitch: 0.08'), 'Side view must use the side camera direction.');
-assert.ok(warehouseRenderer.includes("applyCameraView('quarter')"), 'Screen reset must restore the quarter view.');
+assert.ok(warehouseRenderer.includes('data-warehouse-grid-toggle'), 'The camera view group must include a Grid toggle button.');
+assert.ok(warehouseRenderer.includes('grid.visible = Boolean(isVisible)'), 'The Grid toggle must control Grid visibility.');
+assert.ok(warehouseRenderer.includes("aria-label', grid.visible ? 'Grid 숨기기' : 'Grid 표시'"), 'The Grid toggle must announce its current action.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-camera-views'), 'The camera buttons must be positioned as one viewport overlay group.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-camera-views button[aria-pressed="true"]'), 'The selected camera view must have an active visual state.');
 assert.ok(
@@ -107,7 +115,7 @@ assert.ok(warehouseStyles.includes('margin-left: auto; padding: 0'), 'The connec
 assert.ok(warehouseRenderer.includes('data-warehouse-view="utilization"'), 'The utilization view toggle is missing.');
 assert.ok(warehouseRenderer.includes('data-warehouse-view="status"'), 'The inventory status view toggle is missing.');
 assert.ok(
-    warehouseRenderer.includes('<div class="warehouse-3d-legend" aria-label="선택한 재고 보기의 색상 범례">\n                <div class="warehouse-3d-view-toggle"'),
+    warehouseRenderer.indexOf('<div class="warehouse-3d-legend" aria-label="선택한 재고 보기의 색상 범례">') < warehouseRenderer.indexOf('<div class="warehouse-3d-view-toggle"'),
     'The inventory view toggle must be placed inside the legend.'
 );
 assert.ok(warehouseStyles.includes('min-width: 46px; min-height: 22px'), 'The legend view buttons must use the compact size.');
@@ -122,7 +130,9 @@ assert.ok(warehouseRenderer.includes("const rackFrameColor = '#8b95a5'"), 'Rack 
 assert.ok(warehouseRenderer.includes('metalness: 0.78'), 'Rack posts and beams must use a metallic material.');
 assert.ok(warehouseRenderer.includes('new THREE.MeshPhysicalMaterial'), 'Warehouse surfaces must use physically based reflective materials.');
 assert.ok(warehouseRenderer.includes("color: '#17603f'"), 'The warehouse floor must use the waterproof green color.');
-assert.ok(warehouseRenderer.includes('clearcoat: 0.82'), 'The warehouse floor must use a glossy waterproof coating.');
+assert.ok(/color: '#17603f',\r?\n\s+roughness: 0\.08,\r?\n\s+metalness: 0\.04,\r?\n\s+clearcoat: 1,\r?\n\s+clearcoatRoughness: 0\.025,\r?\n\s+envMapIntensity: 2\.4/.test(warehouseRenderer), 'The warehouse floor must use wet-gloss coating values.');
+assert.ok(warehouseRenderer.includes('new THREE.PMREMGenerator(renderer)'), 'The wet floor must receive a prefiltered reflection environment.');
+assert.ok(warehouseRenderer.includes('scene.environment = floorReflectionEnvironment'), 'The wet floor reflection environment must be applied to the scene.');
 assert.ok(warehouseRenderer.includes("'#78a98b', '#2f7454'"), 'The floor grid must use coordinated green colors.');
 assert.ok(warehouseRenderer.includes('clearcoat: 0.62'), 'Rack frames must use a reflective steel coating.');
 assert.ok(warehouseRenderer.includes('clearcoat: 0.9'), 'Empty slot boxes must use a strong reflective coating.');
@@ -131,7 +141,46 @@ assert.ok(warehouseRenderer.includes('clearcoatRoughness: 0.04'), 'Occupied slot
 assert.ok(!warehouseRenderer.includes("const frameColor = type.color"), 'Rack type colors must not be applied to rack frames.');
 assert.ok(warehouseRenderer.includes('opacity: 0.5'), 'Empty slot boxes must use 50% opacity.');
 assert.ok(warehouseRenderer.includes('depthWrite: false'), 'Transparent empty slot boxes must not write to the depth buffer.');
+assert.ok(warehouseRenderer.includes('clickTargets.push(label)'), 'Floating rack labels must be selectable with the rack body.');
+assert.ok(warehouseRenderer.includes('createRackOutline'), 'Rack-level hover and selected outlines must be created.');
+assert.ok(warehouseRenderer.includes('setHoveredRack(slot ? null : getRackAtPointer(event))'), 'Rack body and billboards must show a hover outline when no slot is hovered.');
+assert.ok(warehouseRenderer.includes('setSelectedRack(hit.object.userData)'), 'Selecting a rack must show its persistent outline.');
+assert.ok(warehouseRenderer.includes('setSelectedRack(null); showSelection(slot);'), 'Selecting a slot must clear any rack-level selection outline.');
+assert.ok(warehouseRenderer.includes('const worldUiResolutionScale = 2'), 'World-space UI must render at a 2x internal resolution.');
+assert.ok(warehouseRenderer.includes('canvas.width = 256 * worldUiResolutionScale'), 'Rack billboards must use the 2x resolution scale.');
+assert.ok(warehouseRenderer.includes('hoverCanvas.width = 520 * worldUiResolutionScale'), 'Slot hover labels must use the 2x resolution scale.');
 
+assert.ok(warehouseRenderer.includes('const labelTargets = []'), 'Rack billboards must have a separate priority hit-target list.');
+assert.ok(warehouseRenderer.includes('labelTargets.push(label)'), 'Each rack billboard must be registered in the priority hit-target list.');
+assert.ok(/if \(labelRack\) \{\s*setHoveredSlot\(null\);\s*setHoveredRack\(labelRack\);\s*return;\s*\}\s*const slot = getSlotAtPointer\(event\);/.test(warehouseRenderer), 'Billboard hover must run before slot hover detection.');
+assert.ok(/if \(labelRack\) \{\s*setSelectedSlot\(null\);\s*setSelectedRack\(labelRack\);\s*showSelection\(labelRack\);\s*return;\s*\}\s*const slot = getSlotAtPointer\(event\);/.test(warehouseRenderer), 'Billboard selection must run before slot selection.');
+assert.ok(warehouseRenderer.includes("normal: { fill: 'rgba(5, 15, 30, 0.92)'"), 'Rack billboards must have a normal visual state.');
+assert.ok(warehouseRenderer.includes("hover: { fill: 'rgba(35, 34, 13, 0.96)'"), 'Rack billboards must have a hover visual state.');
+assert.ok(warehouseRenderer.includes("selected: { fill: '#FFFF2D'"), 'Rack billboards must have a selected visual state.');
+assert.ok(warehouseRenderer.includes("sprite.setInteractionState = (state = 'normal') =>"), 'Rack billboards must expose an animated interaction-state renderer.');
+assert.ok(warehouseRenderer.includes("setRackLabelState(selectedRack, 'selected')"), 'Rack selection must update the billboard selected state.');
+assert.ok(warehouseRenderer.includes('new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false })'), 'Rack billboard materials must not block foreground rendering.');
+assert.ok(warehouseRenderer.includes('sprite.renderOrder = 1000'), 'Rack billboards must use a dedicated top rendering order.');
+assert.ok(warehouseRenderer.includes('renderer.sortObjects = true'), 'The renderer must preserve billboard and outline ordering.');
+assert.ok(warehouseRenderer.includes('outline.renderOrder = 12'), 'Rack outlines must render before rack billboards.');
+assert.ok(warehouseRenderer.includes('new THREE.EdgesGeometry(boxGeometry)'), 'Cell outlines must use a simple box outer edge geometry.');
+assert.ok(!warehouseRenderer.includes('new THREE.EdgesGeometry(getChamferedBoxGeometry(width, height, depth), 20)'), 'Cell outlines must not include chamfer seam edges.');
+assert.ok(warehouseRenderer.includes('addOuterEdgeTubes(outline, edgeGeometry, 0.042, material, 12)'), 'Rack outlines must use the same thick outer-edge tubes as selected cells.');
+assert.ok(warehouseRenderer.includes('new THREE.MeshBasicMaterial({ color: \'#78ABFF\''), 'Rack hover outlines must use the requested blue material.');
+assert.ok(warehouseRenderer.includes('new THREE.MeshBasicMaterial({ color: \'#3B82F6\''), 'Rack selected outlines must use the requested blue material.');
+assert.ok(warehouseRenderer.includes('labelLayer.renderOrder = 1000'), 'Rack billboards must use a top-level render group instead of only sprite order.');
+assert.ok(warehouseRenderer.includes('group.add(labelLayer)'), 'Rack billboard render groups must remain attached to their rack.');
+assert.ok(warehouseRenderer.includes('const isRaycastTargetVisible = (object)'), 'Hidden parent groups must be considered during raycasting.');
+assert.ok(warehouseRenderer.includes('const activeWorldUiTransitions = new Set()'), 'World-space UI transitions must be tracked independently.');
+assert.ok(warehouseRenderer.includes('if (activeWorldUiTransitions.size) requestRender()'), 'Animation frames must stop when no world UI transition remains.');
+assert.ok(warehouseRenderer.includes('const fadeWorldObject ='), 'World-space UI outlines and labels must share the fade transition helper.');
+assert.ok(warehouseRenderer.includes('fadeWorldObject(hoverLabel, false, { duration: 120 })'), 'Slot hover labels must fade out smoothly.');
+assert.ok(warehouseRenderer.includes('fadeWorldObject(hoveredRack.outlines.hover, true, { reset: true })'), 'Rack hover outlines must fade in smoothly.');
+assert.ok(warehouseRenderer.includes('fadeWorldObject(selectedRack.outlines.selected, true, { duration: 180, reset: true })'), 'Rack selected outlines must fade in smoothly.');
+assert.ok(warehouseRenderer.includes('hoverLabelLayer.renderOrder = 1000'), 'Slot hover labels must use a top-level render group.');
+assert.ok(warehouseRenderer.includes('hoverLabelLayer.add(hoverLabel)'), 'The hover label must be attached to its top-level render group.');
+assert.ok(warehouseRenderer.includes('slot.group.add(hoverLabelLayer)'), 'The hover label render group must follow the hovered slot.');
+assert.ok(/drawLabel\('normal'\);\s*applyScale\(displayedScale\);/.test(warehouseRenderer), 'Rack billboards must apply their normal scale before any interaction.');
 const sandbox = {
     window: { dispatchEvent() {} },
     Event: function Event() {}

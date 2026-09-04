@@ -2,6 +2,7 @@
     const threeModuleUrl = 'https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.min.js';
     const mountedControllers = new WeakMap();
     let threeModulePromise;
+    const worldUiResolutionScale = 2;
 
     function loadThree() {
         if (!threeModulePromise) threeModulePromise = import(threeModuleUrl);
@@ -362,7 +363,6 @@
                 <div class="warehouse-3d-toolbar-main">
                     <label>구역 <select class="warehouse-3d-zone-filter"><option value="">전체</option></select></label>
                     <label class="warehouse-3d-search-label">검색 <input class="warehouse-3d-search" type="search" placeholder="랙·품목 코드 또는 이름"></label>
-                    <button class="warehouse-3d-reset" type="button">화면 초기화</button>
                     <button class="warehouse-3d-reload" type="button" hidden>시트 새로고침</button>
                     <button class="warehouse-3d-fullscreen" type="button" aria-pressed="false">전체화면</button>
                 </div>
@@ -373,16 +373,19 @@
                     <div class="warehouse-3d-loading" role="status">3D 창고 기준정보를 불러오는 중입니다.</div>
                     <div class="warehouse-3d-camera-views" role="group" aria-label="카메라 구도" hidden>
                         <button type="button" data-warehouse-camera-view="quarter" aria-label="쿼터 뷰: 30도 등각으로 보기" aria-pressed="true" title="쿼터 뷰">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 7.3v9.4L12 21l7.5-4.3V7.3L12 3Z"/><path d="m4.8 7.5 7.2 4.1 7.2-4.1M12 11.6V21"/></svg>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7.5 4.3v9.4L12 21l-7.5-4.3V7.3L12 3Z"/><path d="m4.5 7.3 7.5 4.3 7.5-4.3M12 11.6V21"/></svg>
                         </button>
                         <button type="button" data-warehouse-camera-view="top" aria-label="탑 뷰: 중앙 위에서 보기" aria-pressed="false" title="탑 뷰">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M8 8h8v8H8zM12 1.5V4M12 20v2.5"/></svg>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="warehouse-3d-view-face" d="m12 3 7.5 4.3L12 11.6 4.5 7.3 12 3Z"/><path d="m12 3 7.5 4.3v9.4L12 21l-7.5-4.3V7.3L12 3Z"/><path d="m4.5 7.3 7.5 4.3 7.5-4.3M12 11.6V21"/></svg>
                         </button>
                         <button type="button" data-warehouse-camera-view="front" aria-label="프론트 뷰: 정면에서 보기" aria-pressed="false" title="프론트 뷰">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M4 10h16M4 15h16M8 5v14M16 5v14"/></svg>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="warehouse-3d-view-face" d="M4.5 7.3 12 11.6V21l-7.5-4.3V7.3Z"/><path d="m12 3 7.5 4.3v9.4L12 21l-7.5-4.3V7.3L12 3Z"/><path d="m4.5 7.3 7.5 4.3 7.5-4.3M12 11.6V21"/></svg>
                         </button>
                         <button type="button" data-warehouse-camera-view="side" aria-label="사이드 뷰: 측면에서 보기" aria-pressed="false" title="사이드 뷰">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h12v14H6zM10 5v14M10 10h8M10 15h8"/><path d="m3 12 2-2m-2 2 2 2"/></svg>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="warehouse-3d-view-face" d="M12 11.6 19.5 7.3v9.4L12 21v-9.4Z"/><path d="m12 3 7.5 4.3v9.4L12 21l-7.5-4.3V7.3L12 3Z"/><path d="m4.5 7.3 7.5 4.3 7.5-4.3M12 11.6V21"/></svg>
+                        </button>
+                        <button type="button" data-warehouse-grid-toggle aria-label="Grid 숨기기" aria-pressed="true" title="Grid 켜기/끄기">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 9h16M4 14h16M9 4v16M14 4v16"/></svg>
                         </button>
                     </div>
                 </div>
@@ -406,12 +409,12 @@
             inspector: container.querySelector('.warehouse-3d-inspector'),
             zoneFilter: container.querySelector('.warehouse-3d-zone-filter'),
             search: container.querySelector('.warehouse-3d-search'),
-            reset: container.querySelector('.warehouse-3d-reset'),
             reload: container.querySelector('.warehouse-3d-reload'),
             fullscreen: container.querySelector('.warehouse-3d-fullscreen'),
             viewButtons: [...container.querySelectorAll('[data-warehouse-view]')],
             cameraViews: container.querySelector('.warehouse-3d-camera-views'),
             cameraViewButtons: [...container.querySelectorAll('[data-warehouse-camera-view]')],
+            gridToggle: container.querySelector('[data-warehouse-grid-toggle]'),
             legendItems: container.querySelector('.warehouse-3d-legend-items'),
             sourceStatus: container.querySelector('.warehouse-3d-source-status'),
             count: container.querySelector('.warehouse-3d-count')
@@ -425,25 +428,52 @@
 
     function createLabelSprite(THREE, text) {
         const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 72;
+        canvas.width = 256 * worldUiResolutionScale;
+        canvas.height = 72 * worldUiResolutionScale;
         const context = canvas.getContext('2d');
-        context.fillStyle = 'rgba(5, 15, 30, 0.92)';
-        context.strokeStyle = '#3b82f6';
-        context.lineWidth = 3;
-        context.fillRect(3, 3, 250, 66);
-        context.strokeRect(3, 3, 250, 66);
-        context.fillStyle = '#ffffff';
-        context.font = '700 32px sans-serif';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText(text, 128, 36);
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
-        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
         const sprite = new THREE.Sprite(material);
-        sprite.scale.set(3.2, 0.9, 1);
-        sprite.renderOrder = 10;
+        const visuals = {
+            normal: { fill: 'rgba(5, 15, 30, 0.92)', stroke: '#3b82f6', text: '#ffffff', scale: 1 },
+            hover: { fill: 'rgba(35, 34, 13, 0.96)', stroke: '#FFFF97', text: '#ffffff', scale: 1.06 },
+            selected: { fill: '#FFFF2D', stroke: '#FFF9B0', text: '#07111f', scale: 1.1 }
+        };
+        const applyScale = (scale) => sprite.scale.set(3.2 * scale, 0.9 * scale, 1);
+        let displayedScale = 1;
+
+        const drawLabel = (state = 'normal') => {
+            const visual = visuals[state] || visuals.normal;
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = visual.fill;
+            context.fillRect(6, 6, 500, 132);
+            context.strokeStyle = visual.stroke;
+            context.lineWidth = 6;
+            context.strokeRect(6, 6, 500, 132);
+            context.fillStyle = visual.text;
+            context.font = '700 64px sans-serif';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(text, 256, 72);
+            texture.needsUpdate = true;
+        };
+        sprite.setInteractionState = (state = 'normal') => {
+            const visual = visuals[state] || visuals.normal;
+            drawLabel(state);
+            const startScale = displayedScale;
+            const targetScale = visual.scale;
+            material.opacity = 0.82;
+            return (progress) => {
+                displayedScale = startScale + (targetScale - startScale) * progress;
+                applyScale(displayedScale);
+                material.opacity = 0.82 + 0.18 * progress;
+            };
+        };
+        drawLabel('normal');
+        applyScale(displayedScale);
+        material.opacity = 1;
+        sprite.renderOrder = 1000;
         return sprite;
     }
 
@@ -456,6 +486,7 @@
 
         const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 250);
         const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.sortObjects = true;
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.shadowMap.enabled = true;
@@ -475,14 +506,37 @@
         fillLight.castShadow = false;
         scene.add(fillLight, fillLight.target);
 
+        const reflectionRoom = new THREE.Scene();
+        reflectionRoom.background = new THREE.Color('#0b2138');
+        const reflectionShell = new THREE.Mesh(new THREE.SphereGeometry(12, 24, 16), new THREE.MeshBasicMaterial({ color: '#12324c', side: THREE.BackSide }));
+        reflectionRoom.add(reflectionShell);
+        const addReflectionPanel = (color, position, rotation, size) => {
+            const panel = new THREE.Mesh(new THREE.PlaneGeometry(size[0], size[1]), new THREE.MeshBasicMaterial({ color }));
+            panel.position.set(...position);
+            panel.rotation.set(...rotation);
+            reflectionRoom.add(panel);
+        };
+        addReflectionPanel('#e0f2fe', [0, 7, 0], [-Math.PI / 2, 0, 0], [18, 4]);
+        addReflectionPanel('#93c5fd', [0, 3, -8], [0, 0, 0], [18, 3]);
+        addReflectionPanel('#bbf7d0', [-8, 3, 0], [0, Math.PI / 2, 0], [16, 3]);
+        const reflectionPmrem = new THREE.PMREMGenerator(renderer);
+        const floorReflectionEnvironment = reflectionPmrem.fromScene(reflectionRoom, 0.04).texture;
+        reflectionPmrem.dispose();
+        reflectionRoom.traverse((object) => {
+            if (object.geometry) object.geometry.dispose();
+            if (object.material) object.material.dispose();
+        });
+        scene.environment = floorReflectionEnvironment;
+
         const floor = new THREE.Mesh(
             new THREE.PlaneGeometry(floorWidth, floorDepth),
             new THREE.MeshPhysicalMaterial({
                 color: '#17603f',
-                roughness: 0.24,
-                metalness: 0.06,
-                clearcoat: 0.82,
-                clearcoatRoughness: 0.12
+                roughness: 0.08,
+                metalness: 0.04,
+                clearcoat: 1,
+                clearcoatRoughness: 0.025,
+                envMapIntensity: 2.4
             })
         );
         floor.rotation.x = -Math.PI / 2;
@@ -513,8 +567,11 @@
 
         const rackEntries = [];
         const clickTargets = [];
+        const labelTargets = [];
         const slotMeshEntries = [];
         const geometryCache = new Map();
+        const outlineGeometryCache = new Map();
+        const outlineTubeGeometryCache = new Map();
         const materialCache = new Map();
         const getGeometry = (width, height, depth) => {
             const key = `${width}:${height}:${depth}`;
@@ -553,6 +610,37 @@
             }
             return geometryCache.get(key);
         };
+        const getSlotOutlineGeometry = (width, height, depth) => {
+            const key = `${width}:${height}:${depth}`;
+            if (!outlineGeometryCache.has(key)) {
+                const boxGeometry = new THREE.BoxGeometry(width, height, depth);
+                const edgeGeometry = new THREE.EdgesGeometry(boxGeometry);
+                boxGeometry.dispose();
+                outlineGeometryCache.set(key, edgeGeometry);
+            }
+            return outlineGeometryCache.get(key);
+        };
+        const getOutlineTubeGeometry = (length, radius) => {
+            const key = `${length.toFixed(4)}:${radius}`;
+            if (!outlineTubeGeometryCache.has(key)) outlineTubeGeometryCache.set(key, new THREE.CylinderGeometry(radius, radius, length, 6));
+            return outlineTubeGeometryCache.get(key);
+        };
+        const addOuterEdgeTubes = (outline, edgeGeometry, radius, material, renderOrder) => {
+            const positions = edgeGeometry.getAttribute('position');
+            const up = new THREE.Vector3(0, 1, 0);
+            for (let index = 0; index < positions.count; index += 2) {
+                const start = new THREE.Vector3().fromBufferAttribute(positions, index);
+                const end = new THREE.Vector3().fromBufferAttribute(positions, index + 1);
+                const direction = end.clone().sub(start);
+                const length = direction.length();
+                if (!(length > 0)) continue;
+                const segment = new THREE.Mesh(getOutlineTubeGeometry(length, radius), material);
+                segment.position.copy(start).add(end).multiplyScalar(0.5);
+                segment.quaternion.setFromUnitVectors(up, direction.normalize());
+                segment.renderOrder = renderOrder;
+                outline.add(segment);
+            }
+        };
         const getMaterial = (color, options = {}) => {
             const materialOptions = {
                 roughness: 0.38,
@@ -573,6 +661,18 @@
             if (!materialCache.has(key)) materialCache.set(key, new THREE.MeshPhysicalMaterial({ color, ...materialOptions }));
             return materialCache.get(key);
         };
+        const rackHoverMaterial = new THREE.MeshBasicMaterial({ color: '#78ABFF', transparent: true, opacity: 0.92, depthTest: false, depthWrite: false });
+        const rackSelectedMaterial = new THREE.MeshBasicMaterial({ color: '#3B82F6', transparent: true, opacity: 1, depthTest: false, depthWrite: false });
+        const createRackOutline = (size, position, material) => {
+            const outline = new THREE.Group();
+            const edgeGeometry = getSlotOutlineGeometry(size[0], size[1], size[2]);
+            addOuterEdgeTubes(outline, edgeGeometry, 0.042, material, 12);
+            outline.position.set(position[0], position[1], position[2]);
+            outline.visible = false;
+            outline.renderOrder = 12;
+            outline.userData = { material, maxOpacity: material.opacity };
+            return outline;
+        };
         const addBox = (group, size, position, color, userData, options = {}) => {
             const mesh = new THREE.Mesh(getGeometry(size[0], size[1], size[2]), getMaterial(color, options));
             mesh.position.set(position[0], position[1], position[2]);
@@ -582,6 +682,34 @@
             group.add(mesh);
             return mesh;
         };
+
+        const createSlotOutline = (color, radius) => {
+            const outline = new THREE.Group();
+            outline.visible = false;
+            outline.renderOrder = 10;
+            outline.userData = {
+                radius,
+                material: new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthTest: false, depthWrite: false }),
+                maxOpacity: 1
+            };
+            return outline;
+        };
+        const hoverOutline = createSlotOutline('#FFFF97', 0.03);
+        const selectedOutline = createSlotOutline('#FFFF2D', 0.03);
+        const hoverCanvas = document.createElement('canvas');
+        hoverCanvas.width = 520 * worldUiResolutionScale;
+        hoverCanvas.height = 132 * worldUiResolutionScale;
+        const hoverContext = hoverCanvas.getContext('2d');
+        const hoverTexture = new THREE.CanvasTexture(hoverCanvas);
+        hoverTexture.colorSpace = THREE.SRGBColorSpace;
+        const hoverLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: hoverTexture, transparent: true, depthTest: false, depthWrite: false }));
+        const hoverLabelLayer = new THREE.Group();
+        hoverLabelLayer.renderOrder = 1000;
+        hoverLabelLayer.add(hoverLabel);
+        hoverLabel.visible = false;
+        hoverLabel.renderOrder = 11;
+        hoverLabel.material.opacity = 0;
+        const hoverLabelBaseScale = [4.4, 1.12];
 
         data.racks.forEach((rack) => {
             const type = rackTypeByCode.get(rack.rackTypeCode);
@@ -654,6 +782,8 @@
                             stock,
                             item,
                             occupied,
+                            group,
+                            boxSize: [boxWidth, boxHeight, boxDepth],
                             position: [
                                 (bay - 0.5) * bayWidth,
                                 (level - 1) * levelHeight + boxHeight / 2 + 0.06,
@@ -706,7 +836,20 @@
             clickTargets.push(pick);
             const label = createLabelSprite(THREE, rack.code);
             label.position.set(length / 2, height + 0.65, depth / 2);
-            group.add(label);
+            label.userData = rackData;
+            rackData.label = label;
+            clickTargets.push(label);
+            labelTargets.push(label);
+            const labelLayer = new THREE.Group();
+            labelLayer.renderOrder = 1000;
+            labelLayer.add(label);
+            group.add(labelLayer);
+            const outlineSize = [length + 0.18, height + 0.18, depth + 0.18];
+            const outlinePosition = [length / 2, height / 2, depth / 2];
+            const rackHoverOutline = createRackOutline(outlineSize, outlinePosition, rackHoverMaterial);
+            const rackSelectedOutline = createRackOutline(outlineSize, outlinePosition, rackSelectedMaterial);
+            rackData.outlines = { hover: rackHoverOutline, selected: rackSelectedOutline };
+            group.add(rackHoverOutline, rackSelectedOutline);
             const startX = mm(rack.startX);
             const startZ = mm(rack.startY);
             if (rack.direction === 'vertical') {
@@ -733,18 +876,188 @@
         const target = new THREE.Vector3(floorWidth / 2, 2.5, floorDepth / 2);
         let animationFrame = 0;
         let destroyed = false;
+        const activeWorldUiTransitions = new Set();
+        const easeOutCubic = (progress) => 1 - ((1 - progress) ** 3);
+        const updateWorldUiTransitions = (timestamp) => {
+            activeWorldUiTransitions.forEach((transition) => {
+                const progress = Math.min(1, Math.max(0, (timestamp - transition.startedAt) / transition.duration));
+                const keep = transition.update(easeOutCubic(progress));
+                if (progress >= 1 || keep === false) {
+                    activeWorldUiTransitions.delete(transition);
+                    transition.complete?.();
+                }
+            });
+        };
+
         const updateCamera = () => {
             const horizontal = distance * Math.cos(pitch);
             camera.position.set(target.x + horizontal * Math.sin(yaw), target.y + distance * Math.sin(pitch), target.z + horizontal * Math.cos(yaw));
             camera.lookAt(target);
         };
-        const render = () => {
+        const render = (timestamp) => {
             animationFrame = 0;
+            updateWorldUiTransitions(timestamp || performance.now());
             if (!destroyed && renderer.domElement.isConnected) renderer.render(scene, camera);
+            if (activeWorldUiTransitions.size) requestRender();
         };
         const requestRender = () => {
             if (!animationFrame && !destroyed) animationFrame = requestAnimationFrame(render);
         };
+        const startWorldUiTransition = (duration, update, complete) => {
+            activeWorldUiTransitions.add({
+                startedAt: performance.now(),
+                duration,
+                update,
+                complete
+            });
+            requestRender();
+        };
+        const fadeWorldObject = (object, visible, { duration = 140, reset = false } = {}) => {
+            const material = object?.userData?.material || object?.material;
+            if (!material) return;
+            const targetOpacity = visible ? (object.userData.maxOpacity ?? 1) : 0;
+            if (visible) object.visible = true;
+            if (!visible && !object.visible) return;
+            const token = {};
+            object.userData.worldTransitionToken = token;
+            const startOpacity = reset ? 0 : material.opacity;
+            if (reset) material.opacity = 0;
+            if (Math.abs(startOpacity - targetOpacity) < 0.001 && !reset) {
+                material.opacity = targetOpacity;
+                if (!visible) object.visible = false;
+                return;
+            }
+            startWorldUiTransition(duration, (progress) => {
+                if (object.userData.worldTransitionToken !== token) return false;
+                material.opacity = startOpacity + (targetOpacity - startOpacity) * progress;
+                return true;
+            }, () => {
+                if (object.userData.worldTransitionToken === token && !visible) object.visible = false;
+            });
+        };
+
+        const applyGridVisibility = (isVisible) => {
+            grid.visible = Boolean(isVisible);
+            shell.gridToggle.setAttribute('aria-pressed', String(grid.visible));
+            shell.gridToggle.setAttribute('aria-label', grid.visible ? 'Grid 숨기기' : 'Grid 표시');
+            requestRender();
+        };
+        const moveSlotOverlay = (overlay, slot) => {
+            if (!slot) return;
+            if (overlay.parent !== slot.group) { overlay.parent?.remove(overlay); slot.group.add(overlay); }
+            overlay.position.set(slot.position[0], slot.position[1], slot.position[2]);
+        };
+        const updateSlotOutline = (outline, slot) => {
+            if (!slot) { fadeWorldObject(outline, false); return; }
+            const [width, height, depth] = slot.boxSize;
+            const edgeGeometry = getSlotOutlineGeometry(width + 0.045, height + 0.045, depth + 0.045);
+            if (outline.userData.edgeGeometry !== edgeGeometry) {
+                outline.clear();
+                const positions = edgeGeometry.getAttribute('position');
+                const up = new THREE.Vector3(0, 1, 0);
+                for (let index = 0; index < positions.count; index += 2) {
+                    const start = new THREE.Vector3().fromBufferAttribute(positions, index);
+                    const end = new THREE.Vector3().fromBufferAttribute(positions, index + 1);
+                    const direction = end.clone().sub(start);
+                    const length = direction.length();
+                    if (!(length > 0)) continue;
+                    const segment = new THREE.Mesh(getOutlineTubeGeometry(length, outline.userData.radius), outline.userData.material);
+                    segment.position.copy(start).add(end).multiplyScalar(0.5);
+                    segment.quaternion.setFromUnitVectors(up, direction.normalize());
+                    segment.renderOrder = 10;
+                    outline.add(segment);
+                }
+                outline.userData.edgeGeometry = edgeGeometry;
+            }
+            moveSlotOverlay(outline, slot);
+            const slotChanged = outline.userData.slot !== slot;
+            outline.userData.slot = slot;
+            fadeWorldObject(outline, true, { reset: slotChanged });
+        };
+        const getSlotSummary = (slot) => {
+            const capacity = Number(slot.stock?.capacity || slot.location?.capacity || 0);
+            const quantity = Number(slot.stock?.quantity || 0);
+            return { itemName: slot.item?.name || '빈 로케이션', quantity, capacity, rate: capacity > 0 ? Math.round((quantity / capacity) * 100) : null };
+        };
+        const updateHoverLabel = (slot) => {
+            if (!slot) { fadeWorldObject(hoverLabel, false, { duration: 120 }); return; }
+            const summary = getSlotSummary(slot);
+            if (hoverLabelLayer.parent !== slot.group) { hoverLabelLayer.parent?.remove(hoverLabelLayer); slot.group.add(hoverLabelLayer); }
+            hoverContext.clearRect(0, 0, hoverCanvas.width, hoverCanvas.height);
+            hoverContext.fillStyle = 'rgba(7, 17, 31, 0.9)';
+            hoverContext.fillRect(0, 0, hoverCanvas.width, hoverCanvas.height);
+            hoverContext.strokeStyle = 'rgba(255, 255, 255, 0.68)';
+            hoverContext.lineWidth = 6;
+            hoverContext.strokeRect(3, 3, hoverCanvas.width - 6, hoverCanvas.height - 6);
+            hoverContext.fillStyle = '#ffffff';
+            hoverContext.font = '700 56px sans-serif';
+            hoverContext.fillText(summary.itemName, 40, 78);
+            hoverContext.fillStyle = '#dbeafe';
+            hoverContext.font = '600 46px sans-serif';
+            hoverContext.fillText(`수량 ${summary.quantity} / ${summary.capacity || '미설정'}  ·  적재율 ${summary.rate === null ? '용량 미설정' : `${summary.rate}%`}`, 40, 176);
+            hoverTexture.needsUpdate = true;
+            hoverLabel.position.set(slot.position[0], slot.position[1] + slot.boxSize[1] / 2 + 0.5, slot.position[2]);
+            const slotChanged = hoverLabel.userData.slot !== slot;
+            hoverLabel.userData.slot = slot;
+            const startScale = slotChanged ? 0.94 : 1;
+            hoverLabel.scale.set(hoverLabelBaseScale[0] * startScale, hoverLabelBaseScale[1] * startScale, 1);
+            fadeWorldObject(hoverLabel, true, { duration: 160, reset: slotChanged });
+            if (slotChanged) {
+                const token = {};
+                hoverLabel.userData.scaleTransitionToken = token;
+                startWorldUiTransition(160, (progress) => {
+                    if (hoverLabel.userData.scaleTransitionToken !== token) return false;
+                    const scale = startScale + (1 - startScale) * progress;
+                    hoverLabel.scale.set(hoverLabelBaseScale[0] * scale, hoverLabelBaseScale[1] * scale, 1);
+                    return true;
+                });
+            }
+        };
+        let hoveredSlot = null;
+        const setHoveredSlot = (slot) => {
+            if (hoveredSlot === slot) return;
+            hoveredSlot = slot || null;
+            updateSlotOutline(hoverOutline, hoveredSlot);
+            updateHoverLabel(hoveredSlot);
+            requestRender();
+        };
+        const setSelectedSlot = (slot) => {
+            updateSlotOutline(selectedOutline, slot || null);
+            requestRender();
+        };
+        let hoveredRack = null;
+        let selectedRack = null;
+        const setRackLabelState = (rackData, state) => {
+            const update = rackData?.label?.setInteractionState?.(state);
+            if (update) startWorldUiTransition(160, (progress) => { update(progress); return true; });
+        };
+        const setHoveredRack = (rackData) => {
+            if (hoveredRack === rackData) return;
+            if (hoveredRack?.outlines?.hover) {
+                const previousOutline = hoveredRack.outlines.hover;
+                if (rackData) { previousOutline.visible = false; previousOutline.userData.material.opacity = 0; }
+                else fadeWorldObject(previousOutline, false);
+            }
+            if (hoveredRack && hoveredRack !== selectedRack) setRackLabelState(hoveredRack, 'normal');
+            hoveredRack = rackData || null;
+            if (hoveredRack?.outlines?.hover) fadeWorldObject(hoveredRack.outlines.hover, true, { reset: true });
+            if (hoveredRack && hoveredRack !== selectedRack) setRackLabelState(hoveredRack, 'hover');
+            requestRender();
+        };
+        const setSelectedRack = (rackData) => {
+            const previousSelectedRack = selectedRack;
+            if (previousSelectedRack?.outlines?.selected) {
+                const previousOutline = previousSelectedRack.outlines.selected;
+                if (rackData) { previousOutline.visible = false; previousOutline.userData.material.opacity = 0; }
+                else fadeWorldObject(previousOutline, false, { duration: 180 });
+            }
+            if (previousSelectedRack) setRackLabelState(previousSelectedRack, previousSelectedRack === hoveredRack ? 'hover' : 'normal');
+            selectedRack = rackData || null;
+            if (selectedRack?.outlines?.selected) fadeWorldObject(selectedRack.outlines.selected, true, { duration: 180, reset: true });
+            if (selectedRack) setRackLabelState(selectedRack, 'selected');
+            requestRender();
+        };
+        const showDefaultInspector = () => { shell.inspector.innerHTML = '<h5>선택 정보</h5><p>랙이나 적재 상자를 선택하면 상세 정보가 표시됩니다.</p>'; };
         const cameraViewPresets = {
             quarter: { yaw: Math.PI / 4, pitch: Math.PI / 6, distanceScale: 1.08, targetY: 2.5 },
             top: { yaw: 0, pitch: Math.PI / 2 - 0.01, distanceScale: 1.82, targetY: 0 },
@@ -770,6 +1083,7 @@
         shell.cameraViewButtons.forEach((button) => {
             button.addEventListener('click', () => applyCameraView(button.dataset.warehouseCameraView), { signal });
         });
+        shell.gridToggle.addEventListener('click', () => applyGridVisibility(!grid.visible), { signal });
         const legendsByMode = {
             utilization: [
                 ['empty', '비어 있음'],
@@ -810,8 +1124,13 @@
         });
         applyViewMode('utilization');
         const resize = () => {
-            const width = Math.max(320, shell.viewport.clientWidth);
-            const height = Math.max(360, shell.viewport.clientHeight);
+            const viewportWidth = shell.viewport.clientWidth;
+            const viewportHeight = shell.viewport.clientHeight;
+            // A hidden menu panel reports a zero-sized viewport. Keeping the
+            // last canvas size avoids changing the card height while hidden.
+            if (!viewportWidth || !viewportHeight) return;
+            const width = Math.max(320, viewportWidth);
+            const height = Math.max(360, viewportHeight);
             renderer.setSize(width, height, false);
             camera.aspect = width / height;
             camera.updateProjectionMatrix();
@@ -826,6 +1145,8 @@
         renderer.domElement.addEventListener('pointerdown', (event) => {
             if (event.button !== 0 && event.button !== 2) return;
             event.preventDefault();
+            setHoveredSlot(null);
+            setHoveredRack(null);
             const viewDirection = new THREE.Vector3();
             camera.getWorldDirection(viewDirection);
             viewDirection.y = 0;
@@ -877,6 +1198,37 @@
 
         const raycaster = new THREE.Raycaster();
         const pointer = new THREE.Vector2();
+        const isRaycastTargetVisible = (object) => {
+            for (let node = object; node; node = node.parent) {
+                if (!node.visible) return false;
+            }
+            return true;
+        };
+        const getSlotAtPointer = (event) => {
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+            const hits = raycaster.intersectObjects(clickTargets, false).filter((hit) => isRaycastTargetVisible(hit.object));
+            const hit = hits.find((candidate) => candidate.object.userData.kind === 'slotInstances');
+            return hit && Number.isInteger(hit.instanceId) ? hit.object.userData.slots[hit.instanceId] || null : null;
+        };
+        const getLabelRackAtPointer = (event) => {
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+            const hit = raycaster.intersectObjects(labelTargets, false).find((candidate) => isRaycastTargetVisible(candidate.object));
+            return hit?.object.userData?.kind === 'rack' ? hit.object.userData : null;
+        };
+        const getRackAtPointer = (event) => {
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+            const hits = raycaster.intersectObjects(clickTargets, false).filter((hit) => isRaycastTargetVisible(hit.object));
+            return hits.find((candidate) => candidate.object.userData.kind === 'rack')?.object.userData || null;
+        };
         const showSelection = (selection) => {
             if (selection.kind === 'slot') {
                 const statusLabels = { normal: '정상', warning: '주의', hold: '보류', defect: '불량' };
@@ -894,25 +1246,42 @@
                 shell.inspector.innerHTML = `<h5>${escapeHtml(selection.rack.code)}</h5><dl><dt>구역</dt><dd>${escapeHtml(selection.rack.zoneCode)} · ${escapeHtml(selection.zone?.name || '')}</dd><dt>랙타입</dt><dd>${escapeHtml(selection.type.name)}</dd><dt>배치 기준</dt><dd>${selection.rack.layoutSource === 'floorPlan' ? '평면도' : '랙배치'}</dd><dt>베이</dt><dd>${selection.rack.bayCount}개</dd><dt>단수·깊이</dt><dd>${selection.type.levels}단 · 깊이 ${Math.max(1, Number(selection.type.depthCount) || 1)}</dd><dt>규격</dt><dd>${(selection.type.bayWidth * selection.rack.bayCount / 1000).toFixed(1)}m × ${(selection.type.depth / 1000).toFixed(1)}m × ${(selection.type.height / 1000).toFixed(1)}m</dd><dt>등록 재고</dt><dd>${(inventoryByRack.get(selection.rack.code) || []).length}개 로케이션</dd></dl>`;
             }
         };
+        renderer.domElement.addEventListener('pointermove', (event) => {
+            if (pointerStart) return;
+            const labelRack = getLabelRackAtPointer(event);
+            if (labelRack) {
+                setHoveredSlot(null);
+                setHoveredRack(labelRack);
+                return;
+            }
+            const slot = getSlotAtPointer(event);
+            setHoveredSlot(slot);
+            setHoveredRack(slot ? null : getRackAtPointer(event));
+        }, { signal });
+        renderer.domElement.addEventListener('pointerleave', () => { setHoveredSlot(null); setHoveredRack(null); }, { signal });
         renderer.domElement.addEventListener('pointerup', (event) => {
             if (!pointerStart || event.pointerId !== pointerStart.pointerId) return;
             const moved = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
             const button = pointerStart.button;
             pointerStart = null;
             if (button !== 0 || moved > 5) return;
+            const labelRack = getLabelRackAtPointer(event);
+            if (labelRack) {
+                setSelectedSlot(null);
+                setSelectedRack(labelRack);
+                showSelection(labelRack);
+                return;
+            }
+            const slot = getSlotAtPointer(event);
+            if (slot) { setSelectedSlot(slot); setSelectedRack(null); showSelection(slot); return; }
             const rect = renderer.domElement.getBoundingClientRect();
             pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
             pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
             raycaster.setFromCamera(pointer, camera);
-            const hits = raycaster.intersectObjects(clickTargets, false).filter((hit) => hit.object.visible && hit.object.parent?.visible !== false);
-            const slotHit = hits.find((candidate) => candidate.object.userData.kind === 'slotInstances');
-            if (slotHit && Number.isInteger(slotHit.instanceId)) {
-                const slot = slotHit.object.userData.slots[slotHit.instanceId];
-                if (slot) showSelection(slot);
-                return;
-            }
+            const hits = raycaster.intersectObjects(clickTargets, false).filter((hit) => isRaycastTargetVisible(hit.object));
             const hit = hits[0];
-            if (hit?.object.userData?.kind) showSelection(hit.object.userData);
+            if (hit?.object.userData?.kind) { setSelectedSlot(null); setSelectedRack(hit.object.userData); showSelection(hit.object.userData); }
+            else { setSelectedSlot(null); setSelectedRack(null); showDefaultInspector(); }
         }, { signal });
 
         const applyFilters = () => {
@@ -935,9 +1304,6 @@
         };
         shell.zoneFilter.addEventListener('change', applyFilters, { signal });
         shell.search.addEventListener('input', applyFilters, { signal });
-        shell.reset.addEventListener('click', () => {
-            applyCameraView('quarter');
-        }, { signal });
         applyFilters();
         requestRender();
 
@@ -946,12 +1312,21 @@
             if (animationFrame) cancelAnimationFrame(animationFrame);
             resizeObserver.disconnect();
             geometryCache.forEach((geometry) => geometry.dispose());
+            outlineGeometryCache.forEach((geometry) => geometry.dispose());
+            outlineTubeGeometryCache.forEach((geometry) => geometry.dispose());
             materialCache.forEach((material) => material.dispose());
+            rackHoverMaterial.dispose();
+            rackSelectedMaterial.dispose();
+            hoverOutline.userData.material.dispose();
+            selectedOutline.userData.material.dispose();
+            hoverTexture.dispose();
+            hoverLabel.material.dispose();
             scene.traverse((object) => {
                 if (object.material?.map) object.material.map.dispose();
                 if (object.type === 'Sprite' && object.material) object.material.dispose();
             });
             renderer.dispose();
+            floorReflectionEnvironment.dispose();
         };
     }
 
