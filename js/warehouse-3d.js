@@ -10,13 +10,14 @@
     }
 
     const googleSheetDefinitions = Object.freeze({
-        floorPlan: { sheetName: '평면도', range: 'A4:AZ60', headers: ['Y\\X'] },
-        rackTypes: { sheetName: '랙타입 마스터', range: 'A4:J', headers: ['랙타입코드', '랙타입명', '베이폭(mm)', '깊이(mm)', '전체높이(mm)', '단수', '단당높이(mm)'] },
-        zones: { sheetName: '구역설정', range: 'A4:H', headers: ['구역코드', '구역명', '용도', '기본랙타입코드'] },
-        racks: { sheetName: '랙배치', range: 'A4:K', headers: ['랙코드', '구역코드', '랙타입코드', '시작X(m)', '시작Y(m)', '방향', '베이수'] },
-        locations: { sheetName: '로케이션 마스터', range: 'A4:H', headers: ['로케이션코드', '랙코드', '베이번호', '단번호', '최대수량'] },
-        items: { sheetName: '품목 마스터', range: 'A4:I', headers: ['품목코드', '품목명', '분류', '표시색상', '가로(mm)', '세로(mm)', '높이(mm)'] },
-        inventory: { sheetName: '재고 현황', range: 'A4:G', headers: ['로케이션코드', '품목코드', '재고수량', '최대수량', '재고상태'] }
+        // 3행의 연속된 X 좌표와 A열의 연속된 Y 좌표를 먼저 읽고 실제 평면도 범위를 계산한다.
+        floorPlan: { sheetName: '평면도', xAxisRange: 'A3:3', yAxisRange: 'A3:A', headers: ['Y\\X'] },
+        rackTypes: { sheetName: '랙타입 마스터', range: 'A4:H', headers: ['랙타입코드', '랙타입명', '베이폭(m)', '깊이(m)', '전체높이(m)', '단수', '단당높이(m)'] },
+        zones: { sheetName: '구역설정', range: 'A4:D', headers: ['구역코드', '구역명', '용도', '기본랙타입코드'] },
+        racks: { sheetName: '랙배치', range: 'A4:I', headers: ['랙코드', '구역코드', '랙타입코드', '방향', '베이 수(가로 칸 수)', '평면도 랙 전체 길이(m)', '평면도 랙 깊이(m)'] },
+        locations: { sheetName: '로케이션 마스터', range: 'A4:F', headers: ['로케이션코드', '랙코드', '베이번호', '단번호', '깊이번호', '최대수량'] },
+        items: { sheetName: '품목 마스터', range: 'A4:C', headers: ['품목코드', '품목명', '표시색상'] },
+        inventory: { sheetName: '재고 현황', range: 'A4:D', headers: ['로케이션코드', '품목코드', '재고수량', '재고상태'] }
     });
 
     function parseCsv(csvText) {
@@ -62,6 +63,53 @@
             .map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ''])));
     }
 
+    function columnNumberToName(columnNumber) {
+        let remaining = Math.floor(Number(columnNumber));
+        if (!(remaining > 0)) throw new Error('평면도 열 번호가 올바르지 않습니다.');
+        let name = '';
+        while (remaining > 0) {
+            remaining -= 1;
+            name = String.fromCharCode(65 + (remaining % 26)) + name;
+            remaining = Math.floor(remaining / 26);
+        }
+        return name;
+    }
+
+    function getSequentialAxisLength(values, axisName) {
+        let length = 0;
+        let reachedBlank = false;
+        values.forEach((value) => {
+            const text = String(value ?? '').trim();
+            if (!text) {
+                reachedBlank = true;
+                return;
+            }
+            const number = Number(text);
+            const expected = length + 1;
+            if (reachedBlank || !Number.isInteger(number) || number !== expected) {
+                throw new Error(`평면도 ${axisName}축은 1부터 빈칸 없이 연속된 숫자여야 합니다. (${expected} 확인)`);
+            }
+            length = expected;
+        });
+        return length;
+    }
+
+    function getFloorPlanAxisRange(xAxisCsv, yAxisCsv) {
+        const xRows = parseCsv(xAxisCsv);
+        const yRows = parseCsv(yAxisCsv);
+        const xCount = getSequentialAxisLength((xRows[0] || []).slice(1), 'X');
+        const yCount = getSequentialAxisLength(yRows.slice(1).map((row) => row[0]), 'Y');
+        if (!xCount || !yCount) throw new Error('평면도 X·Y 좌표축을 확인해 주세요.');
+        const lastColumn = columnNumberToName(xCount + 1);
+        const lastRow = yCount + 3;
+        return {
+            range: `A3:${lastColumn}${lastRow}`,
+            dataRange: `B4:${lastColumn}${lastRow}`,
+            xCount,
+            yCount
+        };
+    }
+
     function toNumber(value, fallback = 0) {
         const text = String(value ?? '').replace(/,/g, '').trim();
         if (!text) return fallback;
@@ -80,15 +128,29 @@
             records[key] = csvToRecords(csvByKey[key], definition.headers, sheetName);
         });
 
+        const floorPlanCellSize = Math.max(1, toNumber(options.floorPlanCellSizeMeters, 0.5) * 1000);
+        const rackCodesFromMaster = new Set(records.racks.map((row) => String(row['랙코드'] || '').trim()).filter(Boolean));
         const floorPlanByRack = new Map();
+        const floorPlanCells = [];
+        const passageCells = [];
+        const unmappedFloorRackCodes = new Set();
         records.floorPlan.forEach((row) => {
             const y = Number(row['Y\\X']);
             if (!Number.isFinite(y)) return;
             Object.entries(row).forEach(([header, value]) => {
                 if (header === 'Y\\X') return;
                 const x = Number(header);
-                const rackCode = String(value || '').trim();
-                if (!Number.isFinite(x) || !rackCode) return;
+                const cellValue = String(value || '').trim();
+                if (!Number.isFinite(x) || !cellValue) return;
+                floorPlanCells.push({ x, y, value: cellValue });
+                const normalizedValue = cellValue.toUpperCase();
+                if (normalizedValue === 'T') passageCells.push({ x, y });
+                if (normalizedValue === 'F' || normalizedValue === 'T') return;
+                const rackCode = rackCodesFromMaster.has(cellValue) ? cellValue : '';
+                if (!rackCode) {
+                    unmappedFloorRackCodes.add(cellValue);
+                    return;
+                }
                 const placement = floorPlanByRack.get(rackCode) || { minX: x, maxX: x, minY: y, maxY: y, cellCount: 0 };
                 placement.minX = Math.min(placement.minX, x);
                 placement.maxX = Math.max(placement.maxX, x);
@@ -99,34 +161,31 @@
             });
         });
 
+        const metersToMillimeters = (value, fallback = 0) => toNumber(value, fallback) * 1000;
         const zones = records.zones
             .filter((row) => row['구역코드'])
             .map((row) => ({
                 code: row['구역코드'],
                 name: row['구역명'],
                 purpose: row['용도'],
-                defaultRackTypeCode: row['기본랙타입코드'],
-                aisleWidth: toNumber(row['통로폭(mm)']),
-                temperatureClass: row['온도구분'] || '',
-                priority: toNumber(row['작업우선순위']),
-                description: row['설명'] || ''
+                defaultRackTypeCode: row['기본랙타입코드']
             }));
         const rackTypes = records.rackTypes
             .filter((row) => row['랙타입코드'])
             .map((row) => ({
                 code: row['랙타입코드'],
                 name: row['랙타입명'],
-                bayWidth: toNumber(row['베이폭(mm)']),
-                depth: toNumber(row['깊이(mm)']),
-                height: toNumber(row['전체높이(mm)']),
+                bayWidth: metersToMillimeters(row['베이폭(m)']),
+                depth: metersToMillimeters(row['깊이(m)']),
+                height: metersToMillimeters(row['전체높이(m)']),
                 levels: toNumber(row['단수']),
-                levelHeight: toNumber(row['단당높이(mm)']),
-                depthCount: toNumber(row['깊이수'], 1),
-                maxWeight: toNumber(row['단당최대중량(kg)']),
-                color: row['표시색상'] || '#64748b'
+                levelHeight: metersToMillimeters(row['단당높이(m)']),
+                depthCount: toNumber(row['깊이수'], 1)
             }));
+        const rackTypeByCode = new Map(rackTypes.map((type) => [type.code, type]));
+        const layoutErrors = [];
         let floorPlanAppliedCount = 0;
-        const enabledRackRows = records.racks.filter((row) => row['랙코드'] && isEnabled(row['사용여부']));
+        const enabledRackRows = records.racks.filter((row) => row['랙코드']);
         const usesFloorPlan = floorPlanByRack.size > 0;
         const unplacedRackCodes = usesFloorPlan
             ? enabledRackRows.map((row) => String(row['랙코드']).trim()).filter((code) => !floorPlanByRack.has(code))
@@ -136,59 +195,103 @@
             .map((row) => {
                 const code = String(row['랙코드']).trim();
                 const placement = floorPlanByRack.get(code);
+                const type = rackTypeByCode.get(row['랙타입코드']);
                 const storedDirection = ['세로', 'VERTICAL', 'V'].includes(String(row['방향'] || '').trim().toUpperCase()) ? 'vertical' : 'horizontal';
-                let direction = storedDirection;
+                const direction = storedDirection;
+                const bayCount = toNumber(row['베이 수(가로 칸 수)']);
+                let rackRowCount = 1;
+                let floorPlan = null;
                 if (placement) {
-                    const width = placement.maxX - placement.minX + 1;
-                    const depth = placement.maxY - placement.minY + 1;
-                    if (width !== depth) direction = depth > width ? 'vertical' : 'horizontal';
+                    const columns = placement.maxX - placement.minX + 1;
+                    const rows = placement.maxY - placement.minY + 1;
+                    const planLength = (direction === 'vertical' ? rows : columns) * floorPlanCellSize;
+                    const planWidth = (direction === 'vertical' ? columns : rows) * floorPlanCellSize;
+                    if (!type) {
+                        layoutErrors.push({ code, message: '랙타입을 찾을 수 없습니다.' });
+                        return null;
+                    }
+                    const actualLength = type.bayWidth * bayCount;
+                    const actualWidth = metersToMillimeters(row['랙깊이(m)'], type.depth / 1000);
+                    const expectedPlanLength = metersToMillimeters(row['평면도 랙 전체 길이(m)']);
+                    const expectedPlanWidth = metersToMillimeters(row['평면도 랙 깊이(m)']);
+                    rackRowCount = Math.max(1, Math.round(actualWidth / type.depth));
+                    floorPlan = {
+                        columns,
+                        rows,
+                        cellCount: placement.cellCount,
+                        planLength,
+                        planWidth,
+                        actualLength,
+                        actualWidth,
+                        remainingLength: planLength - actualLength,
+                        remainingWidth: planWidth - actualWidth
+                    };
+                    if (placement.cellCount !== columns * rows) {
+                        layoutErrors.push({ code, message: '평면도 마킹이 직사각형 범위가 아닙니다.' });
+                        return null;
+                    }
+                    if (!(bayCount > 0) || actualLength > planLength + 0.001 || actualWidth > planWidth + 0.001) {
+                        layoutErrors.push({ code, message: '평면도 범위보다 실제 랙 크기가 큽니다.' });
+                        return null;
+                    }
+                    if ((expectedPlanLength > 0 && Math.abs(expectedPlanLength - planLength) > 0.001)
+                        || (expectedPlanWidth > 0 && Math.abs(expectedPlanWidth - planWidth) > 0.001)) {
+                        layoutErrors.push({ code, message: '랙배치의 평면도 크기와 실제 마킹 범위가 다릅니다.' });
+                        return null;
+                    }
                     floorPlanAppliedCount += 1;
                 }
+                const xPlanGap = floorPlan ? (direction === 'vertical' ? floorPlan.remainingWidth : floorPlan.remainingLength) : 0;
+                const yPlanGap = floorPlan ? (direction === 'vertical' ? floorPlan.remainingLength : floorPlan.remainingWidth) : 0;
                 return {
                     code,
                     zoneCode: row['구역코드'],
                     rackTypeCode: row['랙타입코드'],
-                    startX: placement ? placement.minX * 1000 : toNumber(row['시작X(m)']) * 1000,
-                    startY: placement ? placement.minY * 1000 : toNumber(row['시작Y(m)']) * 1000,
+                    startX: placement ? (placement.minX - 1) * floorPlanCellSize + Math.max(0, xPlanGap) / 2 : 0,
+                    startY: placement ? (placement.minY - 1) * floorPlanCellSize + Math.max(0, yPlanGap) / 2 : 0,
                     direction,
-                    bayCount: toNumber(row['베이수']),
-                    doubleSided: String(row['양면여부'] || '').trim().toUpperCase() === 'Y',
-                    layoutSource: placement ? 'floorPlan' : 'rackPlacement'
+                    bayCount,
+                    rackRowCount,
+                    layoutSource: placement ? 'floorPlan' : 'rackPlacement',
+                    floorPlan
                 };
-            });
+            })
+            .filter(Boolean);
         const items = records.items
             .filter((row) => row['품목코드'])
             .map((row) => ({
                 code: row['품목코드'],
                 name: row['품목명'],
-                category: row['분류'],
-                color: row['표시색상'] || '#ef4444',
-                width: toNumber(row['가로(mm)']),
-                depth: toNumber(row['세로(mm)']),
-                height: toNumber(row['높이(mm)']),
-                storageType: row['보관유형'] || '',
-                unit: row['단위'] || ''
+                color: row['표시색상'] || '#ef4444'
             }));
         const locations = records.locations
             .filter((row) => row['로케이션코드'])
             .map((row) => ({
                 locationCode: row['로케이션코드'],
                 rackCode: row['랙코드'],
+                rackRow: toNumber(row['랙열번호'], 1),
                 bay: toNumber(row['베이번호']),
                 level: toNumber(row['단번호']),
                 depth: toNumber(row['깊이번호'], 1),
-                capacity: toNumber(row['최대수량']),
-                status: row['상태'] || '',
-                note: row['비고'] || ''
+                capacity: toNumber(row['최대수량'])
             }));
         const locationsByCode = new Map(locations.map((location) => [location.locationCode, location]));
+        const rackByCode = new Map(racks.map((rack) => [rack.code, rack]));
+        const isLocationWithinRack = (location) => {
+            const rack = rackByCode.get(location?.rackCode);
+            const type = rack && rackTypeByCode.get(rack.rackTypeCode);
+            return Boolean(rack && location.bay >= 1 && location.bay <= rack.bayCount
+                && location.rackRow >= 1 && location.rackRow <= rack.rackRowCount
+                && location.level >= 1 && location.level <= type?.levels
+                && location.depth >= 1 && location.depth <= type?.depthCount);
+        };
         const statusMap = { 정상: 'normal', 주의: 'warning', 보류: 'hold', 불량: 'defect' };
         const visibleRackCodes = new Set(racks.map((rack) => rack.code));
         const inventory = records.inventory
             .filter((row) => {
                 const location = locationsByCode.get(row['로케이션코드']);
                 return row['로케이션코드'] && row['품목코드'] && toNumber(row['재고수량']) > 0
-                    && (!usesFloorPlan || visibleRackCodes.has(location?.rackCode));
+                    && (!usesFloorPlan || (visibleRackCodes.has(location?.rackCode) && isLocationWithinRack(location)));
             })
             .map((row) => {
                 const location = locationsByCode.get(row['로케이션코드']) || {};
@@ -196,42 +299,49 @@
                 return {
                     locationCode: row['로케이션코드'],
                     rackCode: location.rackCode || '',
+                    rackRow: location.rackRow || 1,
                     bay: location.bay || 0,
                     level: location.level || 0,
                     depth: location.depth || 1,
                     itemCode: row['품목코드'],
                     quantity: toNumber(row['재고수량']),
-                    capacity: toNumber(row['최대수량'], location.capacity || 0),
+                    capacity: location.capacity || 0,
                     status: statusMap[rawStatus] || rawStatus.toLowerCase() || 'normal'
                 };
             });
 
-        const rackTypeByCode = new Map(rackTypes.map((type) => [type.code, type]));
-        const floorPlanMaxX = Math.max(0, ...Object.keys(records.floorPlan[0] || {}).map(Number).filter(Number.isFinite));
-        const floorPlanMaxY = Math.max(0, ...records.floorPlan.map((row) => Number(row['Y\\X'])).filter(Number.isFinite));
-        let floorWidth = Math.max(10000, (floorPlanMaxX + 1) * 1000);
-        let floorDepth = Math.max(10000, (floorPlanMaxY + 1) * 1000);
-        racks.forEach((rack) => {
-            const type = rackTypeByCode.get(rack.rackTypeCode);
-            if (!type) return;
-            const length = type.bayWidth * rack.bayCount;
-            const width = rack.direction === 'vertical' ? type.depth : length;
-            const depth = rack.direction === 'vertical' ? length : type.depth;
-            floorWidth = Math.max(floorWidth, rack.startX + width + 4000);
-            floorDepth = Math.max(floorDepth, rack.startY + depth + 4000);
-        });
+        const outOfRangeLocationCodes = locations
+            .filter((location) => rackByCode.has(location.rackCode) && !isLocationWithinRack(location))
+            .map((location) => location.locationCode);
+        const configuredFloorPlanX = toNumber(options.floorPlanAxis?.xCount);
+        const configuredFloorPlanY = toNumber(options.floorPlanAxis?.yCount);
+        const floorPlanMaxX = configuredFloorPlanX > 0 ? configuredFloorPlanX : Math.max(0, ...floorPlanCells.map((cell) => cell.x));
+        const floorPlanMaxY = configuredFloorPlanY > 0 ? configuredFloorPlanY : Math.max(0, ...floorPlanCells.map((cell) => cell.y));
+        const floorWidth = floorPlanMaxX * floorPlanCellSize;
+        const floorDepth = floorPlanMaxY * floorPlanCellSize;
+        const warehouseGapCount = Math.max(0, floorPlanMaxX * floorPlanMaxY - floorPlanCells.length);
         return {
             schemaVersion: 1,
             meta: {
                 name: options.name || 'Google Sheets 기준정보 창고',
                 unit: 'mm',
-                floorWidth: Math.ceil(floorWidth / 1000) * 1000,
-                floorDepth: Math.ceil(floorDepth / 1000) * 1000,
+                floorWidth,
+                floorDepth,
+                floorPlanCellSize,
+                warehouseCellCount: floorPlanCells.length,
+                warehouseGapCount,
+                passageCells: passageCells.map((cell) => ({
+                    x: (cell.x - 1) * floorPlanCellSize,
+                    y: (cell.y - 1) * floorPlanCellSize
+                })),
                 source: 'googleSheets',
                 documentId: options.documentId || '',
+                floorPlanRange: options.floorPlanAxis?.range || '',
                 floorPlanAppliedCount,
+                layoutErrors,
+                outOfRangeLocationCodes,
                 unplacedRackCodes,
-                unmappedFloorRackCodes: [...floorPlanByRack.keys()].filter((code) => !racks.some((rack) => rack.code === code))
+                unmappedFloorRackCodes: [...unmappedFloorRackCodes]
             },
             zones, rackTypes, racks, locations, items, inventory
         };
@@ -242,7 +352,7 @@
             const text = String(value ?? '');
             return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
         };
-        const headers = (table?.cols || []).map((column) => escapeCell(column?.label || column?.id || ''));
+        const headers = (table?.cols || []).map((column) => escapeCell(column?.label ?? ''));
         const rows = (table?.rows || []).map((row) => (table?.cols || []).map((_, index) => {
             const cell = row?.c?.[index];
             return escapeCell(cell?.v ?? '');
@@ -290,12 +400,26 @@
 
     async function loadGoogleSheetData(config, signal) {
         const documentId = config?.documentId;
-        const entries = await Promise.all(Object.entries(googleSheetDefinitions).map(async ([key, definition]) => {
-            const sheetName = config?.sheets?.[key] || definition.sheetName;
-            const csv = await loadGoogleSheetTable(documentId, sheetName, definition.range, signal);
-            return [key, csv];
-        }));
-        return convertGoogleSheetCsv(Object.fromEntries(entries), config);
+        const floorPlanDefinition = googleSheetDefinitions.floorPlan;
+        const floorPlanSheetName = config?.sheets?.floorPlan || floorPlanDefinition.sheetName;
+        const otherEntriesPromise = Promise.all(Object.entries(googleSheetDefinitions)
+            .filter(([key]) => key !== 'floorPlan')
+            .map(async ([key, definition]) => {
+                const sheetName = config?.sheets?.[key] || definition.sheetName;
+                const csv = await loadGoogleSheetTable(documentId, sheetName, definition.range, signal);
+                return [key, csv];
+            }));
+        const [xAxisCsv, yAxisCsv, otherEntries] = await Promise.all([
+            loadGoogleSheetTable(documentId, floorPlanSheetName, floorPlanDefinition.xAxisRange, signal),
+            loadGoogleSheetTable(documentId, floorPlanSheetName, floorPlanDefinition.yAxisRange, signal),
+            otherEntriesPromise
+        ]);
+        const floorPlanAxis = getFloorPlanAxisRange(xAxisCsv, yAxisCsv);
+        const floorPlanCsv = await loadGoogleSheetTable(documentId, floorPlanSheetName, floorPlanAxis.range, signal);
+        return convertGoogleSheetCsv(Object.fromEntries([['floorPlan', floorPlanCsv], ...otherEntries]), {
+            ...(config || {}),
+            floorPlanAxis
+        });
     }
 
     function validateWarehouseData(data) {
@@ -371,22 +495,32 @@
             <div class="warehouse-3d-main">
                 <div class="warehouse-3d-viewport" aria-label="3D 창고 화면">
                     <div class="warehouse-3d-loading" role="status">3D 창고 기준정보를 불러오는 중입니다.</div>
-                    <div class="warehouse-3d-camera-views" role="group" aria-label="카메라 구도" hidden>
-                        <button type="button" data-warehouse-camera-view="quarter" aria-label="쿼터 뷰: 30도 등각으로 보기" aria-pressed="true" title="쿼터 뷰">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7.5 4.3v9.4L12 21l-7.5-4.3V7.3L12 3Z"/><path d="m4.5 7.3 7.5 4.3 7.5-4.3M12 11.6V21"/></svg>
+                    <div class="warehouse-3d-slot-tooltip" role="status" hidden></div>
+                    <div class="warehouse-3d-camera-views" role="group" aria-label="카메라 투영 및 구도" hidden>
+                        <button class="warehouse-3d-projection-toggle" type="button" data-warehouse-projection-toggle data-projection="perspective" aria-label="현재 Perspective. Orthographic으로 전환" aria-pressed="false" title="Orthographic으로 전환">
+                            <svg class="warehouse-3d-projection-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path class="warehouse-3d-projection-half warehouse-3d-projection-half-primary" d="M3.5 3.5h17l-17 17Z"/>
+                                <path class="warehouse-3d-projection-half warehouse-3d-projection-half-secondary" d="M20.5 3.5v17h-17Z"/>
+                                <text class="warehouse-3d-projection-letter warehouse-3d-projection-letter-p" x="8" y="9.2">P</text>
+                                <text class="warehouse-3d-projection-letter warehouse-3d-projection-letter-o" x="16" y="16.5">O</text>
+                                <rect class="warehouse-3d-projection-outline" x="3.5" y="3.5" width="17" height="17"/>
+                            </svg>
                         </button>
-                        <button type="button" data-warehouse-camera-view="top" aria-label="탑 뷰: 중앙 위에서 보기" aria-pressed="false" title="탑 뷰">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="warehouse-3d-view-face" d="m12 3 7.5 4.3L12 11.6 4.5 7.3 12 3Z"/><path d="m12 3 7.5 4.3v9.4L12 21l-7.5-4.3V7.3L12 3Z"/><path d="m4.5 7.3 7.5 4.3 7.5-4.3M12 11.6V21"/></svg>
-                        </button>
-                        <button type="button" data-warehouse-camera-view="front" aria-label="프론트 뷰: 정면에서 보기" aria-pressed="false" title="프론트 뷰">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="warehouse-3d-view-face" d="M4.5 7.3 12 11.6V21l-7.5-4.3V7.3Z"/><path d="m12 3 7.5 4.3v9.4L12 21l-7.5-4.3V7.3L12 3Z"/><path d="m4.5 7.3 7.5 4.3 7.5-4.3M12 11.6V21"/></svg>
-                        </button>
-                        <button type="button" data-warehouse-camera-view="side" aria-label="사이드 뷰: 측면에서 보기" aria-pressed="false" title="사이드 뷰">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="warehouse-3d-view-face" d="M12 11.6 19.5 7.3v9.4L12 21v-9.4Z"/><path d="m12 3 7.5 4.3v9.4L12 21l-7.5-4.3V7.3L12 3Z"/><path d="m4.5 7.3 7.5 4.3 7.5-4.3M12 11.6V21"/></svg>
-                        </button>
-                        <button type="button" data-warehouse-grid-toggle aria-label="Grid 숨기기" aria-pressed="true" title="Grid 켜기/끄기">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 9h16M4 14h16M9 4v16M14 4v16"/></svg>
-                        </button>
+                            <button type="button" data-warehouse-camera-view="quarter" aria-label="쿼터 뷰: 30도 등각으로 보기" aria-pressed="true" title="쿼터 뷰">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7.5 4.3v9.4L12 21l-7.5-4.3V7.3L12 3Z"/><path d="m4.5 7.3 7.5 4.3 7.5-4.3M12 11.6V21"/></svg>
+                            </button>
+                            <button type="button" data-warehouse-camera-view="top" aria-label="탑 뷰: 중앙 위에서 보기" aria-pressed="false" title="탑 뷰">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path class="warehouse-3d-view-face" d="m12 3 7.5 4.3L12 11.6 4.5 7.3 12 3Z"/><path d="m12 3 7.5 4.3v9.4L12 21l-7.5-4.3V7.3L12 3Z"/><path d="m4.5 7.3 7.5 4.3 7.5-4.3M12 11.6V21"/></svg>
+                            </button>
+                            <button type="button" data-warehouse-camera-view="front" aria-label="프론트 뷰: 정면에서 보기" aria-pressed="false" title="프론트 뷰">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path class="warehouse-3d-view-face" d="M4.5 7.3 12 11.6V21l-7.5-4.3V7.3Z"/><path d="m12 3 7.5 4.3v9.4L12 21l-7.5-4.3V7.3L12 3Z"/><path d="m4.5 7.3 7.5 4.3 7.5-4.3M12 11.6V21"/></svg>
+                            </button>
+                            <button type="button" data-warehouse-camera-view="side" aria-label="사이드 뷰: 측면에서 보기" aria-pressed="false" title="사이드 뷰">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path class="warehouse-3d-view-face" d="M12 11.6 19.5 7.3v9.4L12 21v-9.4Z"/><path d="m12 3 7.5 4.3v9.4L12 21l-7.5-4.3V7.3L12 3Z"/><path d="m4.5 7.3 7.5 4.3 7.5-4.3M12 11.6V21"/></svg>
+                            </button>
+                            <button type="button" data-warehouse-grid-toggle aria-label="Grid 숨기기" aria-pressed="true" title="Grid 켜기/끄기">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 9h16M4 14h16M9 4v16M14 4v16"/></svg>
+                            </button>
                     </div>
                 </div>
                 <aside class="warehouse-3d-inspector" aria-live="polite">
@@ -406,12 +540,14 @@
         return {
             viewport: container.querySelector('.warehouse-3d-viewport'),
             loading: container.querySelector('.warehouse-3d-loading'),
+            hoverTooltip: container.querySelector('.warehouse-3d-slot-tooltip'),
             inspector: container.querySelector('.warehouse-3d-inspector'),
             zoneFilter: container.querySelector('.warehouse-3d-zone-filter'),
             search: container.querySelector('.warehouse-3d-search'),
             reload: container.querySelector('.warehouse-3d-reload'),
             fullscreen: container.querySelector('.warehouse-3d-fullscreen'),
             viewButtons: [...container.querySelectorAll('[data-warehouse-view]')],
+            projectionToggle: container.querySelector('[data-warehouse-projection-toggle]'),
             cameraViews: container.querySelector('.warehouse-3d-camera-views'),
             cameraViewButtons: [...container.querySelectorAll('[data-warehouse-camera-view]')],
             gridToggle: container.querySelector('[data-warehouse-grid-toggle]'),
@@ -437,8 +573,8 @@
         const sprite = new THREE.Sprite(material);
         const visuals = {
             normal: { fill: 'rgba(5, 15, 30, 0.92)', stroke: '#3b82f6', text: '#ffffff', scale: 1 },
-            hover: { fill: 'rgba(35, 34, 13, 0.96)', stroke: '#FFFF97', text: '#ffffff', scale: 1.06 },
-            selected: { fill: '#FFFF2D', stroke: '#FFF9B0', text: '#07111f', scale: 1.1 }
+            hover: { fill: 'rgba(15, 52, 96, 0.96)', stroke: '#78ABFF', text: '#ffffff', scale: 1.06 },
+            selected: { fill: '#2563EB', stroke: '#BFDBFE', text: '#ffffff', scale: 1.1 }
         };
         const applyScale = (scale) => sprite.scale.set(3.2 * scale, 0.9 * scale, 1);
         let displayedScale = 1;
@@ -477,6 +613,129 @@
         return sprite;
     }
 
+    function calculateZoneFloorBounds(racks, rackTypes, clearance = 500, boundaryWidth = 0) {
+        const typeByCode = new Map((rackTypes || []).map((type) => [type.code, type]));
+        const boundsByZone = new Map();
+        (racks || []).forEach((rack) => {
+            const zoneCode = String(rack?.zoneCode || '').trim();
+            const type = typeByCode.get(rack?.rackTypeCode);
+            if (!zoneCode || !type) return;
+            const length = Math.max(0, toNumber(type.bayWidth) * Math.max(0, toNumber(rack.bayCount)));
+            const width = Math.max(0, toNumber(type.depth) * Math.max(1, toNumber(rack.rackRowCount, 1)));
+            if (!(length > 0) || !(width > 0)) return;
+            const startX = toNumber(rack.startX);
+            const startY = toNumber(rack.startY);
+            const vertical = rack.direction === 'vertical';
+            const footprint = vertical
+                ? { minX: startX, maxX: startX + width, minY: startY, maxY: startY + length }
+                : { minX: startX, maxX: startX + length, minY: startY, maxY: startY + width };
+            const bounds = boundsByZone.get(zoneCode) || { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+            bounds.minX = Math.min(bounds.minX, footprint.minX);
+            bounds.maxX = Math.max(bounds.maxX, footprint.maxX);
+            bounds.minY = Math.min(bounds.minY, footprint.minY);
+            bounds.maxY = Math.max(bounds.maxY, footprint.maxY);
+            boundsByZone.set(zoneCode, bounds);
+        });
+        const expansion = clearance + boundaryWidth / 2;
+        return [...boundsByZone.entries()].map(([zoneCode, bounds]) => ({
+            zoneCode,
+            minX: bounds.minX - expansion,
+            maxX: bounds.maxX + expansion,
+            minY: bounds.minY - expansion,
+            maxY: bounds.maxY + expansion
+        }));
+    }
+    function buildPassageBoundarySegments(passageCells, cellSize = 500, boundaryWidth = 100) {
+        const size = Math.max(1, toNumber(cellSize, 500));
+        const thickness = Math.min(size, Math.max(1, toNumber(boundaryWidth, 100)));
+        const cells = [];
+        const occupied = new Set();
+        (Array.isArray(passageCells) ? passageCells : []).forEach((cell) => {
+            const x = toNumber(cell?.x);
+            const y = toNumber(cell?.y);
+            const key = `${x}:${y}`;
+            if (occupied.has(key)) return;
+            occupied.add(key);
+            cells.push({ x, y });
+        });
+        const hasCell = (x, y) => occupied.has(`${x}:${y}`);
+        const segments = [];
+        cells.forEach(({ x, y }) => {
+            if (!hasCell(x, y - size)) {
+                segments.push({ side: 'top', x: x + size / 2, y: y + thickness / 2, width: size, depth: thickness });
+            }
+            if (!hasCell(x, y + size)) {
+                segments.push({ side: 'bottom', x: x + size / 2, y: y + size - thickness / 2, width: size, depth: thickness });
+            }
+            if (!hasCell(x - size, y)) {
+                segments.push({ side: 'left', x: x + thickness / 2, y: y + size / 2, width: thickness, depth: size });
+            }
+            if (!hasCell(x + size, y)) {
+                segments.push({ side: 'right', x: x + size - thickness / 2, y: y + size / 2, width: thickness, depth: size });
+            }
+        });
+        return segments;
+    }
+    function calculateRackFocusView(bounds, options = {}) {
+        const min = {
+            x: Number(bounds?.min?.x),
+            y: Number(bounds?.min?.y),
+            z: Number(bounds?.min?.z)
+        };
+        const max = {
+            x: Number(bounds?.max?.x),
+            y: Number(bounds?.max?.y),
+            z: Number(bounds?.max?.z)
+        };
+        if (![min.x, min.y, min.z, max.x, max.y, max.z].every(Number.isFinite)
+            || max.x < min.x || max.y < min.y || max.z < min.z) return null;
+        const yaw = toNumber(options.yaw, Math.PI / 4);
+        const pitch = toNumber(options.pitch, Math.PI / 6);
+        const aspect = Math.max(0.01, toNumber(options.aspect, 1));
+        const verticalHalfFov = Math.max(0.01, Math.min(Math.PI / 2 - 0.01, toNumber(options.verticalFovDegrees, 45) * Math.PI / 360));
+        const horizontalHalfFov = Math.atan(Math.tan(verticalHalfFov) * aspect);
+        const padding = Math.max(1, toNumber(options.padding, 1.12));
+        const nearPadding = Math.max(0.01, toNumber(options.nearPadding, 0.25));
+        const center = {
+            x: (min.x + max.x) / 2,
+            y: (min.y + max.y) / 2,
+            z: (min.z + max.z) / 2
+        };
+        const cosPitch = Math.cos(pitch);
+        const sinPitch = Math.sin(pitch);
+        const sinYaw = Math.sin(yaw);
+        const cosYaw = Math.cos(yaw);
+        const cameraBack = { x: cosPitch * sinYaw, y: sinPitch, z: cosPitch * cosYaw };
+        const cameraRight = { x: cosYaw, y: 0, z: -sinYaw };
+        const cameraUp = { x: -sinPitch * sinYaw, y: cosPitch, z: -sinPitch * cosYaw };
+        let perspectiveDistance = nearPadding;
+        let orthographicHalfHeight = 0.05;
+        let depthExtent = 0;
+        [min.x, max.x].forEach((x) => {
+            [min.y, max.y].forEach((y) => {
+                [min.z, max.z].forEach((z) => {
+                    const offset = { x: x - center.x, y: y - center.y, z: z - center.z };
+                    const horizontal = Math.abs(offset.x * cameraRight.x + offset.y * cameraRight.y + offset.z * cameraRight.z);
+                    const vertical = Math.abs(offset.x * cameraUp.x + offset.y * cameraUp.y + offset.z * cameraUp.z);
+                    const towardCamera = offset.x * cameraBack.x + offset.y * cameraBack.y + offset.z * cameraBack.z;
+                    perspectiveDistance = Math.max(
+                        perspectiveDistance,
+                        towardCamera + horizontal * padding / Math.tan(horizontalHalfFov),
+                        towardCamera + vertical * padding / Math.tan(verticalHalfFov),
+                        towardCamera + nearPadding
+                    );
+                    orthographicHalfHeight = Math.max(orthographicHalfHeight, vertical * padding, horizontal * padding / aspect);
+                    depthExtent = Math.max(depthExtent, Math.abs(towardCamera));
+                });
+            });
+        });
+        return {
+            center,
+            perspectiveDistance,
+            orthographicViewHeight: orthographicHalfHeight * 2,
+            depthExtent
+        };
+    }
     function startWarehouseScene(THREE, shell, data, signal) {
         const mm = (value) => Number(value || 0) / 1000;
         const floorWidth = mm(data.meta?.floorWidth || 52000);
@@ -484,7 +743,9 @@
         const scene = new THREE.Scene();
         scene.background = new THREE.Color('#07111f');
 
-        const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 250);
+        const perspectiveCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 250);
+        const orthographicCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 250);
+        let camera = perspectiveCamera;
         const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
         renderer.sortObjects = true;
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
@@ -492,7 +753,7 @@
         renderer.shadowMap.enabled = true;
         renderer.domElement.tabIndex = 0;
         renderer.domElement.setAttribute('aria-label', '기준정보 기반 3D 창고');
-        shell.viewport.replaceChildren(renderer.domElement, shell.cameraViews);
+        shell.viewport.replaceChildren(renderer.domElement, shell.hoverTooltip, shell.cameraViews);
         shell.cameraViews.hidden = false;
 
         scene.add(new THREE.HemisphereLight('#dbeafe', '#0f172a', 2.2));
@@ -543,20 +804,68 @@
         floor.position.set(floorWidth / 2, -0.02, floorDepth / 2);
         floor.receiveShadow = true;
         scene.add(floor);
-        const grid = new THREE.GridHelper(Math.max(floorWidth, floorDepth), Math.ceil(Math.max(floorWidth, floorDepth)), '#78a98b', '#2f7454');
-        grid.position.set(floorWidth / 2, 0, floorDepth / 2);
+        const passageCellSize = mm(data.meta?.floorPlanCellSize || 500);
+        const passageCells = Array.isArray(data.meta?.passageCells) ? data.meta.passageCells : [];
+        const passageBoundaryWidthMm = 100;
+        const passageBoundarySegments = buildPassageBoundarySegments(
+            passageCells,
+            data.meta?.floorPlanCellSize || 500,
+            passageBoundaryWidthMm
+        );
+        let passageBoundaryGeometry = null;
+        let passageBoundaryMaterial = null;
+        if (passageBoundarySegments.length) {
+            passageBoundaryGeometry = new THREE.BoxGeometry(1, 0.012, 1);
+            passageBoundaryMaterial = new THREE.MeshBasicMaterial({ color: '#facc15' });
+            const passageBoundaries = new THREE.InstancedMesh(
+                passageBoundaryGeometry,
+                passageBoundaryMaterial,
+                passageBoundarySegments.length
+            );
+            const passageMatrix = new THREE.Matrix4();
+            passageBoundarySegments.forEach((segment, index) => {
+                passageMatrix.makeScale(mm(segment.width), 1, mm(segment.depth));
+                passageMatrix.setPosition(mm(segment.x), 0.006, mm(segment.y));
+                passageBoundaries.setMatrixAt(index, passageMatrix);
+            });
+            passageBoundaries.instanceMatrix.needsUpdate = true;
+            passageBoundaries.renderOrder = 3;
+            scene.add(passageBoundaries);
+        }
+        const grid = new THREE.Group();
+        const gridPositions = [];
+        for (let x = 0; x <= floorWidth + 0.0001; x += passageCellSize) {
+            gridPositions.push(x, 0, 0, x, 0, floorDepth);
+        }
+        for (let z = 0; z <= floorDepth + 0.0001; z += passageCellSize) {
+            gridPositions.push(0, 0, z, floorWidth, 0, z);
+        }
+        const gridGeometry = new THREE.BufferGeometry();
+        gridGeometry.setAttribute('position', new THREE.Float32BufferAttribute(gridPositions, 3));
+        grid.add(new THREE.LineSegments(
+            gridGeometry,
+            new THREE.LineBasicMaterial({ color: '#78a98b', transparent: true, opacity: 0.42 })
+        ));
+        const boundaryGeometry = new THREE.BufferGeometry();
+        boundaryGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+            0, 0.006, 0, floorWidth, 0.006, 0,
+            floorWidth, 0.006, 0, floorWidth, 0.006, floorDepth,
+            floorWidth, 0.006, floorDepth, 0, 0.006, floorDepth,
+            0, 0.006, floorDepth, 0, 0.006, 0
+        ], 3));
+        grid.add(new THREE.LineSegments(boundaryGeometry, new THREE.LineBasicMaterial({ color: '#2f7454' })));
         scene.add(grid);
 
         const rackTypeByCode = new Map(data.rackTypes.map((type) => [type.code, type]));
         const itemByCode = new Map(data.items.map((item) => [item.code, item]));
         const zoneByCode = new Map(data.zones.map((zone) => [zone.code, zone]));
-        const slotKey = (rackCode, bay, level, depth) => `${rackCode}|${bay}|${level}|${depth}`;
+        const slotKey = (rackCode, rackRow, bay, level, depth) => `${rackCode}|${rackRow}|${bay}|${level}|${depth}`;
         const locationBySlot = new Map((data.locations || []).map((location) => [
-            slotKey(location.rackCode, location.bay, location.level, location.depth || 1),
+            slotKey(location.rackCode, location.rackRow || 1, location.bay, location.level, location.depth || 1),
             location
         ]));
         const inventoryBySlot = new Map(data.inventory.map((stock) => [
-            slotKey(stock.rackCode, stock.bay, stock.level, stock.depth || 1),
+            slotKey(stock.rackCode, stock.rackRow || 1, stock.bay, stock.level, stock.depth || 1),
             stock
         ]));
         const inventoryByRack = new Map();
@@ -573,6 +882,8 @@
         const outlineGeometryCache = new Map();
         const outlineTubeGeometryCache = new Map();
         const materialCache = new Map();
+        const dimmedMaterialCache = new Map();
+        const originalMaterialsByObject = new WeakMap();
         const getGeometry = (width, height, depth) => {
             const key = `${width}:${height}:${depth}`;
             if (!geometryCache.has(key)) geometryCache.set(key, new THREE.BoxGeometry(width, height, depth));
@@ -661,6 +972,28 @@
             if (!materialCache.has(key)) materialCache.set(key, new THREE.MeshPhysicalMaterial({ color, ...materialOptions }));
             return materialCache.get(key);
         };
+        const getDimmedMaterial = (material) => {
+            if (!material) return material;
+            if (!dimmedMaterialCache.has(material)) {
+                const dimmedMaterial = material.clone();
+                dimmedMaterial.transparent = true;
+                dimmedMaterial.opacity = 0.1;
+                dimmedMaterial.depthWrite = false;
+                dimmedMaterial.needsUpdate = true;
+                dimmedMaterialCache.set(material, dimmedMaterial);
+            }
+            return dimmedMaterialCache.get(material);
+        };
+        const setRackEntryDimmed = (entry, dimmed) => {
+            if (!entry || entry.dimmed === dimmed) return;
+            entry.visualObjects.forEach((object) => {
+                const originalMaterial = originalMaterialsByObject.get(object);
+                object.material = dimmed
+                    ? (Array.isArray(originalMaterial) ? originalMaterial.map(getDimmedMaterial) : getDimmedMaterial(originalMaterial))
+                    : originalMaterial;
+            });
+            entry.dimmed = dimmed;
+        };
         const rackHoverMaterial = new THREE.MeshBasicMaterial({ color: '#78ABFF', transparent: true, opacity: 0.92, depthTest: false, depthWrite: false });
         const rackSelectedMaterial = new THREE.MeshBasicMaterial({ color: '#3B82F6', transparent: true, opacity: 1, depthTest: false, depthWrite: false });
         const createRackOutline = (size, position, material) => {
@@ -696,20 +1029,6 @@
         };
         const hoverOutline = createSlotOutline('#FFFF97', 0.03);
         const selectedOutline = createSlotOutline('#FFFF2D', 0.03);
-        const hoverCanvas = document.createElement('canvas');
-        hoverCanvas.width = 520 * worldUiResolutionScale;
-        hoverCanvas.height = 132 * worldUiResolutionScale;
-        const hoverContext = hoverCanvas.getContext('2d');
-        const hoverTexture = new THREE.CanvasTexture(hoverCanvas);
-        hoverTexture.colorSpace = THREE.SRGBColorSpace;
-        const hoverLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: hoverTexture, transparent: true, depthTest: false, depthWrite: false }));
-        const hoverLabelLayer = new THREE.Group();
-        hoverLabelLayer.renderOrder = 1000;
-        hoverLabelLayer.add(hoverLabel);
-        hoverLabel.visible = false;
-        hoverLabel.renderOrder = 11;
-        hoverLabel.material.opacity = 0;
-        const hoverLabelBaseScale = [4.4, 1.12];
 
         data.racks.forEach((rack) => {
             const type = rackTypeByCode.get(rack.rackTypeCode);
@@ -719,6 +1038,8 @@
             const height = mm(type.height);
             const levelHeight = mm(type.levelHeight) || height / Math.max(1, type.levels);
             const length = bayWidth * rack.bayCount;
+            const rackRowCount = Math.max(1, Math.round(Number(rack.rackRowCount) || 1));
+            const rackWidth = depth * rackRowCount;
             const group = new THREE.Group();
             group.name = rack.code;
             const rackFrameColor = '#8b95a5';
@@ -732,27 +1053,31 @@
             const postSize = Math.min(0.1, Math.max(0.055, bayWidth * 0.045));
             for (let bay = 0; bay <= rack.bayCount; bay += 1) {
                 const x = bay * bayWidth;
-                addBox(group, [postSize, height, postSize], [x, height / 2, 0], rackFrameColor, rackData, rackFrameMaterial);
-                addBox(group, [postSize, height, postSize], [x, height / 2, depth], rackFrameColor, rackData, rackFrameMaterial);
+                for (let rackRow = 0; rackRow <= rackRowCount; rackRow += 1) {
+                    addBox(group, [postSize, height, postSize], [x, height / 2, rackRow * depth], rackFrameColor, rackData, rackFrameMaterial);
+                }
             }
             for (let level = 0; level <= type.levels; level += 1) {
                 const y = Math.min(height, level * levelHeight);
-                addBox(group, [length, 0.08, 0.09], [length / 2, y, 0], rackFrameColor, rackData, rackFrameMaterial);
-                addBox(group, [length, 0.08, 0.09], [length / 2, y, depth], rackFrameColor, rackData, rackFrameMaterial);
-                if (level < type.levels) addBox(
-                    group,
-                    [length, 0.035, depth],
-                    [length / 2, y + 0.03, depth / 2],
-                    '#334155',
-                    rackData,
-                    {
-                        castShadow: false,
-                        roughness: 0.38,
-                        metalness: 0.62,
-                        clearcoat: 0.35,
-                        clearcoatRoughness: 0.22
-                    }
-                );
+                for (let rackRow = 0; rackRow < rackRowCount; rackRow += 1) {
+                    const rowStart = rackRow * depth;
+                    addBox(group, [length, 0.08, 0.09], [length / 2, y, rowStart], rackFrameColor, rackData, rackFrameMaterial);
+                    addBox(group, [length, 0.08, 0.09], [length / 2, y, rowStart + depth], rackFrameColor, rackData, rackFrameMaterial);
+                    if (level < type.levels) addBox(
+                        group,
+                        [length, 0.035, depth],
+                        [length / 2, y + 0.03, rowStart + depth / 2],
+                        '#334155',
+                        rackData,
+                        {
+                            castShadow: false,
+                            roughness: 0.38,
+                            metalness: 0.62,
+                            clearcoat: 0.35,
+                            clearcoatRoughness: 0.22
+                        }
+                    );
+                }
             }
             const stocks = inventoryByRack.get(rack.code) || [];
             const depthCount = Math.max(1, Math.round(Number(type.depthCount) || 1));
@@ -763,18 +1088,20 @@
             const slots = [];
             for (let bay = 1; bay <= rack.bayCount; bay += 1) {
                 for (let level = 1; level <= type.levels; level += 1) {
-                    for (let depthIndex = 1; depthIndex <= depthCount; depthIndex += 1) {
-                        const key = slotKey(rack.code, bay, level, depthIndex);
+                    for (let rackRow = 1; rackRow <= rackRowCount; rackRow += 1) {
+                        for (let depthIndex = 1; depthIndex <= depthCount; depthIndex += 1) {
+                        const key = slotKey(rack.code, rackRow, bay, level, depthIndex);
                         const stock = inventoryBySlot.get(key);
                         const location = locationBySlot.get(key);
                         const item = stock ? itemByCode.get(stock.itemCode) : null;
                         const occupied = Boolean(stock && Number(stock.quantity) > 0);
                         slots.push({
                             kind: 'slot',
-                            locationCode: location?.locationCode || `${rack.code}-B${String(bay).padStart(2, '0')}-L${String(level).padStart(2, '0')}-D${String(depthIndex).padStart(2, '0')}`,
+                            locationCode: location?.locationCode || `${rack.code}-R${String(rackRow).padStart(2, '0')}-B${String(bay).padStart(2, '0')}-L${String(level).padStart(2, '0')}-D${String(depthIndex).padStart(2, '0')}`,
                             rack,
                             type,
                             zone: zoneByCode.get(rack.zoneCode),
+                            rackRow,
                             bay,
                             level,
                             depth: depthIndex,
@@ -787,9 +1114,10 @@
                             position: [
                                 (bay - 0.5) * bayWidth,
                                 (level - 1) * levelHeight + boxHeight / 2 + 0.06,
-                                (depthIndex - 0.5) * slotDepth
+                                (rackRow - 1) * depth + (depthIndex - 0.5) * slotDepth
                             ]
                         });
+                    }
                     }
                 }
             }
@@ -831,11 +1159,11 @@
             };
             createSlotInstances(slots.filter((slot) => !slot.occupied), true);
             createSlotInstances(slots.filter((slot) => slot.occupied), false);
-            const pick = addBox(group, [length, height, depth], [length / 2, height / 2, depth / 2], '#ffffff', rackData, { transparent: true, opacity: 0.001, castShadow: false });
+            const pick = addBox(group, [length, height, rackWidth], [length / 2, height / 2, rackWidth / 2], '#ffffff', rackData, { transparent: true, opacity: 0.001, castShadow: false });
             pick.material.depthWrite = false;
             clickTargets.push(pick);
             const label = createLabelSprite(THREE, rack.code);
-            label.position.set(length / 2, height + 0.65, depth / 2);
+            label.position.set(length / 2, height + 0.65, rackWidth / 2);
             label.userData = rackData;
             rackData.label = label;
             clickTargets.push(label);
@@ -844,8 +1172,8 @@
             labelLayer.renderOrder = 1000;
             labelLayer.add(label);
             group.add(labelLayer);
-            const outlineSize = [length + 0.18, height + 0.18, depth + 0.18];
-            const outlinePosition = [length / 2, height / 2, depth / 2];
+            const outlineSize = [length + 0.18, height + 0.18, rackWidth + 0.18];
+            const outlinePosition = [length / 2, height / 2, rackWidth / 2];
             const rackHoverOutline = createRackOutline(outlineSize, outlinePosition, rackHoverMaterial);
             const rackSelectedOutline = createRackOutline(outlineSize, outlinePosition, rackSelectedMaterial);
             rackData.outlines = { hover: rackHoverOutline, selected: rackSelectedOutline };
@@ -853,12 +1181,23 @@
             const startX = mm(rack.startX);
             const startZ = mm(rack.startY);
             if (rack.direction === 'vertical') {
-                group.position.set(startX + depth, 0, startZ);
+                group.position.set(startX + rackWidth, 0, startZ);
                 group.rotation.y = -Math.PI / 2;
             } else group.position.set(startX, 0, startZ);
             scene.add(group);
+            group.updateMatrixWorld(true);
+            rackData.focusBounds = new THREE.Box3(
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(length, height, rackWidth)
+            ).applyMatrix4(group.matrixWorld);
+            const visualObjects = [];
+            group.traverse((object) => {
+                if (!object.material || object === pick) return;
+                originalMaterialsByObject.set(object, object.material);
+                visualObjects.push(object);
+            });
             rackEntries.push({
-                rack, type, group, stocks, slots,
+                rack, type, group, stocks, slots, rackData, visualObjects, dimmed: false,
                 searchText: `${rack.code} ${rack.zoneCode} ${zoneByCode.get(rack.zoneCode)?.name || ''} ${stocks.map((stock) => `${stock.itemCode} ${itemByCode.get(stock.itemCode)?.name || ''}`).join(' ')}`.toLowerCase()
             });
         });
@@ -874,6 +1213,17 @@
         let pitch = Math.PI / 6;
         let distance = Math.max(floorWidth, floorDepth) * 1.08;
         const target = new THREE.Vector3(floorWidth / 2, 2.5, floorDepth / 2);
+        const perspectiveHalfFov = perspectiveCamera.fov * Math.PI / 360;
+        const minimumCameraDistance = 8;
+        const maximumCameraDistance = 140;
+        let projectionMode = 'perspective';
+        let viewportAspect = 1;
+        let cameraFocusTransitionToken = 0;
+        const getPerspectiveViewHeight = (cameraDistance = distance) => 2 * cameraDistance * Math.tan(perspectiveHalfFov);
+        const getEquivalentCameraDistance = () => projectionMode === 'orthographic'
+            ? orthographicViewHeight / (2 * Math.tan(perspectiveHalfFov))
+            : distance;
+        let orthographicViewHeight = getPerspectiveViewHeight();
         let animationFrame = 0;
         let destroyed = false;
         const activeWorldUiTransitions = new Set();
@@ -894,10 +1244,33 @@
             camera.position.set(target.x + horizontal * Math.sin(yaw), target.y + distance * Math.sin(pitch), target.z + horizontal * Math.cos(yaw));
             camera.lookAt(target);
         };
+        const updateProjectionMatrices = () => {
+            perspectiveCamera.aspect = viewportAspect;
+            perspectiveCamera.updateProjectionMatrix();
+            const halfHeight = orthographicViewHeight / 2;
+            const halfWidth = halfHeight * viewportAspect;
+            orthographicCamera.left = -halfWidth;
+            orthographicCamera.right = halfWidth;
+            orthographicCamera.top = halfHeight;
+            orthographicCamera.bottom = -halfHeight;
+            orthographicCamera.updateProjectionMatrix();
+        };
+        const updateProjectionToggle = () => {
+            const isOrthographic = projectionMode === 'orthographic';
+            const currentLabel = isOrthographic ? 'Orthographic' : 'Perspective';
+            const nextLabel = isOrthographic ? 'Perspective' : 'Orthographic';
+            shell.projectionToggle.dataset.projection = projectionMode;
+            shell.projectionToggle.setAttribute('aria-pressed', String(isOrthographic));
+            shell.projectionToggle.setAttribute('aria-label', `현재 ${currentLabel}. ${nextLabel}으로 전환`);
+            shell.projectionToggle.title = `${nextLabel}으로 전환`;
+        };
         const render = (timestamp) => {
             animationFrame = 0;
             updateWorldUiTransitions(timestamp || performance.now());
-            if (!destroyed && renderer.domElement.isConnected) renderer.render(scene, camera);
+            if (!destroyed && renderer.domElement.isConnected) {
+                renderer.render(scene, camera);
+                updateHoverTooltipPosition();
+            }
             if (activeWorldUiTransitions.size) requestRender();
         };
         const requestRender = () => {
@@ -933,6 +1306,39 @@
                 return true;
             }, () => {
                 if (object.userData.worldTransitionToken === token && !visible) object.visible = false;
+            });
+        };
+        const focusRackInCurrentView = (rackData) => {
+            const bounds = rackData?.focusBounds;
+            const focusView = calculateRackFocusView(bounds, {
+                yaw,
+                pitch,
+                aspect: viewportAspect,
+                verticalFovDegrees: perspectiveCamera.fov,
+                padding: 1.12
+            });
+            if (!focusView) return;
+            const startTarget = target.clone();
+            const endTarget = new THREE.Vector3(focusView.center.x, focusView.center.y, focusView.center.z);
+            const startDistance = distance;
+            const startOrthographicViewHeight = orthographicViewHeight;
+            const endDistance = Math.max(minimumCameraDistance, Math.min(maximumCameraDistance, focusView.perspectiveDistance));
+            const endOrthographicViewHeight = Math.max(0.5, Math.min(getPerspectiveViewHeight(maximumCameraDistance), focusView.orthographicViewHeight));
+            const orthographicCameraDistance = Math.max(distance, focusView.depthExtent + 1);
+            const token = ++cameraFocusTransitionToken;
+            startWorldUiTransition(320, (progress) => {
+                if (cameraFocusTransitionToken !== token) return false;
+                target.lerpVectors(startTarget, endTarget, progress);
+                if (projectionMode === 'orthographic') {
+                    distance = startDistance + (orthographicCameraDistance - startDistance) * progress;
+                    orthographicViewHeight = startOrthographicViewHeight + (endOrthographicViewHeight - startOrthographicViewHeight) * progress;
+                } else {
+                    distance = startDistance + (endDistance - startDistance) * progress;
+                    orthographicViewHeight = getPerspectiveViewHeight(distance);
+                }
+                updateProjectionMatrices();
+                updateCamera();
+                return true;
             });
         };
 
@@ -979,46 +1385,47 @@
             const quantity = Number(slot.stock?.quantity || 0);
             return { itemName: slot.item?.name || '빈 로케이션', quantity, capacity, rate: capacity > 0 ? Math.round((quantity / capacity) * 100) : null };
         };
-        const updateHoverLabel = (slot) => {
-            if (!slot) { fadeWorldObject(hoverLabel, false, { duration: 120 }); return; }
-            const summary = getSlotSummary(slot);
-            if (hoverLabelLayer.parent !== slot.group) { hoverLabelLayer.parent?.remove(hoverLabelLayer); slot.group.add(hoverLabelLayer); }
-            hoverContext.clearRect(0, 0, hoverCanvas.width, hoverCanvas.height);
-            hoverContext.fillStyle = 'rgba(7, 17, 31, 0.9)';
-            hoverContext.fillRect(0, 0, hoverCanvas.width, hoverCanvas.height);
-            hoverContext.strokeStyle = 'rgba(255, 255, 255, 0.68)';
-            hoverContext.lineWidth = 6;
-            hoverContext.strokeRect(3, 3, hoverCanvas.width - 6, hoverCanvas.height - 6);
-            hoverContext.fillStyle = '#ffffff';
-            hoverContext.font = '700 56px sans-serif';
-            hoverContext.fillText(summary.itemName, 40, 78);
-            hoverContext.fillStyle = '#dbeafe';
-            hoverContext.font = '600 46px sans-serif';
-            hoverContext.fillText(`수량 ${summary.quantity} / ${summary.capacity || '미설정'}  ·  적재율 ${summary.rate === null ? '용량 미설정' : `${summary.rate}%`}`, 40, 176);
-            hoverTexture.needsUpdate = true;
-            hoverLabel.position.set(slot.position[0], slot.position[1] + slot.boxSize[1] / 2 + 0.5, slot.position[2]);
-            const slotChanged = hoverLabel.userData.slot !== slot;
-            hoverLabel.userData.slot = slot;
-            const startScale = slotChanged ? 0.94 : 1;
-            hoverLabel.scale.set(hoverLabelBaseScale[0] * startScale, hoverLabelBaseScale[1] * startScale, 1);
-            fadeWorldObject(hoverLabel, true, { duration: 160, reset: slotChanged });
-            if (slotChanged) {
-                const token = {};
-                hoverLabel.userData.scaleTransitionToken = token;
-                startWorldUiTransition(160, (progress) => {
-                    if (hoverLabel.userData.scaleTransitionToken !== token) return false;
-                    const scale = startScale + (1 - startScale) * progress;
-                    hoverLabel.scale.set(hoverLabelBaseScale[0] * scale, hoverLabelBaseScale[1] * scale, 1);
-                    return true;
-                });
+        const updateHoverTooltipPosition = () => {
+            const tooltip = shell.hoverTooltip;
+            if (!hoveredSlot || tooltip.hidden) return;
+            const anchor = new THREE.Vector3(
+                hoveredSlot.position[0],
+                hoveredSlot.position[1] + hoveredSlot.boxSize[1] / 2 + 0.22,
+                hoveredSlot.position[2]
+            );
+            hoveredSlot.group.localToWorld(anchor);
+            const cameraSpace = anchor.clone().applyMatrix4(camera.matrixWorldInverse);
+            const projected = anchor.project(camera);
+            const isOutsideViewport = cameraSpace.z >= 0 || projected.z < -1 || projected.z > 1 || Math.abs(projected.x) > 1 || Math.abs(projected.y) > 1;
+            tooltip.classList.toggle('is-offscreen', isOutsideViewport);
+            if (isOutsideViewport) return;
+            const rect = renderer.domElement.getBoundingClientRect();
+            const padding = 10;
+            const anchorX = (projected.x + 1) * rect.width / 2;
+            const anchorY = (1 - projected.y) * rect.height / 2;
+            const x = Math.max(padding, Math.min(rect.width - tooltip.offsetWidth - padding, anchorX + 14));
+            const y = Math.max(padding, Math.min(rect.height - tooltip.offsetHeight - padding, anchorY - tooltip.offsetHeight - 14));
+            tooltip.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
+        };
+        const updateHoverTooltip = (slot) => {
+            const tooltip = shell.hoverTooltip;
+            if (!slot) {
+                tooltip.hidden = true;
+                tooltip.classList.remove('is-visible', 'is-offscreen');
+                return;
             }
+            const summary = getSlotSummary(slot);
+            tooltip.innerHTML = `<strong>${escapeHtml(summary.itemName)}</strong><span>수량 ${summary.quantity} / ${summary.capacity || '미설정'} · 적재율 ${summary.rate === null ? '용량 미설정' : `${summary.rate}%`}</span>`;
+            tooltip.hidden = false;
+            tooltip.classList.add('is-visible');
+            updateHoverTooltipPosition();
         };
         let hoveredSlot = null;
         const setHoveredSlot = (slot) => {
             if (hoveredSlot === slot) return;
             hoveredSlot = slot || null;
             updateSlotOutline(hoverOutline, hoveredSlot);
-            updateHoverLabel(hoveredSlot);
+            updateHoverTooltip(hoveredSlot);
             requestRender();
         };
         const setSelectedSlot = (slot) => {
@@ -1027,6 +1434,14 @@
         };
         let hoveredRack = null;
         let selectedRack = null;
+        let focusedRack = null;
+        const setFocusedRack = (rackData) => {
+            focusedRack = rackData || null;
+            rackEntries.forEach((entry) => {
+                setRackEntryDimmed(entry, Boolean(focusedRack && entry.rack !== focusedRack.rack));
+            });
+            requestRender();
+        };
         const setRackLabelState = (rackData, state) => {
             const update = rackData?.label?.setInteractionState?.(state);
             if (update) startWorldUiTransition(160, (progress) => { update(progress); return true; });
@@ -1070,11 +1485,14 @@
             });
         };
         const applyCameraView = (viewName) => {
+            cameraFocusTransitionToken += 1;
             const preset = cameraViewPresets[viewName] || cameraViewPresets.quarter;
             yaw = preset.yaw;
             pitch = preset.pitch;
             distance = Math.max(floorWidth, floorDepth) * preset.distanceScale;
             target.set(floorWidth / 2, preset.targetY, floorDepth / 2);
+            orthographicViewHeight = getPerspectiveViewHeight(distance);
+            updateProjectionMatrices();
             updateCamera();
             setActiveCameraView(viewName);
             requestRender();
@@ -1083,6 +1501,31 @@
         shell.cameraViewButtons.forEach((button) => {
             button.addEventListener('click', () => applyCameraView(button.dataset.warehouseCameraView), { signal });
         });
+        const applyProjectionMode = (nextMode) => {
+            const normalizedMode = nextMode === 'orthographic' ? 'orthographic' : 'perspective';
+            if (normalizedMode === projectionMode) return;
+            cameraFocusTransitionToken += 1;
+            if (normalizedMode === 'orthographic') {
+                orthographicViewHeight = getPerspectiveViewHeight(distance);
+                projectionMode = 'orthographic';
+                camera = orthographicCamera;
+            } else {
+                distance = Math.max(
+                    minimumCameraDistance,
+                    Math.min(maximumCameraDistance, orthographicViewHeight / (2 * Math.tan(perspectiveHalfFov)))
+                );
+                projectionMode = 'perspective';
+                camera = perspectiveCamera;
+            }
+            updateProjectionMatrices();
+            updateCamera();
+            updateProjectionToggle();
+            requestRender();
+        };
+        shell.projectionToggle.addEventListener('click', () => {
+            applyProjectionMode(projectionMode === 'perspective' ? 'orthographic' : 'perspective');
+        }, { signal });
+        updateProjectionToggle();
         shell.gridToggle.addEventListener('click', () => applyGridVisibility(!grid.visible), { signal });
         const legendsByMode = {
             utilization: [
@@ -1132,8 +1575,8 @@
             const width = Math.max(320, viewportWidth);
             const height = Math.max(360, viewportHeight);
             renderer.setSize(width, height, false);
-            camera.aspect = width / height;
-            camera.updateProjectionMatrix();
+            viewportAspect = width / height;
+            updateProjectionMatrices();
             requestRender();
         };
         updateCamera();
@@ -1145,6 +1588,7 @@
         renderer.domElement.addEventListener('pointerdown', (event) => {
             if (event.button !== 0 && event.button !== 2) return;
             event.preventDefault();
+            cameraFocusTransitionToken += 1;
             setHoveredSlot(null);
             setHoveredRack(null);
             const viewDirection = new THREE.Vector3();
@@ -1157,7 +1601,7 @@
                 y: event.clientY,
                 yaw,
                 pitch,
-                distance,
+                distance: getEquivalentCameraDistance(),
                 target: target.clone(),
                 viewDirection,
                 viewRight,
@@ -1171,7 +1615,6 @@
             if (!pointerStart || event.pointerId !== pointerStart.pointerId) return;
             const deltaX = event.clientX - pointerStart.x;
             const deltaY = event.clientY - pointerStart.y;
-            if (Math.hypot(deltaX, deltaY) > 2) setActiveCameraView('');
             if (pointerStart.mode === 'rotate') {
                 yaw = pointerStart.yaw - deltaX * 0.008;
                 pitch = Math.max(0.02, Math.min(Math.PI / 2 - 0.02, pointerStart.pitch + deltaY * 0.006));
@@ -1190,8 +1633,16 @@
         renderer.domElement.addEventListener('pointercancel', () => { pointerStart = null; }, { signal });
         renderer.domElement.addEventListener('wheel', (event) => {
             event.preventDefault();
-            setActiveCameraView('');
-            distance = Math.max(8, Math.min(140, distance * Math.exp(event.deltaY * 0.0012)));
+            cameraFocusTransitionToken += 1;
+            const zoomFactor = Math.exp(event.deltaY * 0.0012);
+            if (projectionMode === 'orthographic') {
+                const minimumViewHeight = getPerspectiveViewHeight(minimumCameraDistance);
+                const maximumViewHeight = getPerspectiveViewHeight(maximumCameraDistance);
+                orthographicViewHeight = Math.max(minimumViewHeight, Math.min(maximumViewHeight, orthographicViewHeight * zoomFactor));
+                updateProjectionMatrices();
+            } else {
+                distance = Math.max(minimumCameraDistance, Math.min(maximumCameraDistance, distance * zoomFactor));
+            }
             updateCamera();
             requestRender();
         }, { signal, passive: false });
@@ -1241,9 +1692,13 @@
                 const statusText = selection.occupied
                     ? (statusLabels[String(selection.stock?.status || '').toLowerCase()] || '상태 미설정')
                     : '비어 있음';
-                shell.inspector.innerHTML = `<h5>${escapeHtml(selection.locationCode)}</h5><dl><dt>품목</dt><dd>${itemText}</dd><dt>랙</dt><dd>${escapeHtml(selection.rack.code)} / ${escapeHtml(selection.zone?.name || selection.rack.zoneCode)}</dd><dt>셀 위치</dt><dd>${selection.bay}베이 · ${selection.level}단 · 깊이 ${selection.depth}</dd><dt>수량</dt><dd>${quantity} / ${capacity || '미설정'}</dd><dt>적재율</dt><dd>${rate === null ? '용량 미설정' : `${rate}%`}</dd><dt>재고 상태</dt><dd>${escapeHtml(statusText)}</dd></dl>`;
+                shell.inspector.innerHTML = `<h5>${escapeHtml(selection.locationCode)}</h5><dl><dt>품목</dt><dd>${itemText}</dd><dt>랙</dt><dd>${escapeHtml(selection.rack.code)} / ${escapeHtml(selection.zone?.name || selection.rack.zoneCode)}</dd><dt>셀 위치</dt><dd>${selection.rackRow}랙열 · ${selection.bay}베이 · ${selection.level}단 · 깊이 ${selection.depth}</dd><dt>수량</dt><dd>${quantity} / ${capacity || '미설정'}</dd><dt>적재율</dt><dd>${rate === null ? '용량 미설정' : `${rate}%`}</dd><dt>재고 상태</dt><dd>${escapeHtml(statusText)}</dd></dl>`;
             } else {
-                shell.inspector.innerHTML = `<h5>${escapeHtml(selection.rack.code)}</h5><dl><dt>구역</dt><dd>${escapeHtml(selection.rack.zoneCode)} · ${escapeHtml(selection.zone?.name || '')}</dd><dt>랙타입</dt><dd>${escapeHtml(selection.type.name)}</dd><dt>배치 기준</dt><dd>${selection.rack.layoutSource === 'floorPlan' ? '평면도' : '랙배치'}</dd><dt>베이</dt><dd>${selection.rack.bayCount}개</dd><dt>단수·깊이</dt><dd>${selection.type.levels}단 · 깊이 ${Math.max(1, Number(selection.type.depthCount) || 1)}</dd><dt>규격</dt><dd>${(selection.type.bayWidth * selection.rack.bayCount / 1000).toFixed(1)}m × ${(selection.type.depth / 1000).toFixed(1)}m × ${(selection.type.height / 1000).toFixed(1)}m</dd><dt>등록 재고</dt><dd>${(inventoryByRack.get(selection.rack.code) || []).length}개 로케이션</dd></dl>`;
+                const plan = selection.rack.floorPlan;
+                const planInfo = plan
+                    ? `<dt>평면도 범위</dt><dd>${plan.columns}칸 × ${plan.rows}칸 (${(plan.planLength / 1000).toFixed(2)}m × ${(plan.planWidth / 1000).toFixed(2)}m)</dd><dt>여유 공간</dt><dd>길이 ${(plan.remainingLength / 1000).toFixed(2)}m · 폭 ${(plan.remainingWidth / 1000).toFixed(2)}m</dd>`
+                    : '';
+                shell.inspector.innerHTML = `<h5>${escapeHtml(selection.rack.code)}</h5><dl><dt>구역</dt><dd>${escapeHtml(selection.rack.zoneCode)} · ${escapeHtml(selection.zone?.name || '')}</dd><dt>랙타입</dt><dd>${escapeHtml(selection.type.name)}</dd><dt>배치 기준</dt><dd>${selection.rack.layoutSource === 'floorPlan' ? '평면도' : '랙배치'}</dd><dt>구성</dt><dd>${selection.rack.rackRowCount}랙열 · ${selection.rack.bayCount}베이</dd><dt>단수·깊이</dt><dd>${selection.type.levels}단 · 깊이 ${Math.max(1, Number(selection.type.depthCount) || 1)}</dd><dt>실제 규격</dt><dd>${(selection.type.bayWidth * selection.rack.bayCount / 1000).toFixed(2)}m × ${(selection.type.depth * selection.rack.rackRowCount / 1000).toFixed(2)}m × ${(selection.type.height / 1000).toFixed(2)}m</dd>${planInfo}<dt>등록 재고</dt><dd>${(inventoryByRack.get(selection.rack.code) || []).length}개 로케이션</dd></dl>`;
             }
         };
         renderer.domElement.addEventListener('pointermove', (event) => {
@@ -1269,19 +1724,21 @@
             if (labelRack) {
                 setSelectedSlot(null);
                 setSelectedRack(labelRack);
+                setFocusedRack(labelRack);
+                focusRackInCurrentView(labelRack);
                 showSelection(labelRack);
                 return;
             }
             const slot = getSlotAtPointer(event);
-            if (slot) { setSelectedSlot(slot); setSelectedRack(null); showSelection(slot); return; }
+            if (slot) { setSelectedSlot(slot); setSelectedRack(null); setFocusedRack(null); showSelection(slot); return; }
             const rect = renderer.domElement.getBoundingClientRect();
             pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
             pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
             raycaster.setFromCamera(pointer, camera);
             const hits = raycaster.intersectObjects(clickTargets, false).filter((hit) => isRaycastTargetVisible(hit.object));
             const hit = hits[0];
-            if (hit?.object.userData?.kind) { setSelectedSlot(null); setSelectedRack(hit.object.userData); showSelection(hit.object.userData); }
-            else { setSelectedSlot(null); setSelectedRack(null); showDefaultInspector(); }
+            if (hit?.object.userData?.kind) { setSelectedSlot(null); setFocusedRack(null); setSelectedRack(hit.object.userData); showSelection(hit.object.userData); }
+            else { setSelectedSlot(null); setSelectedRack(null); setFocusedRack(null); showDefaultInspector(); }
         }, { signal });
 
         const applyFilters = () => {
@@ -1299,6 +1756,12 @@
                     visibleOccupiedSlots += entry.slots.filter((slot) => slot.occupied).length;
                 }
             });
+            const focusedEntry = focusedRack && rackEntries.find((entry) => entry.rack === focusedRack.rack);
+            if (focusedRack && !focusedEntry?.group.visible) {
+                setSelectedRack(null);
+                setFocusedRack(null);
+                showDefaultInspector();
+            }
             shell.count.textContent = `랙 ${visibleCount} / ${rackEntries.length} · 적재 셀 ${visibleOccupiedSlots} / ${visibleSlots}`;
             requestRender();
         };
@@ -1315,12 +1778,13 @@
             outlineGeometryCache.forEach((geometry) => geometry.dispose());
             outlineTubeGeometryCache.forEach((geometry) => geometry.dispose());
             materialCache.forEach((material) => material.dispose());
+            dimmedMaterialCache.forEach((material) => material.dispose());
             rackHoverMaterial.dispose();
             rackSelectedMaterial.dispose();
             hoverOutline.userData.material.dispose();
             selectedOutline.userData.material.dispose();
-            hoverTexture.dispose();
-            hoverLabel.material.dispose();
+            passageBoundaryGeometry?.dispose();
+            passageBoundaryMaterial?.dispose();
             scene.traverse((object) => {
                 if (object.material?.map) object.material.map.dispose();
                 if (object.type === 'Sprite' && object.material) object.material.dispose();
@@ -1370,16 +1834,9 @@
             const source = options.dataSource || 'data/warehouse-demo.json';
             const THREE = await loadThree();
             let data;
-            let sheetError;
             if (options.googleSheet?.documentId) {
-                try {
-                    data = await loadGoogleSheetData(options.googleSheet, abortController.signal);
-                } catch (error) {
-                    if (error?.name === 'AbortError') throw error;
-                    sheetError = error;
-                }
-            }
-            if (!data) {
+                data = await loadGoogleSheetData(options.googleSheet, abortController.signal);
+            } else {
                 const response = await fetch(source, { cache: 'no-store', signal: abortController.signal });
                 if (!response.ok) throw new Error(`기준정보 파일을 불러오지 못했습니다. (${response.status})`);
                 data = await response.json();
@@ -1390,16 +1847,16 @@
                 return controller;
             }
             if (abortController.signal.aborted || !container.isConnected) return controller;
-            if (sheetError) {
-                shell.sourceStatus.classList.add('is-warning');
-                shell.sourceStatus.textContent = `Google Sheets 연결 실패 · 임시 데이터 표시 중 — ${sheetError.message}`;
-            } else if (options.googleSheet?.documentId) {
+            if (options.googleSheet?.documentId) {
                 const loadedAt = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 shell.sourceStatus.classList.add('is-connected');
                 const unmappedCount = data.meta?.unmappedFloorRackCodes?.length || 0;
                 const unplacedCount = data.meta?.unplacedRackCodes?.length || 0;
                 if (unmappedCount) shell.sourceStatus.classList.add('is-warning');
-                shell.sourceStatus.textContent = `Google Sheets 연결됨 · ${loadedAt} · 평면도 배치 ${data.meta?.floorPlanAppliedCount || 0}개 · 재고 ${data.inventory.length}건${unplacedCount ? ` · 미배치 ${unplacedCount}개` : ''}${unmappedCount ? ` · 미등록 랙코드 ${unmappedCount}개` : ''}`;
+                const layoutErrorCount = data.meta?.layoutErrors?.length || 0;
+                const outOfRangeCount = data.meta?.outOfRangeLocationCodes?.length || 0;
+                if (layoutErrorCount || outOfRangeCount) shell.sourceStatus.classList.add('is-warning');
+                shell.sourceStatus.textContent = `Google Sheets 연결됨 · ${loadedAt} · 평면도 배치 ${data.meta?.floorPlanAppliedCount || 0}개 · 재고 ${data.inventory.length}건${unplacedCount ? ` · 미배치 ${unplacedCount}개` : ''}${unmappedCount ? ` · 미등록 랙코드 ${unmappedCount}개` : ''}${layoutErrorCount ? ` · 배치 오류 ${layoutErrorCount}개` : ''}${outOfRangeCount ? ` · 범위초과 위치 ${outOfRangeCount}개` : ''}`;
             } else shell.sourceStatus.textContent = '내장 임시 기준정보를 표시하고 있습니다.';
             disposeScene = startWarehouseScene(THREE, shell, data, abortController.signal);
         } catch (error) {
@@ -1417,7 +1874,11 @@
         disposeWithin,
         validateWarehouseData,
         parseCsv,
+        getFloorPlanAxisRange,
         convertGoogleSheetCsv,
+        calculateZoneFloorBounds,
+        buildPassageBoundarySegments,
+        calculateRackFocusView,
         getSlotVisualKey,
         getGoogleSheetQueryUrl,
         googleTableToCsv

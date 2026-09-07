@@ -47,26 +47,35 @@ assert.strictEqual(menu.id, 'custom-1788157191456', 'The 3D 테스트 menu id ch
 const rows = published.storage.customCards[menu.id];
 const cards = rows.flatMap((row) => row.cards || []);
 assert.strictEqual(cards[0].title, '3D 창고 레이아웃', 'The first card must be the 3D warehouse card.');
-assert.strictEqual(cards[0].editLocked, true, 'The 3D warehouse card must be read-only.');
+assert.strictEqual(cards[0].editLocked, true, 'The 3D warehouse block must retain its system read-only metadata.');
+assert.strictEqual(cards[0].lockSource, 'system', 'The 3D warehouse card must not be mistaken for a manual whole-card lock.');
 assert.strictEqual(cards[0].contentBlocks[0].type, 'warehouse3d', 'The first card must use the warehouse3d block.');
+assert.strictEqual(cards.length, 1, 'The 3D test menu must use the confirmed single-card structure.');
 assert.strictEqual(cards[0].contentBlocks[0].dataSource, 'data/warehouse-demo.json', 'The first card 3D warehouse data source changed unexpectedly.');
-assert.strictEqual(cards[1].title, '기준 정보', 'The second Google Sheets card must remain unchanged.');
-assert.strictEqual(cards[1].contentBlocks[0].type, 'googleDrive', 'The second card must remain a Google Drive card.');
+assert.strictEqual(cards[0].contentBlocks[1].type, 'googleDrive', 'The Google Sheets block must remain inside the 3D warehouse card.');
 const warehouseBlock = cards[0].contentBlocks[0];
-assert.strictEqual(warehouseBlock.googleSheet.documentId, cards[1].contentBlocks[0].documentId, 'The 3D card must use the Google Sheets document.');
+const gicsDocumentId = '12G9JIftGIVStzWUxIVZrz0JZsJ858Mc90V7-fnfBiHM';
+assert.strictEqual(warehouseBlock.googleSheet.documentId, gicsDocumentId, 'The 3D card must use WMS_기준정보_템플릿_GICS.');
+assert.strictEqual(warehouseBlock.googleSheet.floorPlanCellSizeMeters, 0.5, 'The GICS floor-plan cell size must be 0.5m.');
+assert.strictEqual(warehouseBlock.googleSheet.documentId, cards[0].contentBlocks[1].documentId, 'Both blocks in the 3D card must use the same Google Sheets document.');
+assert.ok(cards[0].contentBlocks[1].url.startsWith(`https://docs.google.com/spreadsheets/d/${gicsDocumentId}/edit`), 'The Google Sheets block must open the GICS sheet.');
 assert.deepStrictEqual(
     Object.values(warehouseBlock.googleSheet.sheets).sort(),
     ['평면도', '구역설정', '랙타입 마스터', '랙배치', '로케이션 마스터', '품목 마스터', '재고 현황'].sort(),
     'The required Google Sheets tabs changed unexpectedly.'
 );
 
-const patch = patches.patches.find((candidate) => candidate.id === 'three-test-warehouse-floor-plan-v3');
+const patch = patches.patches.find((candidate) => candidate.id === 'three-test-warehouse-floor-plan-v5');
 assert.ok(patch, 'The browser card patch is missing.');
 assert.strictEqual(patch.menuId, menu.id, 'The browser card patch targets the wrong menu.');
-assert.strictEqual(patch.readingIndex, 1, 'The browser card patch must target the second card.');
+assert.strictEqual(patch.readingIndex, 0, 'The browser card patch must target the first and only card.');
 assert.strictEqual(patch.card.contentBlocks[0].googleSheet.documentId, warehouseBlock.googleSheet.documentId, 'The browser patch Google Sheets document changed unexpectedly.');
+assert.strictEqual(patch.card.contentBlocks[1].documentId, warehouseBlock.googleSheet.documentId, 'The browser patch must retain the Google Sheets block inside the 3D card.');
+assert.ok(patch.cleanupGeneratedCards.some((card) => card.title === '기준 정보'), 'The browser patch must remove the obsolete separate reference card.');
 assert.ok(contentModel.includes("type: 'warehouse3d'"), 'The shared card model must register the warehouse3d block.');
 assert.ok(cardRenderer.includes("block.type === 'warehouse3d'"), 'The shared renderer must render the warehouse3d block.');
+assert.ok(cardRenderer.includes("if (block.type === 'warehouse3d') return '3D 창고 화면';"), 'The card editor must identify the 3D warehouse block as read-only content.');
+assert.ok(cardRenderer.includes('blocks.push(copyPlainValue(readOnlyState.block));'), 'Saving card metadata must preserve the 3D warehouse block unchanged.');
 assert.ok(cardRenderer.includes('disposeWithin'), '3D resources must be disposed before card rerendering.');
 assert.ok(warehouseRenderer.includes('three@0.185.1'), 'Three.js must use the reviewed pinned version.');
 assert.ok(warehouseRenderer.includes('validateWarehouseData'), 'Warehouse data validation must run before rendering.');
@@ -74,14 +83,25 @@ assert.ok(!warehouseRenderer.includes('new THREE.Fog'), 'The warehouse scene mus
 assert.ok(warehouseRenderer.includes("const fillLight = new THREE.DirectionalLight('#dbeafe', 1.35)"), 'The warehouse scene must use one reflected-light fill.');
 assert.ok(warehouseRenderer.includes('fillLight.castShadow = false'), 'The fill light must not add shadow rendering cost.');
 assert.ok(warehouseRenderer.includes('/gviz/tq?tqx=responseHandler:'), 'The warehouse loader must use the Google Sheets callback endpoint.');
-assert.ok(warehouseRenderer.includes("range: 'A4:K'"), 'The rack sheet must start from the row 4 header.');
-assert.ok(warehouseRenderer.includes("range: 'A4:AZ60'"), 'The floor plan grid range must be loaded.');
+assert.ok(warehouseRenderer.includes("range: 'A4:I'"), 'The rack sheet must load the GICS row 4 header and all nine columns.');
+assert.ok(warehouseRenderer.includes('rackRowCount'), 'Floor-plan width must calculate the number of physical rack rows.');
+assert.ok(warehouseRenderer.includes('outOfRangeLocationCodes'), 'Locations outside the calculated rack range must be reported.');
+assert.ok(warehouseRenderer.includes("xAxisRange: 'A3:3'"), 'The floor plan loader must discover the final X coordinate from row 3.');
+assert.ok(warehouseRenderer.includes("yAxisRange: 'A3:A'"), 'The floor plan loader must discover the final Y coordinate from column A.');
+assert.ok(warehouseRenderer.includes('floorPlanAxis.range'), 'The floor plan loader must fetch the dynamically calculated grid range.');
+assert.ok(!warehouseRenderer.includes('passageTiles'), 'T cells must not render as filled passage tiles.');
+assert.ok(warehouseRenderer.includes('const passageBoundaryWidthMm = 100;'), 'Passage boundaries must be exactly 10cm wide.');
+assert.ok(warehouseRenderer.includes('buildPassageBoundarySegments'), 'Passage boundaries must be derived from exposed T-cell edges.');
+assert.ok(warehouseRenderer.includes("passageBoundaryMaterial = new THREE.MeshBasicMaterial({ color: '#facc15' });"), 'Only the passage boundary must retain the yellow marking.');
+assert.ok(!warehouseRenderer.includes('zoneBoundaryEntries'), 'Zone-code boundary rendering must be removed.');
+assert.ok(!warehouseRenderer.includes('zoneBoundaryMaterial'), 'Zone-code boundary material must be removed.');
+assert.ok(!warehouseRenderer.includes('임시 데이터 표시 중'), 'A GICS connection failure must not silently render stale demo data.');
 assert.ok(warehouseRenderer.includes("script.referrerPolicy = 'no-referrer'"), 'The public sheet callback must not send the local page as referrer.');
 assert.ok(warehouseRenderer.includes("mode: event.button === 2 ? 'rotate' : 'pan'"), 'Right drag must rotate and left drag must pan.');
 assert.ok(warehouseRenderer.includes("addEventListener('contextmenu'"), 'The 3D canvas must suppress the right-click menu.');
 assert.ok(warehouseRenderer.includes('container.requestFullscreen'), 'The warehouse card must support entering fullscreen.');
 assert.ok(warehouseRenderer.includes('document.exitFullscreen'), 'The warehouse card must support leaving fullscreen.');
-assert.ok(cardRenderer.includes('warehouse-footer-source-status-v16'), 'The shared renderer must load the footer source status layout.');
+assert.ok(cardRenderer.includes('warehouse-floor-plan-axis-v17'), 'The shared renderer must reload the corrected dynamic floor-plan loader.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-shell:fullscreen'), 'Fullscreen warehouse layout styles are missing.');
 assert.ok(warehouseStyles.includes('height: 540px; min-height: 540px;'), 'The regular warehouse viewport must keep a stable height.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-shell:fullscreen .warehouse-3d-main { flex: 1; height: auto; min-height: 0; }'), 'Fullscreen must override the regular warehouse height.');
@@ -89,7 +109,21 @@ assert.ok(warehouseStyles.includes('cursor: default'), 'The 3D canvas must use t
 assert.ok(warehouseRenderer.includes('if (!viewportWidth || !viewportHeight) return;'), 'A hidden warehouse viewport must not trigger a resize.');
 assert.ok(!warehouseRenderer.includes('warehouse-3d-reset'), 'The screen reset button must be removed.');
 assert.strictEqual((warehouseRenderer.match(/data-warehouse-camera-view=/g) || []).length, 4, 'The viewport must provide exactly four camera view buttons.');
-assert.ok(warehouseRenderer.includes('role="group" aria-label="카메라 구도"'), 'The camera view buttons must be grouped accessibly.');
+assert.ok(warehouseRenderer.includes('role="group" aria-label="카메라 투영 및 구도"'), 'Projection and camera view buttons must share one accessible group.');
+assert.strictEqual((warehouseRenderer.match(/data-warehouse-projection-toggle/g) || []).length, 2, 'The camera group and shell reference must use one projection toggle.');
+assert.ok(!warehouseRenderer.includes('data-warehouse-projection="'), 'Separate projection buttons must be removed.');
+assert.ok(warehouseRenderer.includes('data-projection="perspective" aria-label="현재 Perspective. Orthographic으로 전환" aria-pressed="false"'), 'Perspective must be the default toggle state.');
+assert.ok(warehouseRenderer.includes('warehouse-3d-projection-letter-p'), 'The projection toggle must show a P initial.');
+assert.ok(warehouseRenderer.includes('warehouse-3d-projection-letter-o'), 'The projection toggle must show an O initial.');
+assert.ok(!warehouseRenderer.includes('data-warehouse-projection-label'), 'Projection buttons must not display text labels.');
+assert.ok(warehouseRenderer.includes('new THREE.OrthographicCamera'), 'The 3D viewport must create an orthographic camera.');
+assert.ok(warehouseRenderer.includes('let camera = perspectiveCamera;'), 'The active camera must default to the perspective camera.');
+assert.ok(warehouseRenderer.includes('const getPerspectiveViewHeight'), 'Projection switching must calculate an equivalent visible height.');
+assert.ok(warehouseRenderer.includes('const applyProjectionMode = (nextMode) =>'), 'The projection toggle must switch its camera mode.');
+assert.ok(warehouseRenderer.includes("if (projectionMode === 'orthographic')"), 'Orthographic wheel zoom must use its own visible-height control.');
+assert.ok(warehouseRenderer.includes('orthographicCamera.left = -halfWidth;'), 'Viewport resizing must update orthographic bounds.');
+assert.ok(warehouseRenderer.includes("shell.projectionToggle.setAttribute('aria-pressed', String(isOrthographic))"), 'The projection toggle must announce the selected state.');
+assert.ok(warehouseRenderer.includes("applyProjectionMode(projectionMode === 'perspective' ? 'orthographic' : 'perspective')"), 'One projection toggle must switch between Perspective and Orthographic.');
 assert.ok(warehouseRenderer.includes('data-warehouse-camera-view="quarter"'), 'The 30-degree quarter view button is missing.');
 assert.ok(warehouseRenderer.includes('data-warehouse-camera-view="top"'), 'The centered top view button is missing.');
 assert.ok(warehouseRenderer.includes('data-warehouse-camera-view="front"'), 'The front view button is missing.');
@@ -101,10 +135,14 @@ assert.ok(warehouseRenderer.includes('quarter: { yaw: Math.PI / 4, pitch: Math.P
 assert.ok(warehouseRenderer.includes('top: { yaw: 0, pitch: Math.PI / 2 - 0.01'), 'Top view must look down from the warehouse center.');
 assert.ok(warehouseRenderer.includes('front: { yaw: 0, pitch: 0.08'), 'Front view must use the front camera direction.');
 assert.ok(warehouseRenderer.includes('side: { yaw: Math.PI / 2, pitch: 0.08'), 'Side view must use the side camera direction.');
+assert.ok(!warehouseRenderer.includes("setActiveCameraView('')"), 'The selected camera view must remain active during canvas interaction and zoom.');
 assert.ok(warehouseRenderer.includes('data-warehouse-grid-toggle'), 'The camera view group must include a Grid toggle button.');
 assert.ok(warehouseRenderer.includes('grid.visible = Boolean(isVisible)'), 'The Grid toggle must control Grid visibility.');
 assert.ok(warehouseRenderer.includes("aria-label', grid.visible ? 'Grid 숨기기' : 'Grid 표시'"), 'The Grid toggle must announce its current action.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-camera-views'), 'The camera buttons must be positioned as one viewport overlay group.');
+assert.ok(!warehouseStyles.includes('.warehouse-3d-camera-controls'), 'The projection buttons must not be separated from the camera view group.');
+assert.ok(warehouseStyles.includes('.warehouse-3d-projection-toggle[data-projection="orthographic"]'), 'The P/O icon colors must invert in Orthographic mode.');
+assert.ok(warehouseStyles.includes('width: 36px; height: 36px;'), 'Projection icons must inherit the same desktop button size as the view buttons.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-camera-views button[aria-pressed="true"]'), 'The selected camera view must have an active visual state.');
 assert.ok(
     warehouseRenderer.indexOf('<span class="warehouse-3d-source-status"') > warehouseRenderer.indexOf('<div class="warehouse-3d-legend"'),
@@ -133,7 +171,10 @@ assert.ok(warehouseRenderer.includes("color: '#17603f'"), 'The warehouse floor m
 assert.ok(/color: '#17603f',\r?\n\s+roughness: 0\.08,\r?\n\s+metalness: 0\.04,\r?\n\s+clearcoat: 1,\r?\n\s+clearcoatRoughness: 0\.025,\r?\n\s+envMapIntensity: 2\.4/.test(warehouseRenderer), 'The warehouse floor must use wet-gloss coating values.');
 assert.ok(warehouseRenderer.includes('new THREE.PMREMGenerator(renderer)'), 'The wet floor must receive a prefiltered reflection environment.');
 assert.ok(warehouseRenderer.includes('scene.environment = floorReflectionEnvironment'), 'The wet floor reflection environment must be applied to the scene.');
-assert.ok(warehouseRenderer.includes("'#78a98b', '#2f7454'"), 'The floor grid must use coordinated green colors.');
+assert.ok(warehouseRenderer.includes("color: '#78a98b'"), 'The 0.5m floor grid must use the coordinated green line color.');
+assert.ok(warehouseRenderer.includes("color: '#2f7454'"), 'The rectangular warehouse boundary must use the coordinated green color.');
+assert.ok(warehouseRenderer.includes('x += passageCellSize'), 'Floor grid columns must follow the 0.5m GICS cell size.');
+assert.ok(warehouseRenderer.includes('z += passageCellSize'), 'Floor grid rows must follow the 0.5m GICS cell size.');
 assert.ok(warehouseRenderer.includes('clearcoat: 0.62'), 'Rack frames must use a reflective steel coating.');
 assert.ok(warehouseRenderer.includes('clearcoat: 0.9'), 'Empty slot boxes must use a strong reflective coating.');
 assert.ok(warehouseRenderer.includes('clearcoat: 1'), 'Occupied slot boxes must use the strongest reflective coating.');
@@ -145,20 +186,27 @@ assert.ok(warehouseRenderer.includes('clickTargets.push(label)'), 'Floating rack
 assert.ok(warehouseRenderer.includes('createRackOutline'), 'Rack-level hover and selected outlines must be created.');
 assert.ok(warehouseRenderer.includes('setHoveredRack(slot ? null : getRackAtPointer(event))'), 'Rack body and billboards must show a hover outline when no slot is hovered.');
 assert.ok(warehouseRenderer.includes('setSelectedRack(hit.object.userData)'), 'Selecting a rack must show its persistent outline.');
-assert.ok(warehouseRenderer.includes('setSelectedRack(null); showSelection(slot);'), 'Selecting a slot must clear any rack-level selection outline.');
+assert.ok(warehouseRenderer.includes('setSelectedRack(null); setFocusedRack(null); showSelection(slot);'), 'Selecting a slot must clear rack selection and restore every rack opacity.');
 assert.ok(warehouseRenderer.includes('const worldUiResolutionScale = 2'), 'World-space UI must render at a 2x internal resolution.');
 assert.ok(warehouseRenderer.includes('canvas.width = 256 * worldUiResolutionScale'), 'Rack billboards must use the 2x resolution scale.');
-assert.ok(warehouseRenderer.includes('hoverCanvas.width = 520 * worldUiResolutionScale'), 'Slot hover labels must use the 2x resolution scale.');
+assert.ok(warehouseRenderer.includes('warehouse-3d-slot-tooltip'), 'Slot hover information must have a dedicated screen-space UI container.');
 
 assert.ok(warehouseRenderer.includes('const labelTargets = []'), 'Rack billboards must have a separate priority hit-target list.');
 assert.ok(warehouseRenderer.includes('labelTargets.push(label)'), 'Each rack billboard must be registered in the priority hit-target list.');
 assert.ok(/if \(labelRack\) \{\s*setHoveredSlot\(null\);\s*setHoveredRack\(labelRack\);\s*return;\s*\}\s*const slot = getSlotAtPointer\(event\);/.test(warehouseRenderer), 'Billboard hover must run before slot hover detection.');
-assert.ok(/if \(labelRack\) \{\s*setSelectedSlot\(null\);\s*setSelectedRack\(labelRack\);\s*showSelection\(labelRack\);\s*return;\s*\}\s*const slot = getSlotAtPointer\(event\);/.test(warehouseRenderer), 'Billboard selection must run before slot selection.');
+assert.ok(/if \(labelRack\) \{\s*setSelectedSlot\(null\);\s*setSelectedRack\(labelRack\);\s*setFocusedRack\(labelRack\);\s*focusRackInCurrentView\(labelRack\);\s*showSelection\(labelRack\);\s*return;\s*\}\s*const slot = getSlotAtPointer\(event\);/.test(warehouseRenderer), 'Billboard selection must isolate and fit the rack before slot selection.');
 assert.ok(warehouseRenderer.includes("normal: { fill: 'rgba(5, 15, 30, 0.92)'"), 'Rack billboards must have a normal visual state.');
-assert.ok(warehouseRenderer.includes("hover: { fill: 'rgba(35, 34, 13, 0.96)'"), 'Rack billboards must have a hover visual state.');
-assert.ok(warehouseRenderer.includes("selected: { fill: '#FFFF2D'"), 'Rack billboards must have a selected visual state.');
+assert.ok(warehouseRenderer.includes("hover: { fill: 'rgba(15, 52, 96, 0.96)'"), 'Rack billboard hover must use a lighter blue based on the normal state.');
+assert.ok(warehouseRenderer.includes("selected: { fill: '#2563EB'"), 'Rack billboard selected state must use a stronger blue based on the normal state.');
 assert.ok(warehouseRenderer.includes("sprite.setInteractionState = (state = 'normal') =>"), 'Rack billboards must expose an animated interaction-state renderer.');
 assert.ok(warehouseRenderer.includes("setRackLabelState(selectedRack, 'selected')"), 'Rack selection must update the billboard selected state.');
+assert.ok(warehouseRenderer.includes('dimmedMaterial.opacity = 0.1'), 'Non-selected racks must use exactly 10% opacity.');
+assert.ok(warehouseRenderer.includes('dimmedMaterial.depthWrite = false'), 'Dimmed racks must not obstruct the selected rack through depth writes.');
+assert.ok(warehouseRenderer.includes('originalMaterialsByObject'), 'Rack focus must preserve shared original materials for restoration.');
+assert.ok(warehouseRenderer.includes('setFocusedRack(labelRack)'), 'Selecting a rack billboard must isolate the selected rack.');
+assert.ok(warehouseRenderer.includes('focusRackInCurrentView(labelRack)'), 'Selecting a rack billboard must fit it in the current camera view.');
+assert.ok(warehouseRenderer.includes('setFocusedRack(null); showSelection(slot)'), 'Selecting a slot must restore all rack opacity.');
+assert.ok(warehouseRenderer.includes('if (focusedRack && !focusedEntry?.group.visible)'), 'Filtering out the focused rack must clear rack isolation.');
 assert.ok(warehouseRenderer.includes('new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false })'), 'Rack billboard materials must not block foreground rendering.');
 assert.ok(warehouseRenderer.includes('sprite.renderOrder = 1000'), 'Rack billboards must use a dedicated top rendering order.');
 assert.ok(warehouseRenderer.includes('renderer.sortObjects = true'), 'The renderer must preserve billboard and outline ordering.');
@@ -174,12 +222,13 @@ assert.ok(warehouseRenderer.includes('const isRaycastTargetVisible = (object)'),
 assert.ok(warehouseRenderer.includes('const activeWorldUiTransitions = new Set()'), 'World-space UI transitions must be tracked independently.');
 assert.ok(warehouseRenderer.includes('if (activeWorldUiTransitions.size) requestRender()'), 'Animation frames must stop when no world UI transition remains.');
 assert.ok(warehouseRenderer.includes('const fadeWorldObject ='), 'World-space UI outlines and labels must share the fade transition helper.');
-assert.ok(warehouseRenderer.includes('fadeWorldObject(hoverLabel, false, { duration: 120 })'), 'Slot hover labels must fade out smoothly.');
+assert.ok(warehouseRenderer.includes('const updateHoverTooltipPosition = ()'), 'Slot hover information must project its world anchor into the screen viewport.');
 assert.ok(warehouseRenderer.includes('fadeWorldObject(hoveredRack.outlines.hover, true, { reset: true })'), 'Rack hover outlines must fade in smoothly.');
 assert.ok(warehouseRenderer.includes('fadeWorldObject(selectedRack.outlines.selected, true, { duration: 180, reset: true })'), 'Rack selected outlines must fade in smoothly.');
-assert.ok(warehouseRenderer.includes('hoverLabelLayer.renderOrder = 1000'), 'Slot hover labels must use a top-level render group.');
-assert.ok(warehouseRenderer.includes('hoverLabelLayer.add(hoverLabel)'), 'The hover label must be attached to its top-level render group.');
-assert.ok(warehouseRenderer.includes('slot.group.add(hoverLabelLayer)'), 'The hover label render group must follow the hovered slot.');
+assert.ok(warehouseRenderer.includes('hoveredSlot.group.localToWorld(anchor)'), 'The tooltip anchor must follow the hovered slot in world space.');
+assert.ok(warehouseRenderer.includes('const projected = anchor.project(camera)'), 'The tooltip must convert world coordinates into screen coordinates.');
+assert.ok(warehouseRenderer.includes("tooltip.classList.toggle('is-offscreen', isOutsideViewport)"), 'The tooltip must hide when its slot is outside the camera view.');
+assert.ok(warehouseStyles.includes('.warehouse-3d-slot-tooltip'), 'The screen-space slot tooltip must have its own viewport style.');
 assert.ok(/drawLabel\('normal'\);\s*applyScale\(displayedScale\);/.test(warehouseRenderer), 'Rack billboards must apply their normal scale before any interaction.');
 const sandbox = {
     window: { dispatchEvent() {} },
@@ -187,7 +236,45 @@ const sandbox = {
 };
 vm.runInNewContext(warehouseRenderer, sandbox);
 const converter = sandbox.window.wmsWarehouse3D.convertGoogleSheetCsv;
+const getFloorPlanAxisRange = sandbox.window.wmsWarehouse3D.getFloorPlanAxisRange;
+const calculateZoneFloorBounds = sandbox.window.wmsWarehouse3D.calculateZoneFloorBounds;
+const buildPassageBoundarySegments = sandbox.window.wmsWarehouse3D.buildPassageBoundarySegments;
+const calculateRackFocusView = sandbox.window.wmsWarehouse3D.calculateRackFocusView;
 const getSlotVisualKey = sandbox.window.wmsWarehouse3D.getSlotVisualKey;
+const floorPlanAxis = JSON.parse(JSON.stringify(getFloorPlanAxisRange(
+    ['Y\\X', ...Array.from({ length: 111 }, (_, index) => index + 1), '', '', ''].join(','),
+    ['Y\\X', ...Array.from({ length: 66 }, (_, index) => index + 1)].join('\n')
+)));
+assert.deepStrictEqual(floorPlanAxis, {
+    range: 'A3:DH69',
+    dataRange: 'B4:DH69',
+    xCount: 111,
+    yCount: 66
+}, 'The current DH3 and A69 axes must resolve to A3:DH69.');
+assert.throws(
+    () => getFloorPlanAxisRange('Y\\X,1,3', 'Y\\X\n1'),
+    /평면도 X축은 1부터 빈칸 없이 연속된 숫자여야 합니다/,
+    'A skipped axis coordinate must stop an ambiguous floor-plan load.'
+);
+const frontRackFocus = JSON.parse(JSON.stringify(calculateRackFocusView({
+    min: { x: 0, y: 0, z: 0 },
+    max: { x: 2, y: 6, z: 1 }
+}, { yaw: 0, pitch: 0, aspect: 1, verticalFovDegrees: 45, padding: 1.12 })));
+assert.deepStrictEqual(frontRackFocus.center, { x: 1, y: 3, z: 0.5 }, 'Rack focus must target the physical rack center.');
+assert.ok(Math.abs(frontRackFocus.perspectiveDistance - 8.6117575695736) < 0.000001, 'Perspective focus must fit the rack height with padding.');
+assert.ok(Math.abs(frontRackFocus.orthographicViewHeight - 6.72) < 0.000001, 'Orthographic focus must fit the rack height with padding.');
+const contiguousPassageBoundary = JSON.parse(JSON.stringify(buildPassageBoundarySegments([
+    { x: 0, y: 0 },
+    { x: 500, y: 0 }
+], 500, 100)));
+assert.deepStrictEqual(contiguousPassageBoundary, [
+    { side: 'top', x: 250, y: 50, width: 500, depth: 100 },
+    { side: 'bottom', x: 250, y: 450, width: 500, depth: 100 },
+    { side: 'left', x: 50, y: 250, width: 100, depth: 500 },
+    { side: 'top', x: 750, y: 50, width: 500, depth: 100 },
+    { side: 'bottom', x: 750, y: 450, width: 500, depth: 100 },
+    { side: 'right', x: 950, y: 250, width: 100, depth: 500 }
+], 'Adjacent T cells must share no internal boundary and every 10cm strip must stay inside the passage.');
 assert.strictEqual(getSlotVisualKey({ occupied: false }, 'utilization'), 'empty', 'An empty slot must use the translucent empty color.');
 assert.strictEqual(getSlotVisualKey({ occupied: true, stock: { quantity: 49, capacity: 100 } }, 'utilization'), 'low', 'Utilization below 50% must use the low color.');
 assert.strictEqual(getSlotVisualKey({ occupied: true, stock: { quantity: 50, capacity: 100 } }, 'utilization'), 'medium', 'Utilization from 50% must use the medium color.');
@@ -199,28 +286,64 @@ const tableCsv = sandbox.window.wmsWarehouse3D.googleTableToCsv({
     rows: [{ c: [{ v: 'W01' }, { v: '쉼표, 포함' }] }]
 });
 assert.strictEqual(tableCsv, '랙코드,설명\nW01,"쉼표, 포함"', 'Google callback tables must convert to valid CSV.');
+const axisCsvWithTrailingBlankColumns = sandbox.window.wmsWarehouse3D.googleTableToCsv({
+    cols: [{ id: 'A', label: 'Y\\X' }, { id: 'B', label: '1' }, { id: 'DI', label: '' }],
+    rows: []
+});
+assert.strictEqual(
+    axisCsvWithTrailingBlankColumns,
+    'Y\\X,1,',
+    'A blank axis header must not be replaced with its internal Google column id.'
+);
 const csv = (title, headers, values) => [title, '', '', headers.join(','), values.join(',')].join('\n');
 const converted = converter({
-    floorPlan: csv('평면도', ['Y\\X', '0', '1', '2', '3', '4', '5'], ['10', '', '', '', '', 'W01', 'W01']),
-    zones: csv('구역설정', ['구역코드', '구역명', '용도', '기본랙타입코드'], ['A01', '테스트 구역', '보관', 'TYPE-1']),
-    rackTypes: csv('랙타입 마스터', ['랙타입코드', '랙타입명', '베이폭(mm)', '깊이(mm)', '전체높이(mm)', '단수', '단당높이(mm)', '깊이수'], ['TYPE-1', '테스트 랙', '2700', '1100', '6000', '4', '1400', '2']),
-    racks: csv('랙배치', ['랙코드', '구역코드', '랙타입코드', '시작X(m)', '시작Y(m)', '방향', '베이수'], ['W01', 'A01', 'TYPE-1', '1', '2', '세로', '2'])
-        + '\nW02,A01,TYPE-1,8,12,가로,2',
-    locations: csv('로케이션 마스터', ['로케이션코드', '랙코드', '베이번호', '단번호', '최대수량'], ['A01-W01-01-01-01', 'W01', '1', '1', '12']),
-    items: csv('품목 마스터', ['품목코드', '품목명', '분류', '표시색상', '가로(mm)', '세로(mm)', '높이(mm)'], ['P-1', '테스트 품목', '완제품', '#E74C3C', '1000', '800', '700']),
-    inventory: csv('재고 현황', ['로케이션코드', '품목코드', '재고수량', '최대수량', '재고상태'], ['A01-W01-01-01-01', 'P-1', '8', '12', '주의'])
-}, { documentId: warehouseBlock.googleSheet.documentId });
+    floorPlan: [
+        '평면도', '', 'Y\\X,1,2,3,4,5,6',
+        '1,T,F,F,F,F,F',
+        '2,F,W01,W01,W01,W01,W01',
+        '3,F,W01,W01,W01,W01,W01',
+        '4,F,W01,W01,W01,W01,W01'
+    ].join('\n'),
+    zones: csv('구역설정', ['구역코드', '구역명', '용도', '기본랙타입코드'], ['A01', '테스트 구역', '완제품 보관', 'TYPE-1']),
+    rackTypes: csv('랙타입 마스터', ['랙타입코드', '랙타입명', '베이폭(m)', '깊이(m)', '전체높이(m)', '단수', '단당높이(m)', '깊이수'], ['TYPE-1', '테스트 랙', '1.23', '1.23', '6.00', '4', '1.40', '2']),
+    racks: csv('랙배치', ['랙코드', '구역코드', '랙타입코드', '방향', '베이 수(가로 칸 수)', '랙 전체 길이(m)', '랙깊이(m)', '평면도 랙 전체 길이(m)', '평면도 랙 깊이(m)'], ['W01', 'A01', 'TYPE-1', '가로', '2', '2.46', '1.23', '2.5', '1.5'])
+        + '\nW02,A01,TYPE-1,가로,2,2.46,1.23,2.5,1.5',
+    locations: csv('로케이션 마스터', ['로케이션코드', '랙코드', '베이번호', '단번호', '깊이번호', '최대수량', '랙열번호'], ['A01-W01-01-01-01', 'W01', '1', '1', '1', '12', '1']),
+    items: csv('품목 마스터', ['품목코드', '품목명', '표시색상'], ['P-1', '테스트 품목', '#E74C3C']),
+    inventory: csv('재고 현황', ['로케이션코드', '품목코드', '재고수량', '재고상태'], ['A01-W01-01-01-01', 'P-1', '8', '주의'])
+}, {
+    documentId: warehouseBlock.googleSheet.documentId,
+    floorPlanCellSizeMeters: 0.5,
+    floorPlanAxis: { range: 'A3:G8', dataRange: 'B4:G8', xCount: 6, yCount: 5 }
+});
 assert.strictEqual(sandbox.window.wmsWarehouse3D.validateWarehouseData(converted).length, 0, 'Converted Google Sheets data must pass warehouse validation.');
-assert.strictEqual(converted.racks[0].startX, 4000, 'The floor plan X coordinate must override the rack placement coordinate.');
-assert.strictEqual(converted.racks[0].startY, 10000, 'The floor plan Y coordinate must override the rack placement coordinate.');
+assert.strictEqual(converted.rackTypes[0].bayWidth, 1230, 'Meter-based rack widths must be converted to internal millimeters.');
+assert.strictEqual(converted.inventory[0].capacity, 12, 'Inventory capacity must be read from the location master.');
+assert.strictEqual(converted.racks[0].startX, 520, 'The 0.5m floor-plan X coordinate and rounding gap must center the rack.');
+assert.strictEqual(converted.racks[0].startY, 635, 'The 0.5m floor-plan Y coordinate and rounding gap must center the rack.');
 assert.strictEqual(converted.racks[0].direction, 'horizontal', 'The floor plan cell shape must override the rack placement direction.');
 assert.strictEqual(converted.racks[0].layoutSource, 'floorPlan', 'The rack must report the floor plan as its placement source.');
+assert.strictEqual(converted.racks[0].bayCount, 2, 'The floor-plan length must calculate the number of full standard bays.');
+assert.strictEqual(converted.racks[0].rackRowCount, 1, 'The GICS rack depth must produce one physical rack row.');
+assert.strictEqual(converted.racks[0].floorPlan.remainingLength, 40, 'The 0.5m ceiling gap along the rack length must remain measurable.');
+assert.strictEqual(converted.racks[0].floorPlan.remainingWidth, 270, 'The 0.5m ceiling gap along the rack depth must remain measurable.');
 assert.strictEqual(converted.meta.floorPlanAppliedCount, 1, 'The applied floor plan rack count must be reported.');
+assert.strictEqual(converted.meta.floorPlanCellSize, 500, 'The internal floor-plan cell size must be 500mm.');
+assert.strictEqual(converted.meta.floorPlanRange, 'A3:G8', 'The resolved floor-plan source range must remain inspectable.');
+assert.strictEqual(converted.meta.floorWidth, 3000, 'Six populated floor-plan columns must create a 3m floor.');
+assert.strictEqual(converted.meta.floorDepth, 2500, 'The five-row Y axis must create a 2.5m floor even when its final row is blank.');
+assert.strictEqual(converted.meta.warehouseCellCount, 24, 'Every populated F, T, and rack cell must count as warehouse area.');
+assert.strictEqual(converted.meta.warehouseGapCount, 6, 'Blank cells inside the recognized axis range must remain valid unassigned floor cells.');
+assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.passageCells)), [{ x: 0, y: 0 }], 'T must be stored as a passage coordinate, not a rack.');
+assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.unmappedFloorRackCodes)), [], 'F and T must not be reported as unknown rack codes.');
 assert.strictEqual(converted.racks.length, 1, 'A rack removed from the floor plan must not be rendered.');
 assert.strictEqual(converted.meta.unplacedRackCodes[0], 'W02', 'A rack missing from the floor plan must be reported as unplaced.');
 assert.strictEqual(converted.locations.length, 1, 'Converted location master rows must remain available for empty slot rendering.');
 assert.strictEqual(converted.locations[0].depth, 1, 'A location without an explicit depth must default to depth 1.');
+assert.strictEqual(converted.locations[0].rackRow, 1, 'A location without a row value must use the first rack row.');
 assert.strictEqual(converted.rackTypes[0].depthCount, 2, 'The rack depth count must be preserved for front/back slot boxes.');
 assert.strictEqual(converted.inventory[0].status, 'warning', 'Korean inventory status must map to the 3D status.');
+const zoneBounds = calculateZoneFloorBounds(converted.racks, converted.rackTypes, 500, 100);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(zoneBounds)), [{ zoneCode: 'A01', minX: -30, maxX: 3530, minY: 85, maxY: 2415 }], 'A 10cm zone boundary must preserve a 50cm clear gap from the centered rack.');
 
 console.log('Warehouse 3D data and card checks passed.');

@@ -174,7 +174,15 @@
     border-color: #fdba74;
 }
 
+.test-created-card.test-card-has-readonly-content {
+    border-color: #93c5fd;
+}
+
 body[data-role="viewer"] .test-created-card.test-card-is-locked {
+    border-color: rgba(195, 198, 215, 0.4);
+}
+
+body[data-role="viewer"] .test-created-card.test-card-has-readonly-content {
     border-color: rgba(195, 198, 215, 0.4);
 }
 
@@ -606,6 +614,39 @@ body[data-role="editor"] .test-card-image-resize-enabled:focus-within .test-imag
     color: #334155;
     font-size: 12px;
     cursor: pointer;
+}
+
+.test-edit-readonly-block {
+    display: grid;
+    gap: 0.65rem;
+    padding: 0.85rem;
+    border: 1px solid #93c5fd;
+    border-radius: 0.5rem;
+    background: #eff6ff;
+}
+
+.test-edit-readonly-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: #1e3a8a;
+    font-size: 13px;
+}
+
+.test-edit-readonly-badge {
+    padding: 0.15rem 0.4rem;
+    border-radius: 999px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.test-edit-readonly-block p {
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.5;
 }
 
 .test-edit-image-block {
@@ -1701,6 +1742,16 @@ body[data-role="editor"] .test-card-image-resize-enabled:focus-within .test-imag
 .warehouse-3d-main { display: grid; grid-template-columns: minmax(0, 1fr) 230px; height: 540px; min-height: 540px; }
 .warehouse-3d-viewport { position: relative; min-width: 0; height: 100%; min-height: 0; background: #07111f; }
 .warehouse-3d-viewport canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: default; }
+.warehouse-3d-slot-tooltip {
+    position: absolute; z-index: 8; top: 0; left: 0; max-width: min(280px, calc(100% - 20px));
+    padding: 9px 12px; border: 1px solid rgba(191, 219, 254, 0.76); border-radius: 6px;
+    background: rgba(7, 17, 31, 0.93); box-shadow: 0 8px 20px rgba(2, 6, 23, 0.36);
+    color: #dbeafe; font-size: 12px; line-height: 1.45; pointer-events: none;
+    opacity: 0; transform: translate3d(-9999px, -9999px, 0); transition: opacity 120ms ease;
+}
+.warehouse-3d-slot-tooltip strong { display: block; margin-bottom: 2px; color: #fff; font-size: 13px; }
+.warehouse-3d-slot-tooltip span { display: block; white-space: nowrap; }
+.warehouse-3d-slot-tooltip.is-visible:not(.is-offscreen) { opacity: 1; }
 .warehouse-3d-viewport canvas:active { cursor: default; }
 .warehouse-3d-camera-views {
     position: absolute; top: 12px; right: 12px; z-index: 5;
@@ -1725,6 +1776,24 @@ body[data-role="editor"] .test-card-image-resize-enabled:focus-within .test-imag
     width: 20px; height: 20px; fill: none; stroke: currentColor;
     stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
 }
+.warehouse-3d-camera-views .warehouse-3d-projection-icon {
+    width: 22px; height: 22px; fill: none; stroke: none;
+}
+.warehouse-3d-camera-views .warehouse-3d-projection-half-primary { fill: #f8fafc; }
+.warehouse-3d-camera-views .warehouse-3d-projection-half-secondary { fill: #475569; }
+.warehouse-3d-camera-views .warehouse-3d-projection-letter {
+    font-family: Arial, sans-serif; font-size: 7.5px; font-weight: 800;
+    text-anchor: middle; dominant-baseline: middle; stroke: none;
+}
+.warehouse-3d-camera-views .warehouse-3d-projection-letter-p { fill: #0f172a; }
+.warehouse-3d-camera-views .warehouse-3d-projection-letter-o { fill: #f8fafc; }
+.warehouse-3d-camera-views .warehouse-3d-projection-outline {
+    fill: none; stroke: currentColor; stroke-width: 0.8;
+}
+.warehouse-3d-projection-toggle[data-projection="orthographic"] .warehouse-3d-projection-half-primary { fill: #475569; }
+.warehouse-3d-projection-toggle[data-projection="orthographic"] .warehouse-3d-projection-half-secondary { fill: #f8fafc; }
+.warehouse-3d-projection-toggle[data-projection="orthographic"] .warehouse-3d-projection-letter-p { fill: #f8fafc; }
+.warehouse-3d-projection-toggle[data-projection="orthographic"] .warehouse-3d-projection-letter-o { fill: #0f172a; }
 .warehouse-3d-camera-views .warehouse-3d-view-face { fill: currentColor; }
 .warehouse-3d-loading,
 .warehouse-3d-error {

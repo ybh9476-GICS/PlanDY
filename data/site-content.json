@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-04T01:33:47.791Z",
+  "updatedAt": "2026-09-07T05:33:34.520Z",
   "storage": {
     "menus": {
       "schemaVersion": 2,
@@ -987,7 +987,8 @@
                   "type": "warehouse3d",
                   "dataSource": "data/warehouse-demo.json",
                   "googleSheet": {
-                    "documentId": "1pl6qVIVAxwIDmQ18EbSD-8a_CngilPD3mm_KrImK4Tk",
+                    "documentId": "12G9JIftGIVStzWUxIVZrz0JZsJ858Mc90V7-fnfBiHM",
+                    "floorPlanCellSizeMeters": 0.5,
                     "sheets": {
                       "floorPlan": "평면도",
                       "zones": "구역설정",
@@ -998,62 +999,16 @@
                       "inventory": "재고 현황"
                     }
                   }
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "double",
-          "columnWidths": [
-            50,
-            50
-          ],
-          "cards": [
-            {
-              "title": "기준 정보",
-              "description": "WMS 3D 창고 기준정보 템플릿",
-              "body": "",
-              "bodyHtml": "",
-              "bodyType": "text",
-              "table": null,
-              "body2Type": "text",
-              "table2": null,
-              "body2": "",
-              "body2Html": "",
-              "imageId": "",
-              "image": "",
-              "editLocked": true,
-              "lockSource": "manual",
-              "lockMessage": "",
-              "contentBlocks": [
+                },
                 {
                   "type": "googleDrive",
                   "documentType": "spreadsheets",
                   "documentLabel": "Sheets",
-                  "documentId": "1pl6qVIVAxwIDmQ18EbSD-8a_CngilPD3mm_KrImK4Tk",
-                  "url": "https://docs.google.com/spreadsheets/d/1pl6qVIVAxwIDmQ18EbSD-8a_CngilPD3mm_KrImK4Tk/edit?usp=sharing",
+                  "documentId": "12G9JIftGIVStzWUxIVZrz0JZsJ858Mc90V7-fnfBiHM",
+                  "url": "https://docs.google.com/spreadsheets/d/12G9JIftGIVStzWUxIVZrz0JZsJ858Mc90V7-fnfBiHM/edit?gid=1421695250#gid=1421695250",
                   "title": ""
                 }
               ]
-            },
-            {
-              "title": "",
-              "description": "",
-              "body": "",
-              "bodyHtml": "",
-              "bodyType": "text",
-              "table": null,
-              "body2Type": "text",
-              "table2": null,
-              "body2": "",
-              "body2Html": "",
-              "imageId": "",
-              "image": "",
-              "editLocked": false,
-              "lockSource": "",
-              "lockMessage": "",
-              "contentBlocks": []
             }
           ]
         }

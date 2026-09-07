@@ -316,7 +316,11 @@ assert.ok(testEditor.includes("const numberMarker = '(?:\\\\d+|[a-z]+|[ivxlcdm]+
 assert.ok(testEditor.includes("const bulletMarker = '[•◦▪-]';"), 'The Text viewer must recognize nested bullet markers.');
 assert.ok(testEditor.includes('contentModel.createTextBlock'), 'Copy and save paths must emit canonical Text blocks.');
 assert.ok(testEditor.includes('test-add-image-block'), 'Image add button was removed.');
-assert.ok(testEditor.includes('hasUnsupportedCardContent'), 'Unsupported card content must lock editing.');
+assert.ok(testEditor.includes('const isCardEditLocked = (card) => isManualCardLocked(card) || hasMalformedCardContent(card);'), 'Only manual locks or malformed data may block the whole card editor.');
+assert.ok(testEditor.includes("panel.className = 'test-edit-readonly-block';"), 'Unsupported AI content must appear as a read-only block inside the card editor.');
+assert.ok(testEditor.includes('blocks.push(copyPlainValue(readOnlyState.block));'), 'Saving a card must preserve each read-only block without rewriting it.');
+assert.ok(testEditor.includes("copyButton.title = hasReadOnlyContent ? '읽기 전용 콘텐츠가 포함된 카드는 복사할 수 없습니다.'"), 'Cards with read-only blocks must not create partial clipboard copies.');
+assert.ok(testEditorCss.includes('.test-edit-readonly-block'), 'Read-only content blocks must have a visible editor state.');
 assert.ok(testEditor.includes('const normalizeImageDisplayWidth = (value) => {'), 'Image display widths must be stored safely.');
 assert.ok(testEditor.includes('const getImageResizeBounds = (card, imageFrame) => {'), 'Image resizing must constrain the minimum and maximum widths.');
 assert.ok(testEditor.includes('const imageResizeMargin = 16;'), 'Image resizing must retain the required 16px horizontal margins.');

@@ -2,11 +2,17 @@
   "schemaVersion": 1,
   "patches": [
     {
-      "id": "three-test-warehouse-floor-plan-v3",
+      "id": "three-test-warehouse-floor-plan-v5",
       "menuId": "custom-1788157191456",
-      "readingIndex": 1,
-      "rowIndex": 1,
+      "readingIndex": 0,
+      "rowIndex": 0,
       "cardIndex": 0,
+      "cleanupGeneratedCards": [
+        {
+          "title": "기준 정보",
+          "description": "WMS 3D 창고 기준정보 템플릿"
+        }
+      ],
       "card": {
         "title": "3D 창고 레이아웃",
         "description": "평면도 배치와 기준정보에 따라 생성된 랙과 재고를 3D로 확인합니다.",
@@ -28,7 +34,8 @@
             "type": "warehouse3d",
             "dataSource": "data/warehouse-demo.json",
             "googleSheet": {
-              "documentId": "1pl6qVIVAxwIDmQ18EbSD-8a_CngilPD3mm_KrImK4Tk",
+              "documentId": "12G9JIftGIVStzWUxIVZrz0JZsJ858Mc90V7-fnfBiHM",
+              "floorPlanCellSizeMeters": 0.5,
               "sheets": {
                 "floorPlan": "평면도",
                 "zones": "구역설정",
@@ -39,6 +46,14 @@
                 "inventory": "재고 현황"
               }
             }
+          },
+          {
+            "type": "googleDrive",
+            "documentType": "spreadsheets",
+            "documentLabel": "Sheets",
+            "documentId": "12G9JIftGIVStzWUxIVZrz0JZsJ858Mc90V7-fnfBiHM",
+            "url": "https://docs.google.com/spreadsheets/d/12G9JIftGIVStzWUxIVZrz0JZsJ858Mc90V7-fnfBiHM/edit?gid=1421695250#gid=1421695250",
+            "title": ""
           }
         ]
       }

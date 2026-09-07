@@ -216,30 +216,29 @@
                 card.dataset.legacyImage
             );
         };
-        const hasUnsupportedCardContent = (card) => {
+        const getStoredCardContentBlocks = (card) => {
             try {
                 const contentBlocks = card.dataset.contentBlocks ? JSON.parse(card.dataset.contentBlocks) : [];
-                return Array.isArray(contentBlocks) && contentBlocks.some((block) => !contentModel.isEditableBlock(block));
+                return Array.isArray(contentBlocks) ? contentBlocks : null;
             } catch (error) {
-                return true;
+                return null;
             }
+        };
+        const hasMalformedCardContent = (card) => getStoredCardContentBlocks(card) === null;
+        const hasUnsupportedCardContent = (card) => {
+            const contentBlocks = getStoredCardContentBlocks(card);
+            return contentBlocks === null || contentBlocks.some((block) => !contentModel.isEditableBlock(block));
         };
         const isManualCardLocked = (card) => card.dataset.editLocked === 'true' && card.dataset.lockSource === 'manual';
         const isSystemCardLocked = (card) => hasUnsupportedCardContent(card) ||
             (card.dataset.editLocked === 'true' && card.dataset.lockSource !== 'manual');
-        const isCardEditLocked = (card) => isManualCardLocked(card) || isSystemCardLocked(card);
+        // Manual locks and malformed data protect the entire card. System/AI locks protect
+        // only unsupported content blocks, so the surrounding card can still be edited.
+        const isCardEditLocked = (card) => isManualCardLocked(card) || hasMalformedCardContent(card);
         const getCardLockMessage = (card) => {
             if (isManualCardLocked(card)) return '잠긴 카드로 수정, 삭제 및 에이전트 수정을 할 수 없습니다.';
-            if (card.dataset.lockMessage) return card.dataset.lockMessage;
-            try {
-                const blocks = card.dataset.contentBlocks ? JSON.parse(card.dataset.contentBlocks) : [];
-                if (card.dataset.lockSource === 'system' && blocks.some((block) => block.type === 'diagram')) {
-                    return 'AI 생성 흐름도 카드로 수정할 수 없습니다.';
-                }
-            } catch (_) {
-                // Fall back to the standard read-only message for malformed card data.
-            }
-            return '카드 수정 팝업에서 지원하지 않는 콘텐츠가 있어 수정할 수 없습니다.';
+            if (hasMalformedCardContent(card)) return '카드 데이터 형식을 확인할 수 없어 안전한 편집이 차단되었습니다.';
+            return 'AI·특수 콘텐츠는 읽기 전용입니다. 카드의 제목, 설명과 다른 콘텐츠는 수정할 수 있습니다.';
         };
 
         function showStorageWarning(error) {
@@ -781,25 +780,27 @@
             const editButton = card.querySelector('.test-card-edit-btn');
             const lockButton = card.querySelector('.test-card-lock-btn');
             const editLocked = isCardEditLocked(card);
+            const manualLocked = isManualCardLocked(card);
             const systemLocked = isSystemCardLocked(card);
             card.classList.toggle('test-card-has-title', Boolean(card.dataset.title));
             card.classList.toggle('test-card-has-description', Boolean(card.dataset.description));
-            card.classList.toggle('test-card-is-locked', editLocked);
+            card.classList.toggle('test-card-is-locked', manualLocked);
+            card.classList.toggle('test-card-has-readonly-content', systemLocked && !editLocked);
             if (editButton) {
                 editButton.disabled = editLocked;
-                editButton.title = editLocked ? getCardLockMessage(card) : '';
+                editButton.title = (editLocked || systemLocked) ? getCardLockMessage(card) : '';
                 editButton.setAttribute('aria-disabled', String(editLocked));
             }
             if (lockButton) {
                 lockButton.disabled = systemLocked;
-                lockButton.textContent = editLocked ? '🔒' : '🔓';
+                lockButton.textContent = manualLocked ? '🔒' : (systemLocked ? 'AI' : '🔓');
                 lockButton.title = systemLocked
                     ? getCardLockMessage(card)
-                    : (editLocked ? '카드 잠금 해제' : '카드 잠금');
+                    : (manualLocked ? '카드 잠금 해제' : '카드 잠금');
                 lockButton.setAttribute('aria-label', systemLocked
                     ? getCardLockMessage(card)
-                    : (editLocked ? '카드 잠금 해제' : '카드 잠금'));
-                lockButton.setAttribute('aria-pressed', String(isManualCardLocked(card)));
+                    : (manualLocked ? '카드 잠금 해제' : '카드 잠금'));
+                lockButton.setAttribute('aria-pressed', String(manualLocked));
             }
             if (Array.isArray(contentBlocks)) {
                 window.wmsWarehouse3D?.disposeWithin?.(contentBlocksContainer);
@@ -898,7 +899,7 @@
                             window.addEventListener('wms-warehouse-3d-ready', mountWarehouse, { once: true });
                             if (!document.querySelector('script[data-wms-warehouse-3d]')) {
                                 const warehouseScript = document.createElement('script');
-                                warehouseScript.src = 'js/warehouse-3d.js?v=warehouse-footer-source-status-v16';
+                                warehouseScript.src = 'js/warehouse-3d.js?v=warehouse-floor-plan-axis-v17';
                                 warehouseScript.dataset.wmsWarehouse3d = 'true';
                                 warehouseScript.addEventListener('error', () => {
                                     warehouseMount.innerHTML = '<div class="warehouse-3d-error"><strong>3D 창고 스크립트를 불러오지 못했습니다.</strong></div>';
@@ -1533,7 +1534,7 @@
             if (Array.isArray(storedContentBlocks)) {
                 let bodyIndex = 0;
                 storedContentBlocks.forEach((block, blockOrder) => {
-                    if (block.type !== 'text' && block.type !== 'table') return;
+                    if (!contentModel.isEditableBlock(block) || (block.type !== 'text' && block.type !== 'table')) return;
                     const slot = bodySlots[bodyIndex++];
                     if (!slot) return;
                     slot.type = block.type;
@@ -1736,6 +1737,7 @@
             let contentImageBlocks = [];
             let contentPdfBlocks = [];
             let contentGoogleDriveBlocks = [];
+            let contentReadOnlyBlocks = [];
             if (supportsTableBody) {
                 const contentControls = document.createElement('div');
                 contentControls.className = 'test-content-block-controls';
@@ -1980,6 +1982,50 @@
                     state.panel = panel;
                     return { state, panel };
                 };
+                const getReadOnlyBlockLabel = (block) => {
+                    if (block.type === 'diagram') return 'AI 생성 흐름도';
+                    if (block.type === 'warehouse3d') return '3D 창고 화면';
+                    return contentModel.getBlockType(block.type)?.label || block.type || '특수 콘텐츠';
+                };
+                const createReadOnlyBlock = (savedBlock, blockOrder) => {
+                    const state = {
+                        type: 'readOnly',
+                        block: copyPlainValue(savedBlock),
+                        blockOrder
+                    };
+                    const panel = document.createElement('section');
+                    panel.className = 'test-edit-readonly-block';
+                    panel.setAttribute('role', 'group');
+                    panel.setAttribute('aria-label', `${getReadOnlyBlockLabel(savedBlock)} 읽기 전용 콘텐츠`);
+                    const heading = document.createElement('div');
+                    heading.className = 'test-edit-readonly-heading';
+                    const badge = document.createElement('span');
+                    badge.className = 'test-edit-readonly-badge';
+                    badge.textContent = '읽기 전용';
+                    const title = document.createElement('strong');
+                    title.textContent = getReadOnlyBlockLabel(savedBlock);
+                    heading.append(badge, title);
+                    const description = document.createElement('p');
+                    description.textContent = '이 콘텐츠는 직접 수정할 수 없습니다. 카드의 제목, 설명과 다른 콘텐츠는 편집할 수 있습니다.';
+                    const actions = document.createElement('div');
+                    actions.className = 'test-content-block-actions';
+                    actions.innerHTML = '<button type="button" data-readonly-action="up">위로</button><button type="button" data-readonly-action="down">아래로</button>';
+                    panel.append(heading, description, actions);
+                    actions.addEventListener('click', (event) => {
+                        const action = event.target.dataset.readonlyAction;
+                        if (action === 'up' && panel.previousElementSibling) {
+                            contentArea.insertBefore(panel, panel.previousElementSibling);
+                        } else if (action === 'down' && panel.nextElementSibling) {
+                            contentArea.insertBefore(panel.nextElementSibling, panel);
+                        } else {
+                            return;
+                        }
+                        editTouched = true;
+                    });
+                    state.panel = panel;
+                    contentReadOnlyBlocks.push(state);
+                    return { state, panel };
+                };
                 (Array.isArray(storedContentBlocks) ? storedContentBlocks : []).forEach((block, blockOrder) => {
                     if (block.type === 'image') {
                         const imageBlock = createImageBlock(block);
@@ -1993,6 +2039,9 @@
                         const googleDriveBlock = createGoogleDriveBlock(block);
                         googleDriveBlock.state.blockOrder = blockOrder;
                         contentArea.appendChild(googleDriveBlock.panel);
+                    } else if (!contentModel.isEditableBlock(block)) {
+                        const readOnlyBlock = createReadOnlyBlock(block, blockOrder);
+                        contentArea.appendChild(readOnlyBlock.panel);
                     }
                 });
                 if (Array.isArray(storedContentBlocks)) {
@@ -2000,7 +2049,8 @@
                         ...bodySlots.filter((slot) => slot.active).map((slot) => ({ order: slot.blockOrder, panel: slot.panel })),
                         ...contentImageBlocks.map((state) => ({ order: state.blockOrder, panel: state.panel })),
                         ...contentPdfBlocks.map((state) => ({ order: state.blockOrder, panel: state.panel })),
-                        ...contentGoogleDriveBlocks.map((state) => ({ order: state.blockOrder, panel: state.panel }))
+                        ...contentGoogleDriveBlocks.map((state) => ({ order: state.blockOrder, panel: state.panel })),
+                        ...contentReadOnlyBlocks.map((state) => ({ order: state.blockOrder, panel: state.panel }))
                     ].sort((first, second) => first.order - second.order);
                     orderedBlocks.forEach(({ panel }) => contentArea.appendChild(panel));
                 }
@@ -2074,7 +2124,8 @@
                     bodySlots.some((slot) => slot.active) ||
                     contentImageBlocks.some((state) => state.panel?.isConnected) ||
                     contentPdfBlocks.some((state) => state.panel?.isConnected) ||
-                    contentGoogleDriveBlocks.some((state) => state.panel?.isConnected)
+                    contentGoogleDriveBlocks.some((state) => state.panel?.isConnected) ||
+                    contentReadOnlyBlocks.some((state) => state.panel?.isConnected)
                 );
                 const editorHasCopyableContent = () => Boolean(
                     headerField.textContent.trim() ||
@@ -2086,7 +2137,9 @@
                 );
                 const refreshClipboardActions = () => {
                     const sharedClipboard = readCardClipboard();
-                    copyButton.disabled = !editorHasCopyableContent();
+                    const hasReadOnlyContent = contentReadOnlyBlocks.some((state) => state.panel?.isConnected);
+                    copyButton.disabled = hasReadOnlyContent || !editorHasCopyableContent();
+                    copyButton.title = hasReadOnlyContent ? '읽기 전용 콘텐츠가 포함된 카드는 복사할 수 없습니다.' : '';
                     pasteButton.hidden = !(
                         isValidCardClipboard(sharedClipboard) &&
                         !cardHasStoredContent(card) &&
@@ -2104,6 +2157,10 @@
                                     ? { type: 'table', table: copyPlainValue(slot.tableData) }
                                     : contentModel.createTextBlock({ text: slot.field.textContent.replace(/\r/g, ''), html: getStoredBodyHtml(slot.field) }));
                                 continue;
+                            }
+                            const readOnlyState = contentReadOnlyBlocks.find((item) => item.panel === element);
+                            if (readOnlyState) {
+                                throw new Error('읽기 전용 콘텐츠가 포함된 카드는 복사할 수 없습니다.');
                             }
                             const imageState = contentImageBlocks.find((item) => item.panel === element);
                             if (imageState) {
@@ -3016,6 +3073,11 @@
                                 blocks.push(slot.type === 'table'
                                     ? { type: 'table', table: slot.tableData }
                                     : contentModel.createTextBlock({ text: slot.field.textContent.replace(/\r/g, ''), html: getStoredBodyHtml(slot.field) }));
+                                continue;
+                            }
+                            const readOnlyState = contentReadOnlyBlocks.find((item) => item.panel === element);
+                            if (readOnlyState) {
+                                blocks.push(copyPlainValue(readOnlyState.block));
                                 continue;
                             }
                             const imageState = contentImageBlocks.find((item) => item.panel === element);
