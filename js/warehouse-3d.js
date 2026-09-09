@@ -676,6 +676,177 @@
         });
         return segments;
     }
+
+    function buildPassageNavigationGraph(passageCells, cellSize = 500, vehicleDiameter = 1600) {
+        const size = Math.max(1, toNumber(cellSize, 500));
+        const diameter = Math.max(1, toNumber(vehicleDiameter, 1600));
+        const radius = diameter / 2;
+        const halfStep = size / 2;
+        const occupied = new Set();
+        let minCellX = Infinity;
+        let maxCellX = -Infinity;
+        let minCellY = Infinity;
+        let maxCellY = -Infinity;
+        (Array.isArray(passageCells) ? passageCells : []).forEach((cell) => {
+            const cellX = Math.round(toNumber(cell?.x) / size);
+            const cellY = Math.round(toNumber(cell?.y) / size);
+            occupied.add(`${cellX}:${cellY}`);
+            minCellX = Math.min(minCellX, cellX);
+            maxCellX = Math.max(maxCellX, cellX);
+            minCellY = Math.min(minCellY, cellY);
+            maxCellY = Math.max(maxCellY, cellY);
+        });
+        const nodes = [];
+        const nodesByKey = new Map();
+        if (!occupied.size) return { nodes, nodesByKey, components: [], step: halfStep, vehicleDiameter: diameter };
+
+        const pointIsInPassage = (x, y) => {
+            const cellX = Math.floor((x + 0.0001) / size);
+            const cellY = Math.floor((y + 0.0001) / size);
+            return occupied.has(`${cellX}:${cellY}`);
+        };
+        const clearanceAngles = Array.from({ length: 16 }, (_, index) => index * Math.PI / 8);
+        const hasVehicleClearance = (x, y) => pointIsInPassage(x, y) && clearanceAngles.every((angle) => (
+            pointIsInPassage(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius)
+        ));
+        for (let gridY = minCellY * 2; gridY <= (maxCellY + 1) * 2; gridY += 1) {
+            for (let gridX = minCellX * 2; gridX <= (maxCellX + 1) * 2; gridX += 1) {
+                const x = gridX * halfStep;
+                const y = gridY * halfStep;
+                if (!hasVehicleClearance(x, y)) continue;
+                const key = `${gridX}:${gridY}`;
+                const node = { key, gridX, gridY, x, y, neighbors: [] };
+                nodes.push(node);
+                nodesByKey.set(key, node);
+            }
+        }
+        nodes.forEach((node) => {
+            [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([offsetX, offsetY]) => {
+                const neighborKey = `${node.gridX + offsetX}:${node.gridY + offsetY}`;
+                if (nodesByKey.has(neighborKey)) node.neighbors.push(neighborKey);
+            });
+        });
+        const components = [];
+        const visited = new Set();
+        nodes.forEach((node) => {
+            if (visited.has(node.key)) return;
+            const component = [];
+            const queue = [node.key];
+            visited.add(node.key);
+            for (let index = 0; index < queue.length; index += 1) {
+                const key = queue[index];
+                component.push(key);
+                nodesByKey.get(key).neighbors.forEach((neighborKey) => {
+                    if (visited.has(neighborKey)) return;
+                    visited.add(neighborKey);
+                    queue.push(neighborKey);
+                });
+            }
+            components.push(component);
+        });
+        components.sort((left, right) => right.length - left.length);
+        return { nodes, nodesByKey, components, step: halfStep, vehicleDiameter: diameter };
+    }
+
+    function findPassagePath(graph, startKey, goalKey) {
+        const nodesByKey = graph?.nodesByKey;
+        if (!(nodesByKey instanceof Map) || !nodesByKey.has(startKey) || !nodesByKey.has(goalKey)) return [];
+        if (startKey === goalKey) return [nodesByKey.get(startKey)];
+        const goal = nodesByKey.get(goalKey);
+        const heuristic = (key) => {
+            const node = nodesByKey.get(key);
+            return Math.abs(node.gridX - goal.gridX) + Math.abs(node.gridY - goal.gridY);
+        };
+        const open = [{ key: startKey, score: heuristic(startKey) }];
+        const openScores = new Map([[startKey, heuristic(startKey)]]);
+        const distance = new Map([[startKey, 0]]);
+        const cameFrom = new Map();
+        const push = (entry) => {
+            open.push(entry);
+            let index = open.length - 1;
+            while (index > 0) {
+                const parent = Math.floor((index - 1) / 2);
+                if (open[parent].score <= entry.score) break;
+                open[index] = open[parent];
+                index = parent;
+            }
+            open[index] = entry;
+        };
+        const pop = () => {
+            const first = open[0];
+            const last = open.pop();
+            if (open.length && last) {
+                let index = 0;
+                while (true) {
+                    const left = index * 2 + 1;
+                    const right = left + 1;
+                    if (left >= open.length) break;
+                    const child = right < open.length && open[right].score < open[left].score ? right : left;
+                    if (open[child].score >= last.score) break;
+                    open[index] = open[child];
+                    index = child;
+                }
+                open[index] = last;
+            }
+            return first;
+        };
+        while (open.length) {
+            const currentEntry = pop();
+            if (openScores.get(currentEntry.key) !== currentEntry.score) continue;
+            openScores.delete(currentEntry.key);
+            if (currentEntry.key === goalKey) {
+                const pathKeys = [goalKey];
+                while (cameFrom.has(pathKeys[0])) pathKeys.unshift(cameFrom.get(pathKeys[0]));
+                return pathKeys.map((key) => nodesByKey.get(key));
+            }
+            const currentDistance = distance.get(currentEntry.key);
+            nodesByKey.get(currentEntry.key).neighbors.forEach((neighborKey) => {
+                const nextDistance = currentDistance + 1;
+                if (nextDistance >= (distance.get(neighborKey) ?? Infinity)) return;
+                cameFrom.set(neighborKey, currentEntry.key);
+                distance.set(neighborKey, nextDistance);
+                const score = nextDistance + heuristic(neighborKey);
+                openScores.set(neighborKey, score);
+                push({ key: neighborKey, score });
+            });
+        }
+        return [];
+    }
+
+    function findNearestPassageNode(graph, x, y, maxDistance = 1500) {
+        const nodesByKey = graph?.nodesByKey;
+        const step = Math.max(1, toNumber(graph?.step, 250));
+        if (!(nodesByKey instanceof Map) || !nodesByKey.size) return null;
+        const centerGridX = Math.round(toNumber(x) / step);
+        const centerGridY = Math.round(toNumber(y) / step);
+        const searchRadius = Math.max(1, Math.ceil(toNumber(maxDistance, 1500) / step));
+        let nearest = null;
+        let nearestDistance = Infinity;
+        for (let offsetY = -searchRadius; offsetY <= searchRadius; offsetY += 1) {
+            for (let offsetX = -searchRadius; offsetX <= searchRadius; offsetX += 1) {
+                const node = nodesByKey.get(`${centerGridX + offsetX}:${centerGridY + offsetY}`);
+                if (!node) continue;
+                const distance = Math.hypot(node.x - x, node.y - y);
+                if (distance <= maxDistance && distance < nearestDistance) {
+                    nearest = node;
+                    nearestDistance = distance;
+                }
+            }
+        }
+        return nearest;
+    }
+
+    function getForkTargetHeight(slot, forkThickness = 0.055) {
+        const centerHeight = toNumber(slot?.position?.[1]);
+        const boxHeight = Math.max(0, toNumber(slot?.boxSize?.[1]));
+        const thickness = Math.max(0, toNumber(forkThickness, 0.055));
+        return Math.max(0.06, centerHeight - boxHeight / 2 - thickness / 2);
+    }
+
+    function getForkliftTaskSequence(mode) {
+        const action = mode === 'putaway' ? 'placing' : 'picking';
+        return ['driving', 'aligning', 'lifting', 'extending', action, 'retracting', 'lowering', 'waiting'];
+    }
     function calculateRackFocusView(bounds, options = {}) {
         const min = {
             x: Number(bounds?.min?.x),
@@ -832,6 +1003,203 @@
             passageBoundaries.renderOrder = 3;
             scene.add(passageBoundaries);
         }
+        const forkliftClearanceDiameterMm = 1950;
+        const amrCount = 5;
+        const passageNavigation = buildPassageNavigationGraph(
+            passageCells,
+            data.meta?.floorPlanCellSize || 500,
+            forkliftClearanceDiameterMm
+        );
+        const amrComponent = passageNavigation.components[0] || [];
+        const amrFleet = [];
+        const amrResources = [];
+        const amrColors = ['#38bdf8', '#fb7185', '#a78bfa', '#f97316', '#22c55e'];
+        const simplifyPath = (path) => path.filter((node, index) => {
+            if (index === 0 || index === path.length - 1) return true;
+            const previous = path[index - 1];
+            const next = path[index + 1];
+            return (node.gridX - previous.gridX) !== (next.gridX - node.gridX)
+                || (node.gridY - previous.gridY) !== (next.gridY - node.gridY);
+        });
+        const travelForkHeight = 0.08;
+        const forkThickness = 0.055;
+        const createForkliftModel = (index) => {
+            const group = new THREE.Group();
+            group.name = `FORKLIFT-AMR-${index + 1}`;
+            group.userData.kind = 'forklift-amr';
+            group.userData.amrId = index + 1;
+            const shadowGeometry = new THREE.CircleGeometry(0.82, 32);
+            const shadowMaterial = new THREE.MeshBasicMaterial({ color: '#020617', transparent: true, opacity: 0.42, depthWrite: false });
+            const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
+            shadow.rotation.x = -Math.PI / 2;
+            shadow.position.y = 0.018;
+            group.add(shadow);
+            const bodyGeometry = new THREE.BoxGeometry(1.42, 0.38, 1.3);
+            const bodyMaterial = new THREE.MeshPhysicalMaterial({
+                color: amrColors[index % amrColors.length],
+                roughness: 0.24,
+                metalness: 0.4,
+                clearcoat: 0.8,
+                clearcoatRoughness: 0.12
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.name = 'forklift-body';
+            body.position.set(0, 0.24, -0.08);
+            body.castShadow = true;
+            body.receiveShadow = true;
+            group.add(body);
+            const darkMaterial = new THREE.MeshPhysicalMaterial({ color: '#172033', roughness: 0.32, metalness: 0.62 });
+            const steelMaterial = new THREE.MeshPhysicalMaterial({ color: '#94a3b8', roughness: 0.22, metalness: 0.82 });
+            const forkMaterial = new THREE.MeshPhysicalMaterial({ color: '#dbe3ee', roughness: 0.18, metalness: 0.9 });
+            const counterweightGeometry = new THREE.BoxGeometry(1.18, 0.5, 0.44);
+            const counterweight = new THREE.Mesh(counterweightGeometry, darkMaterial);
+            counterweight.position.set(0, 0.48, -0.48);
+            counterweight.castShadow = true;
+            group.add(counterweight);
+            const wheelGeometry = new THREE.CylinderGeometry(0.19, 0.19, 0.12, 18);
+            const wheelMaterial = new THREE.MeshPhysicalMaterial({ color: '#050b14', roughness: 0.72, metalness: 0.08 });
+            [[-0.7, -0.38], [0.7, -0.38], [-0.7, 0.34], [0.7, 0.34]].forEach(([x, z]) => {
+                const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.set(x, 0.2, z);
+                wheel.castShadow = true;
+                group.add(wheel);
+            });
+            const guardGeometry = new THREE.BoxGeometry(0.07, 1.65, 0.07);
+            const guardTopGeometry = new THREE.BoxGeometry(1.16, 0.07, 0.75);
+            [-0.54, 0.54].forEach((x) => {
+                [-0.39, 0.29].forEach((z) => {
+                    const guardPost = new THREE.Mesh(guardGeometry, darkMaterial);
+                    guardPost.position.set(x, 1.22, z);
+                    guardPost.castShadow = true;
+                    group.add(guardPost);
+                });
+            });
+            const guardTop = new THREE.Mesh(guardTopGeometry, darkMaterial);
+            guardTop.position.set(0, 2.06, -0.05);
+            guardTop.castShadow = true;
+            group.add(guardTop);
+            const mastGroup = new THREE.Group();
+            mastGroup.name = 'forklift-mast';
+            mastGroup.position.z = 0.5;
+            const mastRailGeometry = new THREE.BoxGeometry(0.09, 2.45, 0.1);
+            [-0.59, 0.59].forEach((x) => {
+                const rail = new THREE.Mesh(mastRailGeometry, steelMaterial);
+                rail.position.set(x, 1.38, 0);
+                rail.castShadow = true;
+                mastGroup.add(rail);
+            });
+            const mastMiddle = new THREE.Group();
+            const middleRailGeometry = new THREE.BoxGeometry(0.065, 2.25, 0.075);
+            [-0.48, 0.48].forEach((x) => {
+                const rail = new THREE.Mesh(middleRailGeometry, darkMaterial);
+                rail.position.set(x, 1.32, 0.015);
+                rail.castShadow = true;
+                mastMiddle.add(rail);
+            });
+            mastGroup.add(mastMiddle);
+            const mastUpper = new THREE.Group();
+            const upperRailGeometry = new THREE.BoxGeometry(0.05, 2.05, 0.055);
+            [-0.38, 0.38].forEach((x) => {
+                const rail = new THREE.Mesh(upperRailGeometry, steelMaterial);
+                rail.position.set(x, 1.22, 0.03);
+                rail.castShadow = true;
+                mastUpper.add(rail);
+            });
+            mastGroup.add(mastUpper);
+            const carriage = new THREE.Group();
+            carriage.name = 'forklift-carriage';
+            carriage.position.y = travelForkHeight;
+            const carriageGeometry = new THREE.BoxGeometry(1.08, 0.48, 0.09);
+            const carriageBack = new THREE.Mesh(carriageGeometry, darkMaterial);
+            carriageBack.position.set(0, 0.25, 0.08);
+            carriageBack.castShadow = true;
+            carriage.add(carriageBack);
+            const forkAssembly = new THREE.Group();
+            forkAssembly.name = 'forklift-forks';
+            const forkGeometry = new THREE.BoxGeometry(0.11, forkThickness, 0.92);
+            [-0.37, 0.37].forEach((x) => {
+                const fork = new THREE.Mesh(forkGeometry, forkMaterial);
+                fork.position.set(x, 0, 0.56);
+                fork.castShadow = true;
+                fork.receiveShadow = true;
+                forkAssembly.add(fork);
+            });
+            const loadAnchor = new THREE.Group();
+            loadAnchor.name = 'forklift-load-anchor';
+            loadAnchor.position.set(0, forkThickness / 2, 0.58);
+            forkAssembly.add(loadAnchor);
+            carriage.add(forkAssembly);
+            mastGroup.add(carriage);
+            group.add(mastGroup);
+            const lidarGeometry = new THREE.CylinderGeometry(0.13, 0.16, 0.18, 20);
+            const lidarMaterial = new THREE.MeshPhysicalMaterial({ color: '#dbeafe', emissive: '#38bdf8', emissiveIntensity: 0.55, roughness: 0.15 });
+            const lidar = new THREE.Mesh(lidarGeometry, lidarMaterial);
+            lidar.position.set(0, 2.19, -0.05);
+            lidar.castShadow = true;
+            group.add(lidar);
+            amrResources.push(
+                shadowGeometry, shadowMaterial, bodyGeometry, bodyMaterial, darkMaterial, steelMaterial, forkMaterial,
+                counterweightGeometry, wheelGeometry, wheelMaterial, guardGeometry, guardTopGeometry,
+                mastRailGeometry, middleRailGeometry, upperRailGeometry, carriageGeometry, forkGeometry,
+                lidarGeometry, lidarMaterial
+            );
+            return { group, carriage, forkAssembly, loadAnchor, mastMiddle, mastUpper };
+        };
+        const chooseAmrDestination = (amr) => {
+            if (amrComponent.length < 2) return amr.currentKey;
+            const current = passageNavigation.nodesByKey.get(amr.currentKey);
+            let selectedKey = amr.currentKey;
+            let selectedDistance = -1;
+            for (let attempt = 0; attempt < 16; attempt += 1) {
+                const candidateKey = amrComponent[Math.floor(Math.random() * amrComponent.length)];
+                const candidate = passageNavigation.nodesByKey.get(candidateKey);
+                const candidateDistance = Math.abs(candidate.gridX - current.gridX) + Math.abs(candidate.gridY - current.gridY);
+                if (candidateDistance > selectedDistance) {
+                    selectedKey = candidateKey;
+                    selectedDistance = candidateDistance;
+                }
+            }
+            return selectedKey;
+        };
+        const planAmrRoute = (amr, timestamp = performance.now()) => {
+            const destinationKey = chooseAmrDestination(amr);
+            const path = simplifyPath(findPassagePath(passageNavigation, amr.currentKey, destinationKey));
+            amr.route = path.length > 1 ? path : [passageNavigation.nodesByKey.get(amr.currentKey)];
+            amr.waypointIndex = Math.min(1, amr.route.length - 1);
+            amr.waitUntil = path.length > 1 ? timestamp : timestamp + 800;
+        };
+        if (amrComponent.length) {
+            for (let index = 0; index < amrCount; index += 1) {
+                const startKey = amrComponent[Math.floor(index * amrComponent.length / amrCount) % amrComponent.length];
+                const startNode = passageNavigation.nodesByKey.get(startKey);
+                const model = createForkliftModel(index);
+                model.group.position.set(mm(startNode.x), 0, mm(startNode.y));
+                scene.add(model.group);
+                const amr = {
+                    ...model,
+                    index,
+                    currentKey: startKey,
+                    route: [startNode],
+                    waypointIndex: 0,
+                    speed: 0.9 + index * 0.08,
+                    waitUntil: performance.now() + index * 240,
+                    state: 'driving',
+                    stateStartedAt: performance.now(),
+                    forkHeight: travelForkHeight,
+                    forkExtension: 0,
+                    task: null,
+                    completedTasks: 0,
+                    carriedLoad: null,
+                    placedLoad: null
+                };
+                amrFleet.push(amr);
+                planAmrRoute(amr, amr.waitUntil);
+            }
+        }
+        shell.viewport.dataset.amrCount = String(amrFleet.length);
+        shell.viewport.dataset.amrPathfinding = amrFleet.length ? 'astar' : 'unavailable';
+        renderer.domElement.setAttribute('aria-label', `기준정보 기반 3D 창고, 무인 지게차 ${amrFleet.length}대 운행 중`);
         const grid = new THREE.Group();
         const gridPositions = [];
         for (let x = 0; x <= floorWidth + 0.0001; x += passageCellSize) {
@@ -1105,6 +1473,8 @@
                             bay,
                             level,
                             depth: depthIndex,
+                            depthCount,
+                            rackWidth,
                             location,
                             stock,
                             item,
@@ -1147,6 +1517,9 @@
                     matrix.makeTranslation(slot.position[0], slot.position[1], slot.position[2]);
                     mesh.setMatrixAt(index, matrix);
                     mesh.setColorAt(index, new THREE.Color(slotColorPalette[getSlotVisualKey(slot, 'utilization')]));
+                    slot.instanceMesh = mesh;
+                    slot.instanceIndex = index;
+                    slot.instanceMatrix = matrix.clone();
                 });
                 mesh.instanceMatrix.needsUpdate = true;
                 if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -1202,6 +1575,152 @@
             });
         });
 
+        const forkliftTaskTargets = [];
+        const reservedTaskKeys = new Set();
+        const reservedDockKeys = new Set();
+        const hiddenInstanceMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+        const getDockTarget = (slot) => {
+            const slotWorld = new THREE.Vector3(...slot.position);
+            slot.group.localToWorld(slotWorld);
+            const preferredSide = slot.depth <= Math.ceil(slot.depthCount / 2) ? 'front' : 'back';
+            const sides = preferredSide === 'front' ? ['front', 'back'] : ['back', 'front'];
+            for (const side of sides) {
+                const faceLocalZ = side === 'front' ? 0 : slot.rackWidth;
+                const faceWorld = new THREE.Vector3(slot.position[0], 0, faceLocalZ);
+                slot.group.localToWorld(faceWorld);
+                const outward = faceWorld.clone().sub(slotWorld);
+                outward.y = 0;
+                if (outward.lengthSq() < 0.0001) continue;
+                outward.normalize();
+                const desiredDock = faceWorld.clone().addScaledVector(outward, 1.15);
+                const dockNode = findNearestPassageNode(
+                    passageNavigation,
+                    desiredDock.x * 1000,
+                    desiredDock.z * 1000,
+                    1250
+                );
+                if (!dockNode || !amrComponent.includes(dockNode.key)) continue;
+                const dockWorld = new THREE.Vector3(mm(dockNode.x), 0, mm(dockNode.y));
+                const toSlot = slotWorld.clone().sub(dockWorld);
+                toSlot.y = 0;
+                const distanceToSlot = toSlot.length();
+                if (!(distanceToSlot > 0.4) || distanceToSlot > 2.4) continue;
+                return {
+                    key: slot.locationCode,
+                    slot,
+                    dockNode,
+                    slotWorld,
+                    facingYaw: Math.atan2(toSlot.x, toSlot.z),
+                    forkHeight: getForkTargetHeight(slot, forkThickness),
+                    forkExtension: Math.max(0.08, Math.min(0.95, distanceToSlot - 1.08)),
+                    side
+                };
+            }
+            return null;
+        };
+        rackEntries.forEach((entry) => {
+            entry.slots.forEach((slot) => {
+                const target = getDockTarget(slot);
+                if (target) forkliftTaskTargets.push(target);
+            });
+        });
+        const setSlotInstanceVisible = (slot, visible) => {
+            if (!slot?.instanceMesh || !Number.isInteger(slot.instanceIndex)) return;
+            slot.instanceMesh.setMatrixAt(slot.instanceIndex, visible ? slot.instanceMatrix : hiddenInstanceMatrix);
+            slot.instanceMesh.instanceMatrix.needsUpdate = true;
+        };
+        const createTaskLoad = (amr, target) => {
+            const sourceSize = target.slot.boxSize;
+            const size = [
+                Math.min(1.02, Math.max(0.55, sourceSize[0])),
+                Math.min(0.86, Math.max(0.38, sourceSize[1])),
+                Math.min(0.9, Math.max(0.48, sourceSize[2]))
+            ];
+            const color = target.slot.item?.color || (target.slot.occupied ? '#f59e0b' : '#38bdf8');
+            const load = new THREE.Mesh(
+                getChamferedBoxGeometry(size[0], size[1], size[2]),
+                getMaterial(color, { roughness: 0.2, metalness: 0.12, clearcoat: 0.86, clearcoatRoughness: 0.08 })
+            );
+            load.name = 'forklift-carried-load';
+            load.position.set(0, size[1] / 2 + 0.035, 0.08);
+            load.castShadow = true;
+            load.receiveShadow = true;
+            load.userData.loadSize = size;
+            amr.loadAnchor.add(load);
+            amr.carriedLoad = load;
+            return load;
+        };
+        const clearTaskVisuals = (amr) => {
+            if (amr.task?.slotHidden) setSlotInstanceVisible(amr.task.target.slot, true);
+            if (amr.carriedLoad) {
+                amr.carriedLoad.removeFromParent();
+                amr.carriedLoad = null;
+            }
+            if (amr.placedLoad) {
+                amr.placedLoad.removeFromParent();
+                amr.placedLoad = null;
+            }
+            if (amr.task) {
+                reservedTaskKeys.delete(amr.task.target.key);
+                reservedDockKeys.delete(amr.task.target.dockNode.key);
+            }
+        };
+        const setForkliftState = (amr, state, timestamp) => {
+            amr.state = state;
+            amr.stateStartedAt = timestamp;
+            amr.group.userData.operationState = state;
+        };
+        const assignForkliftTask = (amr, timestamp = performance.now()) => {
+            clearTaskVisuals(amr);
+            const preferredMode = (amr.index + amr.completedTasks) % 2 ? 'putaway' : 'picking';
+            const available = forkliftTaskTargets.filter((target) => (
+                !reservedTaskKeys.has(target.key)
+                && !reservedDockKeys.has(target.dockNode.key)
+                && (preferredMode === 'picking' ? target.slot.occupied : !target.slot.occupied)
+            ));
+            const fallback = available.length ? available : forkliftTaskTargets.filter((target) => (
+                !reservedTaskKeys.has(target.key) && !reservedDockKeys.has(target.dockNode.key)
+            ));
+            if (!fallback.length) {
+                amr.task = null;
+                planAmrRoute(amr, timestamp);
+                setForkliftState(amr, 'driving', timestamp);
+                return;
+            }
+            let selected = null;
+            let selectedPath = [];
+            for (let attempt = 0; attempt < Math.min(24, fallback.length * 2); attempt += 1) {
+                const candidate = fallback[Math.floor(Math.random() * fallback.length)];
+                const path = findPassagePath(passageNavigation, amr.currentKey, candidate.dockNode.key);
+                if (path.length > selectedPath.length) {
+                    selected = candidate;
+                    selectedPath = path;
+                }
+            }
+            if (!selected || !selectedPath.length) {
+                amr.task = null;
+                planAmrRoute(amr, timestamp);
+                setForkliftState(amr, 'driving', timestamp);
+                return;
+            }
+            const mode = selected.slot.occupied ? 'picking' : 'putaway';
+            reservedTaskKeys.add(selected.key);
+            reservedDockKeys.add(selected.dockNode.key);
+            amr.task = {
+                mode,
+                target: selected,
+                phases: getForkliftTaskSequence(mode),
+                handled: false,
+                slotHidden: false
+            };
+            if (mode === 'putaway') createTaskLoad(amr, selected);
+            amr.route = simplifyPath(selectedPath);
+            amr.waypointIndex = Math.min(1, amr.route.length - 1);
+            amr.waitUntil = timestamp;
+            setForkliftState(amr, 'driving', timestamp);
+        };
+        amrFleet.forEach((amr, index) => assignForkliftTask(amr, performance.now() + index * 420));
+
         data.zones.forEach((zone) => {
             const option = document.createElement('option');
             option.value = zone.code;
@@ -1226,6 +1745,7 @@
         let orthographicViewHeight = getPerspectiveViewHeight();
         let animationFrame = 0;
         let destroyed = false;
+        let lastAmrFrameTime = 0;
         const activeWorldUiTransitions = new Set();
         const easeOutCubic = (progress) => 1 - ((1 - progress) ** 3);
         const updateWorldUiTransitions = (timestamp) => {
@@ -1264,14 +1784,159 @@
             shell.projectionToggle.setAttribute('aria-label', `현재 ${currentLabel}. ${nextLabel}으로 전환`);
             shell.projectionToggle.title = `${nextLabel}으로 전환`;
         };
+        const moveToward = (current, goal, maximumChange) => {
+            if (Math.abs(goal - current) <= maximumChange) return goal;
+            return current + Math.sign(goal - current) * maximumChange;
+        };
+        const rotateForkliftToward = (amr, goal, deltaSeconds, speed = 2.4) => {
+            const offset = Math.atan2(
+                Math.sin(goal - amr.group.rotation.y),
+                Math.cos(goal - amr.group.rotation.y)
+            );
+            amr.group.rotation.y += Math.max(-deltaSeconds * speed, Math.min(deltaSeconds * speed, offset));
+            return Math.abs(offset) < 0.025;
+        };
+        const setForkHeight = (amr, height) => {
+            amr.forkHeight = Math.max(travelForkHeight, height);
+            amr.carriage.position.y = amr.forkHeight;
+            const extensionHeight = Math.max(0, amr.forkHeight - 1.35);
+            amr.mastMiddle.position.y = Math.min(2.2, extensionHeight * 0.48);
+            amr.mastUpper.position.y = Math.min(3.8, extensionHeight * 0.82);
+            amr.group.userData.forkHeight = amr.forkHeight;
+        };
+        const setForkExtension = (amr, extension) => {
+            amr.forkExtension = Math.max(0, extension);
+            amr.forkAssembly.position.z = amr.forkExtension;
+            amr.group.userData.forkExtension = amr.forkExtension;
+        };
+        const handleForkliftLoad = (amr) => {
+            if (!amr.task || amr.task.handled) return;
+            const target = amr.task.target;
+            if (amr.task.mode === 'picking') {
+                setSlotInstanceVisible(target.slot, false);
+                amr.task.slotHidden = true;
+                createTaskLoad(amr, target);
+            } else {
+                const loadSize = amr.carriedLoad?.userData?.loadSize || [0.8, 0.6, 0.7];
+                if (amr.carriedLoad) {
+                    amr.carriedLoad.removeFromParent();
+                    amr.carriedLoad = null;
+                }
+                const placedLoad = new THREE.Mesh(
+                    getChamferedBoxGeometry(loadSize[0], loadSize[1], loadSize[2]),
+                    getMaterial('#38bdf8', { roughness: 0.2, metalness: 0.12, clearcoat: 0.86, clearcoatRoughness: 0.08 })
+                );
+                placedLoad.name = 'forklift-placed-load';
+                placedLoad.position.set(...target.slot.position);
+                placedLoad.castShadow = true;
+                placedLoad.receiveShadow = true;
+                target.slot.group.add(placedLoad);
+                amr.placedLoad = placedLoad;
+            }
+            amr.task.handled = true;
+        };
+        const updateDrivingForklift = (amr, timestamp, deltaSeconds) => {
+            setForkHeight(amr, moveToward(amr.forkHeight, travelForkHeight, deltaSeconds * 1.2));
+            setForkExtension(amr, moveToward(amr.forkExtension, 0, deltaSeconds * 0.9));
+            if (timestamp < amr.waitUntil) return;
+            if (amr.waypointIndex >= amr.route.length) {
+                if (amr.task) setForkliftState(amr, 'aligning', timestamp);
+                else assignForkliftTask(amr, timestamp + 600 + Math.random() * 700);
+                return;
+            }
+            const waypoint = amr.route[amr.waypointIndex];
+            const targetX = mm(waypoint.x);
+            const targetZ = mm(waypoint.y);
+            const offsetX = targetX - amr.group.position.x;
+            const offsetZ = targetZ - amr.group.position.z;
+            const remaining = Math.hypot(offsetX, offsetZ);
+            if (remaining < 0.0001) {
+                amr.group.position.set(targetX, 0, targetZ);
+                amr.currentKey = waypoint.key;
+                amr.waypointIndex += 1;
+                return;
+            }
+            const desiredRotation = Math.atan2(offsetX, offsetZ);
+            const aligned = rotateForkliftToward(amr, desiredRotation, deltaSeconds, 3.2);
+            if (!aligned) return;
+            const movement = Math.min(remaining, amr.speed * deltaSeconds);
+            amr.group.position.x += offsetX / remaining * movement;
+            amr.group.position.z += offsetZ / remaining * movement;
+            if (movement >= remaining) {
+                amr.currentKey = waypoint.key;
+                amr.waypointIndex += 1;
+            }
+        };
+        const updateAmrFleet = (timestamp) => {
+            if (!amrFleet.length) return false;
+            if (!lastAmrFrameTime) {
+                lastAmrFrameTime = timestamp;
+                return true;
+            }
+            const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - lastAmrFrameTime) / 1000));
+            lastAmrFrameTime = timestamp;
+            amrFleet.forEach((amr) => {
+                if (amr.state === 'driving') {
+                    updateDrivingForklift(amr, timestamp, deltaSeconds);
+                    return;
+                }
+                const task = amr.task;
+                if (!task) {
+                    assignForkliftTask(amr, timestamp);
+                    return;
+                }
+                if (amr.state === 'aligning') {
+                    const aligned = rotateForkliftToward(amr, task.target.facingYaw, deltaSeconds, 2.2);
+                    if (aligned && timestamp - amr.stateStartedAt > 220) setForkliftState(amr, 'lifting', timestamp);
+                    return;
+                }
+                if (amr.state === 'lifting') {
+                    setForkHeight(amr, moveToward(amr.forkHeight, task.target.forkHeight, deltaSeconds * 0.95));
+                    if (Math.abs(amr.forkHeight - task.target.forkHeight) < 0.001) setForkliftState(amr, 'extending', timestamp);
+                    return;
+                }
+                if (amr.state === 'extending') {
+                    setForkExtension(amr, moveToward(amr.forkExtension, task.target.forkExtension, deltaSeconds * 0.62));
+                    if (Math.abs(amr.forkExtension - task.target.forkExtension) < 0.001) {
+                        setForkliftState(amr, task.mode === 'putaway' ? 'placing' : 'picking', timestamp);
+                    }
+                    return;
+                }
+                if (amr.state === 'picking' || amr.state === 'placing') {
+                    handleForkliftLoad(amr);
+                    if (timestamp - amr.stateStartedAt > 650) setForkliftState(amr, 'retracting', timestamp);
+                    return;
+                }
+                if (amr.state === 'retracting') {
+                    setForkExtension(amr, moveToward(amr.forkExtension, 0, deltaSeconds * 0.72));
+                    if (amr.forkExtension < 0.001) setForkliftState(amr, 'lowering', timestamp);
+                    return;
+                }
+                if (amr.state === 'lowering') {
+                    setForkHeight(amr, moveToward(amr.forkHeight, travelForkHeight, deltaSeconds * 1.05));
+                    if (Math.abs(amr.forkHeight - travelForkHeight) < 0.001) {
+                        amr.completedTasks += 1;
+                        setForkliftState(amr, 'waiting', timestamp);
+                    }
+                    return;
+                }
+                if (amr.state === 'waiting' && timestamp - amr.stateStartedAt > 850) {
+                    assignForkliftTask(amr, timestamp);
+                }
+            });
+            shell.viewport.dataset.forkliftStates = amrFleet.map((amr) => amr.state).join(',');
+            return true;
+        };
         const render = (timestamp) => {
             animationFrame = 0;
-            updateWorldUiTransitions(timestamp || performance.now());
+            const frameTime = timestamp || performance.now();
+            updateWorldUiTransitions(frameTime);
+            const amrIsActive = updateAmrFleet(frameTime);
             if (!destroyed && renderer.domElement.isConnected) {
                 renderer.render(scene, camera);
                 updateHoverTooltipPosition();
             }
-            if (activeWorldUiTransitions.size) requestRender();
+            if (activeWorldUiTransitions.size || (amrIsActive && shell.viewport.clientWidth && shell.viewport.clientHeight)) requestRender();
         };
         const requestRender = () => {
             if (!animationFrame && !destroyed) animationFrame = requestAnimationFrame(render);
@@ -1762,7 +2427,7 @@
                 setFocusedRack(null);
                 showDefaultInspector();
             }
-            shell.count.textContent = `랙 ${visibleCount} / ${rackEntries.length} · 적재 셀 ${visibleOccupiedSlots} / ${visibleSlots}`;
+            shell.count.textContent = `랙 ${visibleCount} / ${rackEntries.length} · 적재 셀 ${visibleOccupiedSlots} / ${visibleSlots} · 무인 지게차 ${amrFleet.length}대`;
             requestRender();
         };
         shell.zoneFilter.addEventListener('change', applyFilters, { signal });
@@ -1785,6 +2450,7 @@
             selectedOutline.userData.material.dispose();
             passageBoundaryGeometry?.dispose();
             passageBoundaryMaterial?.dispose();
+            amrResources.forEach((resource) => resource.dispose());
             scene.traverse((object) => {
                 if (object.material?.map) object.material.map.dispose();
                 if (object.type === 'Sprite' && object.material) object.material.dispose();
@@ -1878,6 +2544,11 @@
         convertGoogleSheetCsv,
         calculateZoneFloorBounds,
         buildPassageBoundarySegments,
+        buildPassageNavigationGraph,
+        findPassagePath,
+        findNearestPassageNode,
+        getForkTargetHeight,
+        getForkliftTaskSequence,
         calculateRackFocusView,
         getSlotVisualKey,
         getGoogleSheetQueryUrl,

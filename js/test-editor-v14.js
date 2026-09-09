@@ -899,7 +899,7 @@
                             window.addEventListener('wms-warehouse-3d-ready', mountWarehouse, { once: true });
                             if (!document.querySelector('script[data-wms-warehouse-3d]')) {
                                 const warehouseScript = document.createElement('script');
-                                warehouseScript.src = 'js/warehouse-3d.js?v=warehouse-floor-plan-axis-v17';
+                                warehouseScript.src = 'js/warehouse-3d.js?v=warehouse-forklift-cycle-v19';
                                 warehouseScript.dataset.wmsWarehouse3d = 'true';
                                 warehouseScript.addEventListener('error', () => {
                                     warehouseMount.innerHTML = '<div class="warehouse-3d-error"><strong>3D 창고 스크립트를 불러오지 못했습니다.</strong></div>';

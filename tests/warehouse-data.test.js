@@ -52,13 +52,17 @@ assert.strictEqual(cards[0].lockSource, 'system', 'The 3D warehouse card must no
 assert.strictEqual(cards[0].contentBlocks[0].type, 'warehouse3d', 'The first card must use the warehouse3d block.');
 assert.strictEqual(cards.length, 1, 'The 3D test menu must use the confirmed single-card structure.');
 assert.strictEqual(cards[0].contentBlocks[0].dataSource, 'data/warehouse-demo.json', 'The first card 3D warehouse data source changed unexpectedly.');
-assert.strictEqual(cards[0].contentBlocks[1].type, 'googleDrive', 'The Google Sheets block must remain inside the 3D warehouse card.');
+const referenceMenu = published.storage.menus.menus.find((candidate) => candidate.id === 'custom-1788911575236');
+assert.ok(referenceMenu, 'The reference data menu is missing.');
+const referenceBlocks = published.storage.customCards[referenceMenu.id].flatMap((row) => row.cards || []).flatMap((card) => card.contentBlocks || []);
+const referenceSheet = referenceBlocks.find((block) => block.type === 'googleDrive');
+assert.ok(referenceSheet, 'The reference data menu must retain its Google Sheets block.');
 const warehouseBlock = cards[0].contentBlocks[0];
 const gicsDocumentId = '12G9JIftGIVStzWUxIVZrz0JZsJ858Mc90V7-fnfBiHM';
 assert.strictEqual(warehouseBlock.googleSheet.documentId, gicsDocumentId, 'The 3D card must use WMS_기준정보_템플릿_GICS.');
 assert.strictEqual(warehouseBlock.googleSheet.floorPlanCellSizeMeters, 0.5, 'The GICS floor-plan cell size must be 0.5m.');
-assert.strictEqual(warehouseBlock.googleSheet.documentId, cards[0].contentBlocks[1].documentId, 'Both blocks in the 3D card must use the same Google Sheets document.');
-assert.ok(cards[0].contentBlocks[1].url.startsWith(`https://docs.google.com/spreadsheets/d/${gicsDocumentId}/edit`), 'The Google Sheets block must open the GICS sheet.');
+assert.strictEqual(warehouseBlock.googleSheet.documentId, referenceSheet.documentId, 'The 3D warehouse and reference menu must use the same Google Sheets document.');
+assert.ok(referenceSheet.url.startsWith(`https://docs.google.com/spreadsheets/d/${gicsDocumentId}/edit`), 'The Google Sheets block must open the GICS sheet.');
 assert.deepStrictEqual(
     Object.values(warehouseBlock.googleSheet.sheets).sort(),
     ['평면도', '구역설정', '랙타입 마스터', '랙배치', '로케이션 마스터', '품목 마스터', '재고 현황'].sort(),
@@ -101,7 +105,7 @@ assert.ok(warehouseRenderer.includes("mode: event.button === 2 ? 'rotate' : 'pan
 assert.ok(warehouseRenderer.includes("addEventListener('contextmenu'"), 'The 3D canvas must suppress the right-click menu.');
 assert.ok(warehouseRenderer.includes('container.requestFullscreen'), 'The warehouse card must support entering fullscreen.');
 assert.ok(warehouseRenderer.includes('document.exitFullscreen'), 'The warehouse card must support leaving fullscreen.');
-assert.ok(cardRenderer.includes('warehouse-floor-plan-axis-v17'), 'The shared renderer must reload the corrected dynamic floor-plan loader.');
+assert.ok(cardRenderer.includes('warehouse-forklift-cycle-v19'), 'The shared renderer must reload the unmanned forklift work cycle.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-shell:fullscreen'), 'Fullscreen warehouse layout styles are missing.');
 assert.ok(warehouseStyles.includes('height: 540px; min-height: 540px;'), 'The regular warehouse viewport must keep a stable height.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-shell:fullscreen .warehouse-3d-main { flex: 1; height: auto; min-height: 0; }'), 'Fullscreen must override the regular warehouse height.');
@@ -220,7 +224,7 @@ assert.ok(warehouseRenderer.includes('labelLayer.renderOrder = 1000'), 'Rack bil
 assert.ok(warehouseRenderer.includes('group.add(labelLayer)'), 'Rack billboard render groups must remain attached to their rack.');
 assert.ok(warehouseRenderer.includes('const isRaycastTargetVisible = (object)'), 'Hidden parent groups must be considered during raycasting.');
 assert.ok(warehouseRenderer.includes('const activeWorldUiTransitions = new Set()'), 'World-space UI transitions must be tracked independently.');
-assert.ok(warehouseRenderer.includes('if (activeWorldUiTransitions.size) requestRender()'), 'Animation frames must stop when no world UI transition remains.');
+assert.ok(warehouseRenderer.includes('amrIsActive && shell.viewport.clientWidth && shell.viewport.clientHeight'), 'AMR animation frames must continue only while the warehouse viewport is visible.');
 assert.ok(warehouseRenderer.includes('const fadeWorldObject ='), 'World-space UI outlines and labels must share the fade transition helper.');
 assert.ok(warehouseRenderer.includes('const updateHoverTooltipPosition = ()'), 'Slot hover information must project its world anchor into the screen viewport.');
 assert.ok(warehouseRenderer.includes('fadeWorldObject(hoveredRack.outlines.hover, true, { reset: true })'), 'Rack hover outlines must fade in smoothly.');
@@ -239,6 +243,11 @@ const converter = sandbox.window.wmsWarehouse3D.convertGoogleSheetCsv;
 const getFloorPlanAxisRange = sandbox.window.wmsWarehouse3D.getFloorPlanAxisRange;
 const calculateZoneFloorBounds = sandbox.window.wmsWarehouse3D.calculateZoneFloorBounds;
 const buildPassageBoundarySegments = sandbox.window.wmsWarehouse3D.buildPassageBoundarySegments;
+const buildPassageNavigationGraph = sandbox.window.wmsWarehouse3D.buildPassageNavigationGraph;
+const findPassagePath = sandbox.window.wmsWarehouse3D.findPassagePath;
+const findNearestPassageNode = sandbox.window.wmsWarehouse3D.findNearestPassageNode;
+const getForkTargetHeight = sandbox.window.wmsWarehouse3D.getForkTargetHeight;
+const getForkliftTaskSequence = sandbox.window.wmsWarehouse3D.getForkliftTaskSequence;
 const calculateRackFocusView = sandbox.window.wmsWarehouse3D.calculateRackFocusView;
 const getSlotVisualKey = sandbox.window.wmsWarehouse3D.getSlotVisualKey;
 const floorPlanAxis = JSON.parse(JSON.stringify(getFloorPlanAxisRange(
@@ -275,6 +284,54 @@ assert.deepStrictEqual(contiguousPassageBoundary, [
     { side: 'bottom', x: 750, y: 450, width: 500, depth: 100 },
     { side: 'right', x: 950, y: 250, width: 100, depth: 500 }
 ], 'Adjacent T cells must share no internal boundary and every 10cm strip must stay inside the passage.');
+const crossPassageCells = [];
+for (let cellX = 0; cellX < 16; cellX += 1) {
+    for (let cellY = 6; cellY < 10; cellY += 1) crossPassageCells.push({ x: cellX * 500, y: cellY * 500 });
+}
+for (let cellX = 6; cellX < 10; cellX += 1) {
+    for (let cellY = 0; cellY < 16; cellY += 1) crossPassageCells.push({ x: cellX * 500, y: cellY * 500 });
+}
+const passageNavigation = buildPassageNavigationGraph(crossPassageCells, 500, 1600);
+assert.ok(passageNavigation.nodesByKey.has('4:16'), 'A 1.6m AMR must fit near the center of a 2m horizontal passage.');
+assert.ok(passageNavigation.nodesByKey.has('16:4'), 'A 1.6m AMR must fit near the center of a 2m vertical passage.');
+const crossPassagePath = findPassagePath(passageNavigation, '4:16', '16:4');
+assert.strictEqual(crossPassagePath[0].key, '4:16', 'A* must preserve the requested start node.');
+assert.strictEqual(crossPassagePath[crossPassagePath.length - 1].key, '16:4', 'A* must reach the requested destination through the intersection.');
+crossPassagePath.slice(1).forEach((node, index) => {
+    const previous = crossPassagePath[index];
+    assert.strictEqual(Math.abs(node.gridX - previous.gridX) + Math.abs(node.gridY - previous.gridY), 1, 'Every A* step must stay on an adjacent passage node.');
+});
+const narrowPassage = Array.from({ length: 12 }, (_, cellX) => Array.from({ length: 3 }, (unused, cellY) => ({ x: cellX * 500, y: cellY * 500 }))).flat();
+assert.strictEqual(buildPassageNavigationGraph(narrowPassage, 500, 1600).nodes.length, 0, 'A 1.6m AMR must not enter a passage narrower than its diameter.');
+assert.ok(warehouseRenderer.includes('const amrCount = 5;'), 'The warehouse scene must create exactly five AMRs.');
+assert.ok(warehouseRenderer.includes('const forkliftClearanceDiameterMm = 1950;'), 'Unmanned forklifts must use their full turning envelope inside a 2m passage.');
+const forkliftNavigation = buildPassageNavigationGraph(crossPassageCells, 500, 1950);
+assert.ok(findPassagePath(forkliftNavigation, '4:16', '16:4').length > 0, 'A 1.95m forklift turning envelope must remain connected through a 2m cross passage.');
+assert.ok(warehouseRenderer.includes("shell.viewport.dataset.amrPathfinding = amrFleet.length ? 'astar' : 'unavailable';"), 'The viewport must expose the active A* navigation state for verification.');
+assert.ok(warehouseRenderer.includes('· 무인 지게차 ${amrFleet.length}대'), 'The warehouse summary must show the active unmanned forklift count.');
+assert.ok(warehouseRenderer.includes("group.name = `FORKLIFT-AMR-${index + 1}`;"), 'The round AMR model must be replaced with an unmanned forklift group.');
+assert.ok(warehouseRenderer.includes("mastGroup.name = 'forklift-mast';"), 'The unmanned forklift must have a visible mast.');
+assert.ok(warehouseRenderer.includes("forkAssembly.name = 'forklift-forks';"), 'The unmanned forklift must have a separately animated fork assembly.');
+assert.ok(warehouseRenderer.includes("if (amr.state === 'driving')"), 'The unmanned forklift must use an explicit operation state machine.');
+assert.ok(warehouseRenderer.includes("setForkliftState(amr, 'lifting', timestamp)"), 'Fork lifting must begin only after rack-facing alignment.');
+assert.ok(warehouseRenderer.includes("setForkliftState(amr, 'retracting', timestamp)"), 'Forks must retract after picking or placing.');
+assert.ok(warehouseRenderer.includes('moveToward(amr.forkHeight, travelForkHeight'), 'Forks must return to travel height while driving.');
+assert.ok(warehouseRenderer.includes('setSlotInstanceVisible(target.slot, false)'), 'Picking must hide only the selected stored box instance.');
+const firstLevelForkHeight = getForkTargetHeight({ position: [0, 0.72, 0], boxSize: [1, 1.2, 1] }, 0.06);
+const highestLevelForkHeight = getForkTargetHeight({ position: [0, 5.62, 0], boxSize: [1, 1.2, 1] }, 0.06);
+assert.ok(Math.abs(firstLevelForkHeight - 0.09) < 0.000001, 'The first-level fork height must stop immediately under the box.');
+assert.ok(Math.abs(highestLevelForkHeight - 4.99) < 0.000001, 'The highest-level fork height must use the actual stored box bottom.');
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(getForkliftTaskSequence('picking'))),
+    ['driving', 'aligning', 'lifting', 'extending', 'picking', 'retracting', 'lowering', 'waiting'],
+    'Picking must follow the safe drive-align-lift-extend-retract-lower sequence.'
+);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(getForkliftTaskSequence('putaway'))),
+    ['driving', 'aligning', 'lifting', 'extending', 'placing', 'retracting', 'lowering', 'waiting'],
+    'Putaway must use the same safe fork sequence with a placing action.'
+);
+assert.strictEqual(findNearestPassageNode(passageNavigation, 1000, 4000, 400)?.key, '4:16', 'Docking must snap a rack approach point to its nearest safe passage node.');
 assert.strictEqual(getSlotVisualKey({ occupied: false }, 'utilization'), 'empty', 'An empty slot must use the translucent empty color.');
 assert.strictEqual(getSlotVisualKey({ occupied: true, stock: { quantity: 49, capacity: 100 } }, 'utilization'), 'low', 'Utilization below 50% must use the low color.');
 assert.strictEqual(getSlotVisualKey({ occupied: true, stock: { quantity: 50, capacity: 100 } }, 'utilization'), 'medium', 'Utilization from 50% must use the medium color.');
