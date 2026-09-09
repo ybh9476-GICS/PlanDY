@@ -10,7 +10,8 @@
     "test:content-save": "node tests/local-content-save.test.js",
     "test:file-content": "node tests/file-content-mode.test.js",
     "test:warehouse": "node tests/warehouse-data.test.js",
-    "test": "npm run test:structure && npm run test:attachments && npm run test:content-save && npm run test:file-content && npm run test:warehouse"
+    "test:warehouse-page": "node tests/warehouse-page.test.js",
+    "test": "npm run test:structure && npm run test:attachments && npm run test:content-save && npm run test:file-content && npm run test:warehouse && npm run test:warehouse-page"
   },
   "dependencies": {
     "pdfjs-dist": "^6.2.108"

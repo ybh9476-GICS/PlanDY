@@ -398,8 +398,23 @@
         });
     }
 
+    function parseEquipmentMaster(csv) {
+        const records = csvToRecords(csv, ['설비 코드', '설비명'], '설비 마스터');
+        const seen = new Set();
+        return records.filter(row => String(row['설비 코드'] || '').trim()).map(row => {
+            const code = String(row['설비 코드']).trim();
+            if (seen.has(code)) throw new Error(`설비 코드가 중복되었습니다: ${code}`);
+            seen.add(code);
+            return { code, name: String(row['설비명'] || '').trim() || code };
+        });
+    }
+
     async function loadGoogleSheetData(config, signal) {
         const documentId = config?.documentId;
+        // Labels are optional: a missing equipment sheet must not hide the warehouse.
+        const equipmentPromise = loadGoogleSheetTable(documentId, config?.sheets?.equipment || '설비 마스터', 'A1:F1000', signal)
+            .then(csv => ({ equipment: parseEquipmentMaster(csv) }))
+            .catch(error => ({ equipment: [], equipmentLoadWarning: `설비명 연결 실패 — 설비 코드로 표시합니다. ${error.message}` }));
         const floorPlanDefinition = googleSheetDefinitions.floorPlan;
         const floorPlanSheetName = config?.sheets?.floorPlan || floorPlanDefinition.sheetName;
         const otherEntriesPromise = Promise.all(Object.entries(googleSheetDefinitions)
@@ -409,17 +424,21 @@
                 const csv = await loadGoogleSheetTable(documentId, sheetName, definition.range, signal);
                 return [key, csv];
             }));
-        const [xAxisCsv, yAxisCsv, otherEntries] = await Promise.all([
+        const [xAxisCsv, yAxisCsv, otherEntries, equipmentResult] = await Promise.all([
             loadGoogleSheetTable(documentId, floorPlanSheetName, floorPlanDefinition.xAxisRange, signal),
             loadGoogleSheetTable(documentId, floorPlanSheetName, floorPlanDefinition.yAxisRange, signal),
-            otherEntriesPromise
+            otherEntriesPromise,
+            equipmentPromise
         ]);
         const floorPlanAxis = getFloorPlanAxisRange(xAxisCsv, yAxisCsv);
         const floorPlanCsv = await loadGoogleSheetTable(documentId, floorPlanSheetName, floorPlanAxis.range, signal);
-        return convertGoogleSheetCsv(Object.fromEntries([['floorPlan', floorPlanCsv], ...otherEntries]), {
+        const data = convertGoogleSheetCsv(Object.fromEntries([['floorPlan', floorPlanCsv], ...otherEntries]), {
             ...(config || {}),
             floorPlanAxis
         });
+        data.equipment = equipmentResult.equipment;
+        data.meta.equipmentLoadWarning = equipmentResult.equipmentLoadWarning || '';
+        return data;
     }
 
     function validateWarehouseData(data) {
@@ -487,12 +506,25 @@
                 <div class="warehouse-3d-toolbar-main">
                     <label>구역 <select class="warehouse-3d-zone-filter"><option value="">전체</option></select></label>
                     <label class="warehouse-3d-search-label">검색 <input class="warehouse-3d-search" type="search" placeholder="랙·품목 코드 또는 이름"></label>
-                    <button class="warehouse-3d-reload" type="button" hidden>시트 새로고침</button>
-                    <button class="warehouse-3d-fullscreen" type="button" aria-pressed="false">전체화면</button>
                 </div>
-                <span class="warehouse-3d-count" role="status"></span>
+                <div class="warehouse-3d-toolbar-actions">
+                    <time class="warehouse-3d-current-time" aria-label="현재 시간"></time>
+                    <button class="warehouse-3d-reload" type="button" aria-label="시트 새로고침" title="시트 새로고침" hidden>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
+                    </button>
+                    <button class="warehouse-3d-fullscreen" type="button" aria-label="전체화면" title="전체화면" aria-pressed="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path class="warehouse-3d-fullscreen-enter" d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/>
+                            <path class="warehouse-3d-fullscreen-exit" d="M4 9h5V4M20 9h-5V4M4 15h5v5M20 15h-5v5"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="warehouse-3d-main">
+                <aside class="warehouse-3d-side-panel warehouse-3d-side-panel-left" aria-label="좌측 정보 패널"></aside>
+                <div class="warehouse-3d-panel-resizer warehouse-3d-panel-resizer-left" data-panel-resizer="left"
+                    role="separator" aria-label="좌측 패널 너비 조절" aria-orientation="vertical"
+                    aria-valuemin="230" aria-valuenow="230" tabindex="0"></div>
                 <div class="warehouse-3d-viewport" aria-label="3D 창고 화면">
                     <div class="warehouse-3d-loading" role="status">3D 창고 기준정보를 불러오는 중입니다.</div>
                     <div class="warehouse-3d-slot-tooltip" role="status" hidden></div>
@@ -523,7 +555,10 @@
                             </button>
                     </div>
                 </div>
-                <aside class="warehouse-3d-inspector" aria-live="polite">
+                <div class="warehouse-3d-panel-resizer warehouse-3d-panel-resizer-right" data-panel-resizer="right"
+                    role="separator" aria-label="우측 패널 너비 조절" aria-orientation="vertical"
+                    aria-valuemin="230" aria-valuenow="230" tabindex="0"></div>
+                <aside class="warehouse-3d-side-panel warehouse-3d-inspector" aria-live="polite">
                     <h5>선택 정보</h5>
                     <p>랙이나 적재 상자를 선택하면 상세 정보가 표시됩니다.</p>
                 </aside>
@@ -538,6 +573,8 @@
                 <span class="warehouse-3d-source-status" role="status">기준정보를 확인하는 중입니다.</span>
             </div>`;
         return {
+            root: container,
+            main: container.querySelector('.warehouse-3d-main'),
             viewport: container.querySelector('.warehouse-3d-viewport'),
             loading: container.querySelector('.warehouse-3d-loading'),
             hoverTooltip: container.querySelector('.warehouse-3d-slot-tooltip'),
@@ -553,7 +590,101 @@
             gridToggle: container.querySelector('[data-warehouse-grid-toggle]'),
             legendItems: container.querySelector('.warehouse-3d-legend-items'),
             sourceStatus: container.querySelector('.warehouse-3d-source-status'),
-            count: container.querySelector('.warehouse-3d-count')
+            currentTime: container.querySelector('.warehouse-3d-current-time'),
+            leftPanel: container.querySelector('.warehouse-3d-side-panel-left'),
+            rightPanel: container.querySelector('.warehouse-3d-inspector'),
+            panelResizers: [...container.querySelectorAll('[data-panel-resizer]')]
+        };
+    }
+
+    function setupPanelResizing(shell, signal) {
+        const minimumPanelWidth = 230;
+        const minimumViewportWidth = 320;
+        const widths = { left: minimumPanelWidth, right: minimumPanelWidth };
+        let activeResize = null;
+
+        const getHandleWidth = () => shell.panelResizers.reduce((total, handle) => total + handle.offsetWidth, 0);
+        const isStacked = () => shell.panelResizers.some(handle => getComputedStyle(handle).display === 'none');
+        const getMaximumPanelWidth = side => {
+            const mainWidth = shell.main.clientWidth;
+            const otherWidth = widths[side === 'left' ? 'right' : 'left'];
+            return Math.max(minimumPanelWidth, Math.min(
+                mainWidth / 2,
+                mainWidth - otherWidth - getHandleWidth() - minimumViewportWidth
+            ));
+        };
+        const updatePanelLayout = () => {
+            shell.main.style.setProperty('--warehouse-left-panel-width', widths.left + 'px');
+            shell.main.style.setProperty('--warehouse-right-panel-width', widths.right + 'px');
+            shell.panelResizers.forEach(handle => {
+                const side = handle.dataset.panelResizer;
+                handle.setAttribute('aria-valuenow', String(Math.round(widths[side])));
+                handle.setAttribute('aria-valuemax', String(Math.floor(getMaximumPanelWidth(side))));
+            });
+        };
+        const setPanelWidth = (side, value) => {
+            widths[side] = Math.max(minimumPanelWidth, Math.min(getMaximumPanelWidth(side), value));
+            updatePanelLayout();
+        };
+        const normalizePanelWidths = () => {
+            if (!shell.main.clientWidth || isStacked()) return;
+            const halfWidth = shell.main.clientWidth / 2;
+            widths.left = Math.max(minimumPanelWidth, Math.min(halfWidth, widths.left));
+            widths.right = Math.max(minimumPanelWidth, Math.min(halfWidth, widths.right));
+            const combinedLimit = Math.max(
+                minimumPanelWidth * 2,
+                shell.main.clientWidth - getHandleWidth() - minimumViewportWidth
+            );
+            if (widths.left + widths.right > combinedLimit) {
+                const availableExtra = Math.max(0, combinedLimit - minimumPanelWidth * 2);
+                const leftExtra = widths.left - minimumPanelWidth;
+                const rightExtra = widths.right - minimumPanelWidth;
+                const totalExtra = leftExtra + rightExtra;
+                const ratio = totalExtra > 0 ? availableExtra / totalExtra : 0;
+                widths.left = minimumPanelWidth + leftExtra * ratio;
+                widths.right = minimumPanelWidth + rightExtra * ratio;
+            }
+            updatePanelLayout();
+        };
+        const finishResize = (handle, pointerId) => {
+            if (!activeResize) return;
+            if (handle.hasPointerCapture?.(pointerId)) handle.releasePointerCapture(pointerId);
+            activeResize = null;
+            shell.root.classList.remove('is-resizing-panels');
+        };
+
+        shell.panelResizers.forEach(handle => {
+            const side = handle.dataset.panelResizer;
+            handle.addEventListener('pointerdown', event => {
+                if (event.button !== 0 || isStacked()) return;
+                event.preventDefault();
+                activeResize = { side, startX: event.clientX, startWidth: widths[side], pointerId: event.pointerId };
+                shell.root.classList.add('is-resizing-panels');
+                handle.setPointerCapture(event.pointerId);
+            }, { signal });
+            handle.addEventListener('pointermove', event => {
+                if (!activeResize || activeResize.pointerId !== event.pointerId) return;
+                const direction = activeResize.side === 'left' ? 1 : -1;
+                setPanelWidth(activeResize.side, activeResize.startWidth + (event.clientX - activeResize.startX) * direction);
+            }, { signal });
+            handle.addEventListener('pointerup', event => finishResize(handle, event.pointerId), { signal });
+            handle.addEventListener('pointercancel', event => finishResize(handle, event.pointerId), { signal });
+            handle.addEventListener('keydown', event => {
+                if (!['ArrowLeft', 'ArrowRight'].includes(event.key) || isStacked()) return;
+                event.preventDefault();
+                const direction = side === 'left'
+                    ? (event.key === 'ArrowRight' ? 1 : -1)
+                    : (event.key === 'ArrowLeft' ? 1 : -1);
+                setPanelWidth(side, widths[side] + direction * 16);
+            }, { signal });
+        });
+        const panelResizeObserver = new ResizeObserver(normalizePanelWidths);
+        panelResizeObserver.observe(shell.main);
+        updatePanelLayout();
+        return () => {
+            activeResize = null;
+            shell.root.classList.remove('is-resizing-panels');
+            panelResizeObserver.disconnect();
         };
     }
 
@@ -562,7 +693,7 @@
         shell.loading.innerHTML = `<strong>3D 창고를 표시하지 못했습니다.</strong><ul>${messages.map((message) => `<li>${escapeHtml(message)}</li>`).join('')}</ul>`;
     }
 
-    function createLabelSprite(THREE, text) {
+    function createLabelSprite(THREE, text, { sizeScale = 1, fontWeight = 700, border = true } = {}) {
         const canvas = document.createElement('canvas');
         canvas.width = 256 * worldUiResolutionScale;
         canvas.height = 72 * worldUiResolutionScale;
@@ -576,7 +707,9 @@
             hover: { fill: 'rgba(15, 52, 96, 0.96)', stroke: '#78ABFF', text: '#ffffff', scale: 1.06 },
             selected: { fill: '#2563EB', stroke: '#BFDBFE', text: '#ffffff', scale: 1.1 }
         };
-        const applyScale = (scale) => sprite.scale.set(3.2 * scale, 0.9 * scale, 1);
+        const baseOpacity = 0.8;
+        // Scale the entire sprite (including text), keeping the canvas resolution sharp.
+        const applyScale = (scale) => sprite.scale.set(3.2 * sizeScale * scale, 0.9 * sizeScale * scale, 1);
         let displayedScale = 1;
 
         const drawLabel = (state = 'normal') => {
@@ -584,14 +717,16 @@
             context.clearRect(0, 0, canvas.width, canvas.height);
             context.fillStyle = visual.fill;
             context.fillRect(6, 6, 500, 132);
-            context.strokeStyle = visual.stroke;
-            context.lineWidth = 6;
-            context.strokeRect(6, 6, 500, 132);
+            if (border) {
+                context.strokeStyle = visual.stroke;
+                context.lineWidth = 6;
+                context.strokeRect(6, 6, 500, 132);
+            }
             context.fillStyle = visual.text;
-            context.font = '700 64px sans-serif';
+            context.font = `${fontWeight} 64px sans-serif`;
             context.textAlign = 'center';
             context.textBaseline = 'middle';
-            context.fillText(text, 256, 72);
+            context.fillText(text, 256, 72, 460);
             texture.needsUpdate = true;
         };
         sprite.setInteractionState = (state = 'normal') => {
@@ -599,16 +734,16 @@
             drawLabel(state);
             const startScale = displayedScale;
             const targetScale = visual.scale;
-            material.opacity = 0.82;
+            material.opacity = baseOpacity * 0.82;
             return (progress) => {
                 displayedScale = startScale + (targetScale - startScale) * progress;
                 applyScale(displayedScale);
-                material.opacity = 0.82 + 0.18 * progress;
+                material.opacity = baseOpacity * (0.82 + 0.18 * progress);
             };
         };
         drawLabel('normal');
         applyScale(displayedScale);
-        material.opacity = 1;
+        material.opacity = baseOpacity;
         sprite.renderOrder = 1000;
         return sprite;
     }
@@ -964,11 +1099,11 @@
             new THREE.PlaneGeometry(floorWidth, floorDepth),
             new THREE.MeshPhysicalMaterial({
                 color: '#17603f',
-                roughness: 0.08,
+                roughness: 0.18,
                 metalness: 0.04,
-                clearcoat: 1,
-                clearcoatRoughness: 0.025,
-                envMapIntensity: 2.4
+                clearcoat: 0.7,
+                clearcoatRoughness: 0.1,
+                envMapIntensity: 1.6
             })
         );
         floor.rotation.x = -Math.PI / 2;
@@ -1012,6 +1147,8 @@
         );
         const amrComponent = passageNavigation.components[0] || [];
         const amrFleet = [];
+        const amrLabelTargets = [];
+        const equipmentByCode = new Map((data.equipment || []).map(item => [item.code, item]));
         const amrResources = [];
         const amrColors = ['#38bdf8', '#fb7185', '#a78bfa', '#f97316', '#22c55e'];
         const simplifyPath = (path) => path.filter((node, index) => {
@@ -1179,6 +1316,7 @@
                 const amr = {
                     ...model,
                     index,
+                    equipmentCode: `AMR-${String(index + 1).padStart(3, '0')}`,
                     currentKey: startKey,
                     route: [startNode],
                     waypointIndex: 0,
@@ -1193,6 +1331,14 @@
                     carriedLoad: null,
                     placedLoad: null
                 };
+                amr.equipmentName = equipmentByCode.get(amr.equipmentCode)?.name || amr.equipmentCode;
+                amr.label = createLabelSprite(THREE, amr.equipmentName, { sizeScale: 0.5, fontWeight: 400, border: false });
+                amr.label.name = amr.equipmentName;
+                amr.label.position.set(0, 3.0, 0);
+                amr.label.userData = { kind: 'amr-label', amr };
+                amr.group.userData.equipmentCode = amr.equipmentCode;
+                amr.group.add(amr.label);
+                amrLabelTargets.push(amr.label);
                 amrFleet.push(amr);
                 planAmrRoute(amr, amr.waitUntil);
             }
@@ -1738,6 +1884,9 @@
         let projectionMode = 'perspective';
         let viewportAspect = 1;
         let cameraFocusTransitionToken = 0;
+        let followedAmr = null;
+        let hoveredAmr = null;
+        let amrFocusTransition = null;
         const getPerspectiveViewHeight = (cameraDistance = distance) => 2 * cameraDistance * Math.tan(perspectiveHalfFov);
         const getEquivalentCameraDistance = () => projectionMode === 'orthographic'
             ? orthographicViewHeight / (2 * Math.tan(perspectiveHalfFov))
@@ -1932,6 +2081,7 @@
             const frameTime = timestamp || performance.now();
             updateWorldUiTransitions(frameTime);
             const amrIsActive = updateAmrFleet(frameTime);
+            updateAmrFollow(frameTime);
             if (!destroyed && renderer.domElement.isConnected) {
                 renderer.render(scene, camera);
                 updateHoverTooltipPosition();
@@ -1949,6 +2099,67 @@
                 complete
             });
             requestRender();
+        };
+        const setAmrLabelState = (amr, state) => {
+            const update = amr?.label?.setInteractionState(state);
+            if (!update) return;
+            const token = {};
+            amr.label.userData.interactionToken = token;
+            startWorldUiTransition(160, progress => {
+                if (amr.label.userData.interactionToken !== token) return false;
+                update(progress);
+                return true;
+            });
+        };
+        const setHoveredAmr = (amr) => {
+            if (hoveredAmr === amr) return;
+            if (hoveredAmr && hoveredAmr !== followedAmr) setAmrLabelState(hoveredAmr, 'normal');
+            hoveredAmr = amr || null;
+            if (hoveredAmr && hoveredAmr !== followedAmr) setAmrLabelState(hoveredAmr, 'hover');
+            renderer.domElement.style.cursor = hoveredAmr ? 'pointer' : '';
+        };
+        const setSelectedAmr = (amr) => {
+            const previous = followedAmr;
+            followedAmr = amr || null;
+            amrFocusTransition = null;
+            amrFollowOffset.set(0, 0, 0);
+            if (previous && previous !== followedAmr) setAmrLabelState(previous, previous === hoveredAmr ? 'hover' : 'normal');
+            if (followedAmr) {
+                setAmrLabelState(followedAmr, 'selected');
+                cameraFocusTransitionToken += 1;
+                // Keep at least 14m vertically and 10m horizontally in view.
+                const viewHeight = Math.max(14, 10 / Math.max(0.1, viewportAspect));
+                amrFocusTransition = {
+                    startedAt: performance.now(), duration: 500,
+                    startTarget: target.clone(), startDistance: distance, startHeight: orthographicViewHeight,
+                    endDistance: Math.max(minimumCameraDistance, Math.min(maximumCameraDistance, viewHeight / (2 * Math.tan(perspectiveHalfFov)))),
+                    endHeight: viewHeight, zoomCancelled: false
+                };
+            }
+            shell.viewport.dataset.followingAmrCode = followedAmr?.equipmentCode || '';
+            requestRender();
+        };
+        const amrFollowTarget = new THREE.Vector3();
+        const amrFollowOffset = new THREE.Vector3();
+        const updateAmrFollow = (timestamp) => {
+            if (!followedAmr) return;
+            amrFollowTarget.copy(followedAmr.group.position);
+            amrFollowTarget.y += 1.5;
+            amrFollowTarget.add(amrFollowOffset);
+            const transition = amrFocusTransition;
+            if (transition) {
+                const fraction = Math.min(1, Math.max(0, (timestamp - transition.startedAt) / transition.duration));
+                const progress = easeOutCubic(fraction);
+                target.lerpVectors(transition.startTarget, amrFollowTarget, progress);
+                if (!transition.zoomCancelled) {
+                    distance = transition.startDistance + (transition.endDistance - transition.startDistance) * progress;
+                    orthographicViewHeight = transition.startHeight + (transition.endHeight - transition.startHeight) * progress;
+                    updateProjectionMatrices();
+                }
+                if (fraction >= 1) amrFocusTransition = null;
+            } else target.copy(amrFollowTarget);
+            // Translation only: yaw, pitch and the selected view preset stay untouched.
+            updateCamera();
         };
         const fadeWorldObject = (object, visible, { duration = 140, reset = false } = {}) => {
             const material = object?.userData?.material || object?.material;
@@ -2144,16 +2355,25 @@
             front: { yaw: 0, pitch: 0.08, distanceScale: 1.08, targetY: 2.5 },
             side: { yaw: Math.PI / 2, pitch: 0.08, distanceScale: 1.08, targetY: 2.5 }
         };
+        // Track alignment separately from the persistent selected-view button.
+        // Manual rotation releases alignment; panning and zooming do not.
+        let alignedCameraView = 'quarter';
+        const getCameraViewPitch = (viewName) => {
+            if (projectionMode === 'orthographic' && (viewName === 'front' || viewName === 'side')) return 0;
+            return cameraViewPresets[viewName].pitch;
+        };
         const setActiveCameraView = (viewName = '') => {
             shell.cameraViewButtons.forEach((button) => {
                 button.setAttribute('aria-pressed', String(button.dataset.warehouseCameraView === viewName));
             });
         };
         const applyCameraView = (viewName) => {
+            setSelectedAmr(null);
             cameraFocusTransitionToken += 1;
             const preset = cameraViewPresets[viewName] || cameraViewPresets.quarter;
+            alignedCameraView = cameraViewPresets[viewName] ? viewName : 'quarter';
             yaw = preset.yaw;
-            pitch = preset.pitch;
+            pitch = getCameraViewPitch(alignedCameraView);
             distance = Math.max(floorWidth, floorDepth) * preset.distanceScale;
             target.set(floorWidth / 2, preset.targetY, floorDepth / 2);
             orthographicViewHeight = getPerspectiveViewHeight(distance);
@@ -2169,6 +2389,7 @@
         const applyProjectionMode = (nextMode) => {
             const normalizedMode = nextMode === 'orthographic' ? 'orthographic' : 'perspective';
             if (normalizedMode === projectionMode) return;
+            if (amrFocusTransition) amrFocusTransition.zoomCancelled = true;
             cameraFocusTransitionToken += 1;
             if (normalizedMode === 'orthographic') {
                 orthographicViewHeight = getPerspectiveViewHeight(distance);
@@ -2182,6 +2403,7 @@
                 projectionMode = 'perspective';
                 camera = perspectiveCamera;
             }
+            if (alignedCameraView) pitch = getCameraViewPitch(alignedCameraView);
             updateProjectionMatrices();
             updateCamera();
             updateProjectionToggle();
@@ -2237,8 +2459,9 @@
             // A hidden menu panel reports a zero-sized viewport. Keeping the
             // last canvas size avoids changing the card height while hidden.
             if (!viewportWidth || !viewportHeight) return;
-            const width = Math.max(320, viewportWidth);
-            const height = Math.max(360, viewportHeight);
+            const isPage = Boolean(shell.viewport.closest('.warehouse-page'));
+            const width = Math.max(isPage ? 1 : 320, viewportWidth);
+            const height = Math.max(isPage ? 1 : 360, viewportHeight);
             renderer.setSize(width, height, false);
             viewportAspect = width / height;
             updateProjectionMatrices();
@@ -2254,8 +2477,14 @@
             if (event.button !== 0 && event.button !== 2) return;
             event.preventDefault();
             cameraFocusTransitionToken += 1;
-            setHoveredSlot(null);
             setHoveredRack(null);
+            setHoveredAmr(null);
+            // Preserve the current framing if a drag interrupts the focus animation.
+            if (followedAmr) {
+                amrFocusTransition = null;
+                amrFollowOffset.copy(target).sub(followedAmr.group.position);
+                amrFollowOffset.y -= 1.5;
+            }
             const viewDirection = new THREE.Vector3();
             camera.getWorldDirection(viewDirection);
             viewDirection.y = 0;
@@ -2268,6 +2497,7 @@
                 pitch,
                 distance: getEquivalentCameraDistance(),
                 target: target.clone(),
+                amrPosition: followedAmr?.group.position.clone() || null,
                 viewDirection,
                 viewRight,
                 mode: event.button === 2 ? 'rotate' : 'pan',
@@ -2280,16 +2510,29 @@
             if (!pointerStart || event.pointerId !== pointerStart.pointerId) return;
             const deltaX = event.clientX - pointerStart.x;
             const deltaY = event.clientY - pointerStart.y;
+            // A click keeps slot information; only a real camera drag clears hover.
+            if (Math.hypot(deltaX, deltaY) > 5) setHoveredSlot(null);
             if (pointerStart.mode === 'rotate') {
+                if (deltaX === 0 && deltaY === 0 && yaw === pointerStart.yaw && pitch === pointerStart.pitch) return;
+                alignedCameraView = null;
                 yaw = pointerStart.yaw - deltaX * 0.008;
-                pitch = Math.max(0.02, Math.min(Math.PI / 2 - 0.02, pointerStart.pitch + deltaY * 0.006));
+                const minimumPitch = Math.min(pointerStart.pitch, projectionMode === 'orthographic' ? 0 : 0.02);
+                pitch = Math.max(minimumPitch, Math.min(Math.PI / 2 - 0.02, pointerStart.pitch + deltaY * 0.006));
             } else {
                 const panScale = Math.max(0.004, pointerStart.distance * 0.0015);
                 target.copy(pointerStart.target);
+                // Include movement since pointerdown so long drags do not lag behind the AMR.
+                if (followedAmr && pointerStart.amrPosition) {
+                    target.add(followedAmr.group.position).sub(pointerStart.amrPosition);
+                }
                 target.addScaledVector(pointerStart.viewRight, -deltaX * panScale);
                 target.addScaledVector(pointerStart.viewDirection, deltaY * panScale);
                 target.x = Math.max(0, Math.min(floorWidth, target.x));
                 target.z = Math.max(0, Math.min(floorDepth, target.z));
+                if (followedAmr) {
+                    amrFollowOffset.copy(target).sub(followedAmr.group.position);
+                    amrFollowOffset.y -= 1.5;
+                }
             }
             updateCamera();
             requestRender();
@@ -2298,6 +2541,7 @@
         renderer.domElement.addEventListener('pointercancel', () => { pointerStart = null; }, { signal });
         renderer.domElement.addEventListener('wheel', (event) => {
             event.preventDefault();
+            if (amrFocusTransition) amrFocusTransition.zoomCancelled = true;
             cameraFocusTransitionToken += 1;
             const zoomFactor = Math.exp(event.deltaY * 0.0012);
             if (projectionMode === 'orthographic') {
@@ -2311,6 +2555,11 @@
             updateCamera();
             requestRender();
         }, { signal, passive: false });
+        renderer.domElement.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape' || !followedAmr) return;
+            event.preventDefault();
+            setSelectedAmr(null);
+        }, { signal });
 
         const raycaster = new THREE.Raycaster();
         const pointer = new THREE.Vector2();
@@ -2329,13 +2578,23 @@
             const hit = hits.find((candidate) => candidate.object.userData.kind === 'slotInstances');
             return hit && Number.isInteger(hit.instanceId) ? hit.object.userData.slots[hit.instanceId] || null : null;
         };
-        const getLabelRackAtPointer = (event) => {
+        const getBillboardAtPointer = (event) => {
+            scene.updateMatrixWorld(true);
+            camera.updateMatrixWorld(true);
             const rect = renderer.domElement.getBoundingClientRect();
             pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
             pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
             raycaster.setFromCamera(pointer, camera);
-            const hit = raycaster.intersectObjects(labelTargets, false).find((candidate) => isRaycastTargetVisible(candidate.object));
-            return hit?.object.userData?.kind === 'rack' ? hit.object.userData : null;
+            const hit = raycaster.intersectObjects([...labelTargets, ...amrLabelTargets], false).find((candidate) => isRaycastTargetVisible(candidate.object));
+            return hit?.object.userData || null;
+        };
+        const getLabelRackAtPointer = (event) => {
+            const label = getBillboardAtPointer(event);
+            return label?.kind === 'rack' ? label : null;
+        };
+        const getLabelAmrAtPointer = (event) => {
+            const label = getBillboardAtPointer(event);
+            return label?.kind === 'amr-label' ? label.amr : null;
         };
         const getRackAtPointer = (event) => {
             const rect = renderer.domElement.getBoundingClientRect();
@@ -2368,6 +2627,13 @@
         };
         renderer.domElement.addEventListener('pointermove', (event) => {
             if (pointerStart) return;
+            const labelAmr = getLabelAmrAtPointer(event);
+            setHoveredAmr(labelAmr);
+            if (labelAmr) {
+                setHoveredSlot(null);
+                setHoveredRack(null);
+                return;
+            }
             const labelRack = getLabelRackAtPointer(event);
             if (labelRack) {
                 setHoveredSlot(null);
@@ -2378,16 +2644,30 @@
             setHoveredSlot(slot);
             setHoveredRack(slot ? null : getRackAtPointer(event));
         }, { signal });
-        renderer.domElement.addEventListener('pointerleave', () => { setHoveredSlot(null); setHoveredRack(null); }, { signal });
+        renderer.domElement.addEventListener('pointerleave', () => { setHoveredSlot(null); setHoveredRack(null); setHoveredAmr(null); }, { signal });
         renderer.domElement.addEventListener('pointerup', (event) => {
             if (!pointerStart || event.pointerId !== pointerStart.pointerId) return;
             const moved = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
             const button = pointerStart.button;
             pointerStart = null;
             if (button !== 0 || moved > 5) return;
+            const labelAmr = getLabelAmrAtPointer(event);
+            if (labelAmr) {
+                setSelectedSlot(null);
+                setHoveredSlot(null);
+                setHoveredRack(null);
+                setSelectedRack(null);
+                setFocusedRack(null);
+                showDefaultInspector();
+                setSelectedAmr(labelAmr);
+                renderer.domElement.focus();
+                return;
+            }
+            setSelectedAmr(null);
             const labelRack = getLabelRackAtPointer(event);
             if (labelRack) {
                 setSelectedSlot(null);
+                setHoveredSlot(null);
                 setSelectedRack(labelRack);
                 setFocusedRack(labelRack);
                 focusRackInCurrentView(labelRack);
@@ -2395,7 +2675,8 @@
                 return;
             }
             const slot = getSlotAtPointer(event);
-            if (slot) { setSelectedSlot(slot); setSelectedRack(null); setFocusedRack(null); showSelection(slot); return; }
+            if (slot) { setHoveredSlot(slot); setSelectedSlot(slot); setSelectedRack(null); setFocusedRack(null); showSelection(slot); return; }
+            setHoveredSlot(null);
             const rect = renderer.domElement.getBoundingClientRect();
             pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
             pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -2409,17 +2690,9 @@
         const applyFilters = () => {
             const zone = shell.zoneFilter.value;
             const query = shell.search.value.trim().toLowerCase();
-            let visibleCount = 0;
-            let visibleSlots = 0;
-            let visibleOccupiedSlots = 0;
             rackEntries.forEach((entry) => {
                 const visible = (!zone || entry.rack.zoneCode === zone) && (!query || entry.searchText.includes(query));
                 entry.group.visible = visible;
-                if (visible) {
-                    visibleCount += 1;
-                    visibleSlots += entry.slots.length;
-                    visibleOccupiedSlots += entry.slots.filter((slot) => slot.occupied).length;
-                }
             });
             const focusedEntry = focusedRack && rackEntries.find((entry) => entry.rack === focusedRack.rack);
             if (focusedRack && !focusedEntry?.group.visible) {
@@ -2427,7 +2700,6 @@
                 setFocusedRack(null);
                 showDefaultInspector();
             }
-            shell.count.textContent = `랙 ${visibleCount} / ${rackEntries.length} · 적재 셀 ${visibleOccupiedSlots} / ${visibleSlots} · 무인 지게차 ${amrFleet.length}대`;
             requestRender();
         };
         shell.zoneFilter.addEventListener('change', applyFilters, { signal });
@@ -2437,6 +2709,10 @@
 
         return () => {
             destroyed = true;
+            followedAmr = null;
+            hoveredAmr = null;
+            amrFocusTransition = null;
+            activeWorldUiTransitions.clear();
             if (animationFrame) cancelAnimationFrame(animationFrame);
             resizeObserver.disconnect();
             geometryCache.forEach((geometry) => geometry.dispose());
@@ -2464,9 +2740,29 @@
         mountedControllers.get(container)?.dispose();
         const abortController = new AbortController();
         const shell = createShell(container);
+        const disposePanelResizing = setupPanelResizing(shell, abortController.signal);
+        const padClockPart = value => String(value).padStart(2, '0');
+        const formatLocalDateTime = value => [
+            value.getFullYear(),
+            padClockPart(value.getMonth() + 1),
+            padClockPart(value.getDate())
+        ].join('-') + ' ' + [
+            padClockPart(value.getHours()),
+            padClockPart(value.getMinutes()),
+            padClockPart(value.getSeconds())
+        ].join(':');
+        const updateCurrentTime = () => {
+            const now = new Date();
+            shell.currentTime.dateTime = now.toISOString();
+            shell.currentTime.textContent = formatLocalDateTime(now);
+        };
+        updateCurrentTime();
+        const currentTimeTimer = setInterval(updateCurrentTime, 1000);
         let disposeScene = () => {};
         const controller = {
             dispose() {
+                disposePanelResizing();
+                clearInterval(currentTimeTimer);
                 abortController.abort();
                 disposeScene();
                 mountedControllers.delete(container);
@@ -2475,7 +2771,9 @@
         mountedControllers.set(container, controller);
         const syncFullscreenButton = () => {
             const active = document.fullscreenElement === container;
-            shell.fullscreen.textContent = active ? '전체화면 종료' : '전체화면';
+            const label = active ? '전체화면 종료' : '전체화면';
+            shell.fullscreen.setAttribute('aria-label', label);
+            if (!shell.fullscreen.disabled) shell.fullscreen.title = label;
             shell.fullscreen.setAttribute('aria-pressed', String(active));
         };
         shell.fullscreen.disabled = !document.fullscreenEnabled || typeof container.requestFullscreen !== 'function';
@@ -2524,6 +2822,10 @@
                 if (layoutErrorCount || outOfRangeCount) shell.sourceStatus.classList.add('is-warning');
                 shell.sourceStatus.textContent = `Google Sheets 연결됨 · ${loadedAt} · 평면도 배치 ${data.meta?.floorPlanAppliedCount || 0}개 · 재고 ${data.inventory.length}건${unplacedCount ? ` · 미배치 ${unplacedCount}개` : ''}${unmappedCount ? ` · 미등록 랙코드 ${unmappedCount}개` : ''}${layoutErrorCount ? ` · 배치 오류 ${layoutErrorCount}개` : ''}${outOfRangeCount ? ` · 범위초과 위치 ${outOfRangeCount}개` : ''}`;
             } else shell.sourceStatus.textContent = '내장 임시 기준정보를 표시하고 있습니다.';
+            if (data.meta?.equipmentLoadWarning) {
+                shell.sourceStatus.classList.add('is-warning');
+                shell.sourceStatus.textContent += ` · ${data.meta.equipmentLoadWarning}`;
+            }
             disposeScene = startWarehouseScene(THREE, shell, data, abortController.signal);
         } catch (error) {
             if (error?.name !== 'AbortError') showError(shell, [error?.message || '알 수 없는 오류가 발생했습니다.', '네트워크 연결과 Three.js 모듈 주소를 확인해 주세요.']);
@@ -2540,6 +2842,7 @@
         disposeWithin,
         validateWarehouseData,
         parseCsv,
+        parseEquipmentMaster,
         getFloorPlanAxisRange,
         convertGoogleSheetCsv,
         calculateZoneFloorBounds,

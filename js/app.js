@@ -204,7 +204,8 @@ function loadMenus() {
         const builtins = defaultMenus
             .filter(menu => !deletedBuiltinIds.includes(menu.id))
             .map(menu => ({ ...menu, ...(savedById.get(menu.id) || {}), builtin: true }));
-        const customs = saved.menus.filter(menu => !menu.builtin && typeof menu.id === 'string' && typeof menu.label === 'string');
+        const customs = saved.menus.filter(menu => !menu.builtin && typeof menu.id === 'string' && typeof menu.label === 'string')
+            .map(menu => ({ ...menu, viewType: window.wmsWarehousePage.getViewType(menu) }));
         return window.WmsMenuTreeModel.normalizeMenus([...builtins, ...customs]);
     } catch (_) { return window.WmsMenuTreeModel.normalizeMenus(defaultMenus); }
 }
@@ -237,9 +238,13 @@ function ensureCustomPanel(menu) {
         panel = document.createElement('section');
         panel.id = 'view-' + menu.id;
         panel.className = 'content-area view-panel';
-        panel.innerHTML = '<div class="test-card-list custom-card-list"></div><button type="button" class="test-add-card-btn custom-add-card-btn" aria-label="카드 추가">+</button>';
+        const isWarehousePage = window.wmsWarehousePage.getViewType(menu) === 'warehouse3d';
+        panel.dataset.viewType = isWarehousePage ? 'warehouse3d' : 'cards';
+        panel.classList.toggle('warehouse-page', isWarehousePage);
+        panel.setAttribute('aria-label', menu.label);
+        if (!isWarehousePage) panel.innerHTML = '<div class="test-card-list custom-card-list"></div><button type="button" class="test-add-card-btn custom-add-card-btn" aria-label="카드 추가">+</button>';
         document.getElementById('main-content').appendChild(panel);
-        initializeCustomCardArea(menu, panel);
+        if (!isWarehousePage) initializeCustomCardArea(menu, panel);
     }
     return panel;
 }
@@ -431,6 +436,7 @@ function initializeAuthoringCardArea() {
 }
 
 function initializeCustomCardArea(menu, panel) {
+    if (window.wmsWarehousePage.getViewType(menu) === 'warehouse3d') return;
     const connectSharedEditor = () => {
         if (panel.dataset.sharedCardEditorInitialized || !window.initializeSharedCardEditor) return;
         panel.dataset.sharedCardEditorInitialized = 'true';
@@ -652,7 +658,10 @@ function switchTab(tabId) {
     expandedMainMenuId = activeMenu?.parentId || activeMenu?.id || null;
     updateSidebarMenuState(tabId);
     document.querySelectorAll('.view-panel').forEach(panel => {
-        panel.style.display = panel.id === 'view-' + tabId ? 'block' : 'none';
+        const active = panel.id === 'view-' + tabId;
+        const isWarehousePage = panel.dataset.viewType === 'warehouse3d';
+        panel.style.display = active ? (isWarehousePage ? 'flex' : 'block') : 'none';
+        if (isWarehousePage) window.wmsWarehousePage.setActive(panel, active, activeMenu);
     });
 }
 
@@ -663,6 +672,7 @@ renderMenus();
 window.addEventListener('hashchange', () => switchTab(window.location.hash.replace('#', '')));
 window.addEventListener('wms-auth-change', (event) => {
     if (event.detail?.authenticated) switchTab(window.location.hash.replace('#', '') || getVisibleTabs()[0]);
+    else document.querySelectorAll('.warehouse-page').forEach(panel => window.wmsWarehousePage.dispose(panel));
 });
 switchTab(window.location.hash.replace('#', '') || getVisibleTabs()[0]);
 
@@ -769,7 +779,9 @@ function removeMenu(id) {
         if (!deletedBuiltinIds.includes(id)) deletedBuiltinIds.push(id);
         menus = menus.filter(item => item.id !== id);
     } else {
-        document.getElementById('view-' + id)?.remove();
+        const panel = document.getElementById('view-' + id);
+        if (panel?.dataset.viewType === 'warehouse3d') window.wmsWarehousePage.dispose(panel);
+        panel?.remove();
         menus = menus.filter(item => item.id !== id);
     }
     applyMenuChange();

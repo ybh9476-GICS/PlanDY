@@ -105,7 +105,46 @@ assert.ok(warehouseRenderer.includes("mode: event.button === 2 ? 'rotate' : 'pan
 assert.ok(warehouseRenderer.includes("addEventListener('contextmenu'"), 'The 3D canvas must suppress the right-click menu.');
 assert.ok(warehouseRenderer.includes('container.requestFullscreen'), 'The warehouse card must support entering fullscreen.');
 assert.ok(warehouseRenderer.includes('document.exitFullscreen'), 'The warehouse card must support leaving fullscreen.');
-assert.ok(cardRenderer.includes('warehouse-forklift-cycle-v19'), 'The shared renderer must reload the unmanned forklift work cycle.');
+assert.ok(cardRenderer.includes('warehouse-panel-resize-v30'), 'The shared renderer must load the current warehouse renderer.');
+assert.ok(warehouseRenderer.includes('<time class="warehouse-3d-current-time" aria-label="현재 시간"></time>'), 'The top-right area must show the current time.');
+assert.ok(
+    warehouseRenderer.indexOf('<time class="warehouse-3d-current-time"') < warehouseRenderer.indexOf('<button class="warehouse-3d-reload"')
+        && warehouseRenderer.indexOf('<button class="warehouse-3d-reload"') < warehouseRenderer.indexOf('<button class="warehouse-3d-fullscreen"'),
+    'Current time, sheet refresh, and fullscreen actions must appear in that order.'
+);
+assert.ok(warehouseRenderer.includes('<button class="warehouse-3d-reload" type="button" aria-label="시트 새로고침" title="시트 새로고침" hidden>'), 'Sheet refresh must be an accessible icon button.');
+assert.ok(warehouseRenderer.includes('<button class="warehouse-3d-fullscreen" type="button" aria-label="전체화면" title="전체화면" aria-pressed="false">'), 'Fullscreen must be an accessible icon button.');
+assert.ok(!warehouseRenderer.includes('hidden>시트 새로고침</button>'), 'Sheet refresh must not show a text label.');
+assert.ok(!warehouseRenderer.includes('aria-pressed="false">전체화면</button>'), 'Fullscreen must not show a text label.');
+assert.ok(!warehouseRenderer.includes('shell.fullscreen.textContent'), 'Fullscreen state changes must preserve its SVG icon.');
+assert.ok(warehouseRenderer.includes("shell.fullscreen.setAttribute('aria-label', label)"), 'Fullscreen state must still have an accessible name.');
+assert.ok(!warehouseRenderer.includes('warehouse-3d-count'), 'The former top-right object summary must be removed.');
+assert.ok(warehouseRenderer.includes('shell.currentTime.textContent = formatLocalDateTime(now);'), 'The date-time label must refresh from the local clock.');
+assert.ok(warehouseRenderer.includes("].join('-') + ' ' + ["), 'The date and time must use YYYY-MM-DD HH:mm:ss separators.');
+assert.ok(warehouseRenderer.includes('const currentTimeTimer = setInterval(updateCurrentTime, 1000);'), 'The current time must refresh every second.');
+assert.ok(warehouseRenderer.includes('clearInterval(currentTimeTimer);'), 'Leaving the 3D screen must stop its clock timer.');
+assert.ok(warehouseRenderer.includes('<aside class="warehouse-3d-side-panel warehouse-3d-side-panel-left" aria-label="좌측 정보 패널"></aside>'), 'An empty left-side panel must be reserved for future content.');
+assert.ok(
+    warehouseRenderer.indexOf('warehouse-3d-side-panel-left') < warehouseRenderer.indexOf('warehouse-3d-viewport')
+        && warehouseRenderer.indexOf('warehouse-3d-viewport') < warehouseRenderer.indexOf('warehouse-3d-inspector'),
+    'The viewport must stay between the left and right panels.'
+);
+assert.ok(warehouseStyles.includes('--warehouse-left-panel-width: 230px;'), 'The left panel must start at the current 230px width.');
+assert.ok(warehouseStyles.includes('--warehouse-right-panel-width: 230px;'), 'The right panel must start at the current 230px width.');
+assert.ok(warehouseStyles.includes('.warehouse-3d-toolbar-actions {'), 'The clock and icon actions must share a right-aligned toolbar group.');
+assert.ok(warehouseStyles.includes('width: 34px; height: 34px; min-height: 34px; padding: 0;'), 'Toolbar icons must use compact square buttons.');
+assert.ok(warehouseStyles.includes('.warehouse-3d-fullscreen[aria-pressed="true"] .warehouse-3d-fullscreen-exit'), 'Fullscreen icon must reflect its current state.');
+assert.ok(warehouseStyles.includes('grid-template-areas: "left-panel left-resizer viewport right-resizer inspector";'), 'Desktop layout must place resizers on both panel boundaries.');
+assert.ok(warehouseStyles.includes('grid-template-areas: "viewport" "left-panel" "inspector";'), 'Narrow screens must stack the viewport and both panels safely.');
+assert.strictEqual((warehouseRenderer.match(/data-panel-resizer="/g) || []).length, 2, 'Both side panels must have one resize boundary.');
+assert.ok(warehouseRenderer.includes('const minimumPanelWidth = 230;'), 'Side panels must not shrink below their current 230px width.');
+assert.ok(warehouseRenderer.includes('mainWidth / 2'), 'A side panel must never exceed half of the main view.');
+assert.ok(warehouseRenderer.includes('const minimumViewportWidth = 320;'), 'Panel resizing should preserve a usable center viewport where possible.');
+assert.ok(warehouseRenderer.includes('handle.setPointerCapture(event.pointerId);'), 'Panel drag must keep pointer control until release.');
+assert.ok(warehouseRenderer.includes("if (!['ArrowLeft', 'ArrowRight'].includes(event.key)"), 'Resize boundaries must also support keyboard adjustments.');
+assert.ok(warehouseRenderer.includes('panelResizeObserver.disconnect();'), 'Leaving the 3D screen must dispose the panel resize observer.');
+assert.ok(warehouseStyles.includes('cursor: ew-resize; touch-action: none;'), 'Panel boundaries must show a horizontal resize cursor.');
+assert.ok(warehouseStyles.includes('.warehouse-3d-panel-resizer { display: none; }'), 'Stacked narrow-screen panels must hide horizontal resize handles.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-shell:fullscreen'), 'Fullscreen warehouse layout styles are missing.');
 assert.ok(warehouseStyles.includes('height: 540px; min-height: 540px;'), 'The regular warehouse viewport must keep a stable height.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-shell:fullscreen .warehouse-3d-main { flex: 1; height: auto; min-height: 0; }'), 'Fullscreen must override the regular warehouse height.');
@@ -172,7 +211,7 @@ assert.ok(warehouseRenderer.includes("const rackFrameColor = '#8b95a5'"), 'Rack 
 assert.ok(warehouseRenderer.includes('metalness: 0.78'), 'Rack posts and beams must use a metallic material.');
 assert.ok(warehouseRenderer.includes('new THREE.MeshPhysicalMaterial'), 'Warehouse surfaces must use physically based reflective materials.');
 assert.ok(warehouseRenderer.includes("color: '#17603f'"), 'The warehouse floor must use the waterproof green color.');
-assert.ok(/color: '#17603f',\r?\n\s+roughness: 0\.08,\r?\n\s+metalness: 0\.04,\r?\n\s+clearcoat: 1,\r?\n\s+clearcoatRoughness: 0\.025,\r?\n\s+envMapIntensity: 2\.4/.test(warehouseRenderer), 'The warehouse floor must use wet-gloss coating values.');
+assert.ok(/color: '#17603f',\r?\n\s+roughness: 0\.18,\r?\n\s+metalness: 0\.04,\r?\n\s+clearcoat: 0\.7,\r?\n\s+clearcoatRoughness: 0\.1,\r?\n\s+envMapIntensity: 1\.6/.test(warehouseRenderer), 'The green warehouse floor must retain a softer, reduced-reflection coating.');
 assert.ok(warehouseRenderer.includes('new THREE.PMREMGenerator(renderer)'), 'The wet floor must receive a prefiltered reflection environment.');
 assert.ok(warehouseRenderer.includes('scene.environment = floorReflectionEnvironment'), 'The wet floor reflection environment must be applied to the scene.');
 assert.ok(warehouseRenderer.includes("color: '#78a98b'"), 'The 0.5m floor grid must use the coordinated green line color.');
@@ -198,7 +237,7 @@ assert.ok(warehouseRenderer.includes('warehouse-3d-slot-tooltip'), 'Slot hover i
 assert.ok(warehouseRenderer.includes('const labelTargets = []'), 'Rack billboards must have a separate priority hit-target list.');
 assert.ok(warehouseRenderer.includes('labelTargets.push(label)'), 'Each rack billboard must be registered in the priority hit-target list.');
 assert.ok(/if \(labelRack\) \{\s*setHoveredSlot\(null\);\s*setHoveredRack\(labelRack\);\s*return;\s*\}\s*const slot = getSlotAtPointer\(event\);/.test(warehouseRenderer), 'Billboard hover must run before slot hover detection.');
-assert.ok(/if \(labelRack\) \{\s*setSelectedSlot\(null\);\s*setSelectedRack\(labelRack\);\s*setFocusedRack\(labelRack\);\s*focusRackInCurrentView\(labelRack\);\s*showSelection\(labelRack\);\s*return;\s*\}\s*const slot = getSlotAtPointer\(event\);/.test(warehouseRenderer), 'Billboard selection must isolate and fit the rack before slot selection.');
+assert.ok(/if \(labelRack\) \{\s*setSelectedSlot\(null\);\s*setHoveredSlot\(null\);\s*setSelectedRack\(labelRack\);\s*setFocusedRack\(labelRack\);\s*focusRackInCurrentView\(labelRack\);\s*showSelection\(labelRack\);\s*return;\s*\}\s*const slot = getSlotAtPointer\(event\);/.test(warehouseRenderer), 'Billboard selection must clear slot information, isolate and fit the rack before slot selection.');
 assert.ok(warehouseRenderer.includes("normal: { fill: 'rgba(5, 15, 30, 0.92)'"), 'Rack billboards must have a normal visual state.');
 assert.ok(warehouseRenderer.includes("hover: { fill: 'rgba(15, 52, 96, 0.96)'"), 'Rack billboard hover must use a lighter blue based on the normal state.');
 assert.ok(warehouseRenderer.includes("selected: { fill: '#2563EB'"), 'Rack billboard selected state must use a stronger blue based on the normal state.');
@@ -308,7 +347,7 @@ assert.ok(warehouseRenderer.includes('const forkliftClearanceDiameterMm = 1950;'
 const forkliftNavigation = buildPassageNavigationGraph(crossPassageCells, 500, 1950);
 assert.ok(findPassagePath(forkliftNavigation, '4:16', '16:4').length > 0, 'A 1.95m forklift turning envelope must remain connected through a 2m cross passage.');
 assert.ok(warehouseRenderer.includes("shell.viewport.dataset.amrPathfinding = amrFleet.length ? 'astar' : 'unavailable';"), 'The viewport must expose the active A* navigation state for verification.');
-assert.ok(warehouseRenderer.includes('· 무인 지게차 ${amrFleet.length}대'), 'The warehouse summary must show the active unmanned forklift count.');
+assert.ok(!warehouseRenderer.includes('· 무인 지게차 ${amrFleet.length}대'), 'The removed top-right object summary must not be updated in the scene.');
 assert.ok(warehouseRenderer.includes("group.name = `FORKLIFT-AMR-${index + 1}`;"), 'The round AMR model must be replaced with an unmanned forklift group.');
 assert.ok(warehouseRenderer.includes("mastGroup.name = 'forklift-mast';"), 'The unmanned forklift must have a visible mast.');
 assert.ok(warehouseRenderer.includes("forkAssembly.name = 'forklift-forks';"), 'The unmanned forklift must have a separately animated fork assembly.');
@@ -403,4 +442,284 @@ assert.strictEqual(converted.inventory[0].status, 'warning', 'Korean inventory s
 const zoneBounds = calculateZoneFloorBounds(converted.racks, converted.rackTypes, 500, 100);
 assert.deepStrictEqual(JSON.parse(JSON.stringify(zoneBounds)), [{ zoneCode: 'A01', minX: -30, maxX: 3530, minY: 85, maxY: 2415 }], 'A 10cm zone boundary must preserve a 50cm clear gap from the centered rack.');
 
-console.log('Warehouse 3D data and card checks passed.');
+// Execute the production camera controls with minimal rendering stubs.
+// Keep the exact perspective presets while testing orthographic axis alignment.
+const cameraControlsSource = warehouseRenderer.slice(
+    warehouseRenderer.indexOf('        const cameraViewPresets = {'),
+    warehouseRenderer.indexOf("        shell.projectionToggle.addEventListener('click'")
+);
+const cameraContext = vm.createContext({
+    assert,
+    setSelectedAmr() {}, amrFocusTransition: null,
+    shell: { cameraViewButtons: [] }, signal: {},
+    renderer: { domElement: { focus() {} } },
+    requestRender() {}, updateProjectionMatrices() {}, updateProjectionToggle() {},
+    cameraFocusTransitionToken: 0, yaw: 0, pitch: 0, distance: 60,
+    floorWidth: 55.5, floorDepth: 33, projectionMode: 'perspective',
+    minimumCameraDistance: 8, maximumCameraDistance: 140, perspectiveHalfFov: Math.PI / 8,
+    orthographicViewHeight: 0, perspectiveCamera: {}, orthographicCamera: {}, camera: {},
+    target: { x: 0, y: 0, z: 0, set(x, y, z) { Object.assign(this, { x, y, z }); } }
+});
+vm.runInContext(`
+    const getPerspectiveViewHeight = (value = distance) => 2 * value * Math.tan(perspectiveHalfFov);
+    const updateCamera = () => { camera.height = target.y + distance * Math.sin(pitch); };
+    ${cameraControlsSource}
+    for (const view of ['front', 'side']) {
+        applyProjectionMode('perspective');
+        applyCameraView(view);
+        assert.strictEqual(pitch, 0.08);
+        applyProjectionMode('orthographic');
+        assert.strictEqual(pitch, 0, view + ' then orthographic must be horizontal.');
+        assert.strictEqual(camera.height, target.y);
+        assert.strictEqual(yaw, view === 'front' ? 0 : Math.PI / 2);
+        applyCameraView('quarter');
+        applyCameraView(view);
+        assert.strictEqual(pitch, 0, 'Orthographic then ' + view + ' must be horizontal.');
+        target.x += 3; target.y += 1; orthographicViewHeight *= 0.8;
+        const savedTarget = JSON.stringify(target);
+        const savedHeight = orthographicViewHeight;
+        applyProjectionMode('perspective');
+        assert.strictEqual(pitch, 0.08);
+        applyProjectionMode('orthographic');
+        assert.strictEqual(pitch, 0);
+        assert.strictEqual(JSON.stringify(target), savedTarget, 'Projection switches must preserve panning.');
+        assert.ok(Math.abs(orthographicViewHeight - savedHeight) < 1e-10, 'Projection switches must preserve zoom.');
+    }
+    for (const view of ['quarter', 'top']) {
+        applyProjectionMode('perspective'); applyCameraView(view);
+        const originalPitch = pitch;
+        applyProjectionMode('orthographic');
+        assert.strictEqual(pitch, originalPitch, 'Other presets must not change.');
+    }
+`, cameraContext);
+const rotationSource = warehouseRenderer.match(/if \(pointerStart.mode === 'rotate'\) \{([\s\S]*?)\n            \} else \{/)[1];
+vm.runInContext(`
+    const rotate = (deltaX, deltaY) => { ${rotationSource} };
+    applyCameraView('front');
+    let pointerStart = { yaw, pitch };
+    rotate(0, 0);
+    assert.strictEqual(alignedCameraView, 'front', 'A click must not release alignment.');
+    rotate(10, 0);
+    assert.strictEqual(pitch, 0, 'Horizontal rotation must not jump above the horizon.');
+    assert.strictEqual(alignedCameraView, null);
+    rotate(0, 0);
+    assert.strictEqual(yaw, pointerStart.yaw, 'Dragging back to the starting point must restore the starting heading.');
+    assert.strictEqual(pitch, pointerStart.pitch);
+    rotate(10, 20);
+    const manualPitch = pitch, manualYaw = yaw;
+    applyProjectionMode('perspective'); applyProjectionMode('orthographic');
+    assert.strictEqual(pitch, manualPitch, 'Manual elevation must survive projection switches.');
+    assert.strictEqual(yaw, manualYaw, 'Manual heading must survive projection switches.');
+    applyCameraView('side');
+    assert.strictEqual(pitch, 0, 'The view button must restore exact alignment.');
+`, cameraContext);
+
+// Equipment names are joined by their stable code, never by sheet row order.
+const parseEquipmentMaster = sandbox.window.wmsWarehouse3D.parseEquipmentMaster;
+assert.deepStrictEqual(JSON.parse(JSON.stringify(parseEquipmentMaster([
+    '설비 마스터', '설비명,사용 여부,설비 코드',
+    ' 두 번째 ,Y, AMR-002 ', '첫 번째,Y,AMR-001', ',Y,AMR-003', ',,'
+].join('\n')))), [
+    { code: 'AMR-002', name: '두 번째' },
+    { code: 'AMR-001', name: '첫 번째' },
+    { code: 'AMR-003', name: 'AMR-003' }
+]);
+assert.throws(() => parseEquipmentMaster('설비 코드,설비명\nAMR-001,A\n AMR-001 ,B'), /중복/);
+assert.throws(() => parseEquipmentMaster('설비 코드,모델명\nAMR-001,A'), /설비 마스터/);
+assert.ok(warehouseRenderer.includes("equipmentByCode.get(amr.equipmentCode)?.name || amr.equipmentCode"));
+assert.ok(warehouseRenderer.includes("amr.label.userData = { kind: 'amr-label', amr };"));
+
+// Run the actual selection/follow code without WebGL to protect camera angles.
+class FollowVector {
+    constructor(x = 0, y = 0, z = 0) { Object.assign(this, { x, y, z }); }
+    set(x, y, z) { Object.assign(this, { x, y, z }); return this; }
+    add(v) { for (const key of ['x', 'y', 'z']) this[key] += v[key]; return this; }
+    sub(v) { for (const key of ['x', 'y', 'z']) this[key] -= v[key]; return this; }
+    addScaledVector(v, scale) { for (const key of ['x', 'y', 'z']) this[key] += v[key] * scale; return this; }
+    clone() { return new FollowVector(this.x, this.y, this.z); }
+    copy(v) { Object.assign(this, { x: v.x, y: v.y, z: v.z }); return this; }
+    lerpVectors(a, b, t) {
+        for (const key of ['x', 'y', 'z']) this[key] = a[key] + (b[key] - a[key]) * t;
+        return this;
+    }
+}
+const followSource = warehouseRenderer.slice(
+    warehouseRenderer.indexOf('        const setSelectedAmr = (amr) => {'),
+    warehouseRenderer.indexOf('        const fadeWorldObject = ')
+);
+const followContext = vm.createContext({
+    assert, THREE: { Vector3: FollowVector }, performance: { now: () => 1000 },
+    followedAmr: null, hoveredAmr: null, amrFocusTransition: null,
+    cameraFocusTransitionToken: 0, viewportAspect: 1.5,
+    floorWidth: 55.5, floorDepth: 33, projectionMode: 'orthographic', alignedCameraView: null, signal: {},
+    target: new FollowVector(28, 2.5, 16), distance: 60, orthographicViewHeight: 50,
+    minimumCameraDistance: 8, maximumCameraDistance: 140, perspectiveHalfFov: Math.PI / 8,
+    yaw: 0.65, pitch: 0.45, shell: { viewport: { dataset: {} } },
+    easeOutCubic: t => 1 - (1 - t) ** 3,
+    setAmrLabelState() {}, setHoveredSlot() {}, requestRender() {}, updateProjectionMatrices() {}, updateCamera() {}
+});
+vm.runInContext(`
+    ${followSource}
+    const robot = { equipmentCode: 'AMR-001', group: { position: new THREE.Vector3(5, 0, 8) } };
+    setSelectedAmr(robot);
+    updateAmrFollow(1250);
+    assert.ok(distance < 60 && distance > 14, 'Focus must animate, not jump.');
+    updateAmrFollow(1500);
+    assert.strictEqual(orthographicViewHeight, 14, 'Keep a moderate 14m vertical view.');
+    assert.strictEqual(target.x, 5); assert.strictEqual(target.y, 1.5); assert.strictEqual(target.z, 8);
+    robot.group.position.x += 2; robot.group.position.z += 3;
+    updateAmrFollow(1600);
+    assert.strictEqual(target.x, 7); assert.strictEqual(target.z, 11);
+    assert.strictEqual(yaw, 0.65); assert.strictEqual(pitch, 0.45);
+    setSelectedAmr(null); robot.group.position.x += 2; updateAmrFollow(1700);
+    assert.strictEqual(target.x, 7, 'Clearing selection must stop following.');
+    assert.strictEqual(shell.viewport.dataset.followingAmrCode, '');
+    setSelectedAmr(robot); amrFocusTransition.zoomCancelled = true; distance = 25;
+    updateAmrFollow(1500);
+    assert.strictEqual(distance, 25, 'Manual wheel zoom must not be overwritten.');
+    assert.strictEqual(target.x, 9, 'Manual zoom still follows the robot.');
+    viewportAspect = 0.5; setSelectedAmr(robot); updateAmrFollow(1500);
+    assert.strictEqual(orthographicViewHeight, 20, 'Narrow views retain at least 10m horizontally.');
+`, followContext);
+
+const followDragSource = warehouseRenderer.slice(
+    warehouseRenderer.indexOf("        renderer.domElement.addEventListener('pointermove', (event) => {"),
+    warehouseRenderer.indexOf("        renderer.domElement.addEventListener('contextmenu'")
+);
+vm.runInContext(`
+    let dragHandler;
+    const renderer = { domElement: { addEventListener(type, handler) { dragHandler = handler; } } };
+    ${followDragSource}
+    let pointerStart = {
+        x: 0, y: 0, yaw, pitch, distance: 25, target: target.clone(),
+        amrPosition: robot.group.position.clone(),
+        viewRight: new THREE.Vector3(1, 0, 0), viewDirection: new THREE.Vector3(0, 0, -1),
+        mode: 'pan', pointerId: 1
+    };
+    robot.group.position.x += 1;
+    dragHandler({ pointerId: 1, clientX: 20, clientY: 10 });
+    assert.strictEqual(followedAmr, robot, 'Panning must not deselect the AMR.');
+    assert.strictEqual(target.x, 9.25, 'Panning must include AMR movement since pointerdown.');
+    const savedOffset = amrFollowOffset.clone();
+    assert.strictEqual(savedOffset.x, -0.75);
+    assert.strictEqual(savedOffset.z, -0.375);
+    robot.group.position.x += 2;
+    updateAmrFollow(2000);
+    assert.strictEqual(target.x, 11.25, 'Tracking must retain the manual pan offset.');
+    pointerStart = { ...pointerStart, mode: 'rotate', yaw, pitch };
+    const oldYaw = yaw;
+    dragHandler({ pointerId: 1, clientX: 20, clientY: 10 });
+    assert.strictEqual(followedAmr, robot, 'Rotation must not deselect the AMR.');
+    assert.strictEqual(yaw, oldYaw - 0.16);
+    const rotatedPitch = pitch;
+    robot.group.position.z += 1; updateAmrFollow(2100);
+    assert.strictEqual(pitch, rotatedPitch, 'Following must preserve the adjusted rotation.');
+    assert.strictEqual(amrFollowOffset.x, savedOffset.x);
+    assert.strictEqual(amrFollowOffset.z, savedOffset.z);
+    setSelectedAmr(robot); updateAmrFollow(1500);
+    assert.strictEqual(amrFollowOffset.x, 0, 'Selecting an AMR again must recenter it.');
+    assert.strictEqual(target.x, robot.group.position.x);
+`, followContext);
+
+// Run actual pointer handlers: clicking must never transiently hide slot hover information.
+const slotPointerDownAndMove = warehouseRenderer.slice(
+    warehouseRenderer.indexOf('        let pointerStart;'),
+    warehouseRenderer.indexOf("        renderer.domElement.addEventListener('contextmenu'")
+);
+const slotPointerUp = warehouseRenderer.slice(
+    warehouseRenderer.indexOf("        renderer.domElement.addEventListener('pointerup'"),
+    warehouseRenderer.indexOf('        const applyFilters = ')
+);
+const slotPointerContext = vm.createContext({
+    assert, THREE: { Vector3: class extends FollowVector {
+        normalize() { return this; }
+        crossVectors() { return this.set(1, 0, 0); }
+    } },
+    camera: { up: new FollowVector(0, 1, 0), getWorldDirection(v) { v.set(0, 0, -1); } },
+    target: new FollowVector(10, 2, 10), yaw: 0, pitch: 0.5,
+    cameraFocusTransitionToken: 0, followedAmr: null, amrFocusTransition: null,
+    projectionMode: 'perspective', alignedCameraView: null, floorWidth: 55, floorDepth: 33, signal: {},
+    getEquivalentCameraDistance: () => 25,
+    updateCamera() {}, requestRender() {}, setHoveredRack() {}, setHoveredAmr() {},
+    setSelectedAmr() {}, setSelectedRack() {}, setFocusedRack() {}, showDefaultInspector() {}, focusRackInCurrentView() {}
+});
+vm.runInContext(`
+    const handlers = {};
+    const renderer = { domElement: { addEventListener(type, handler) { handlers[type] = handler; }, setPointerCapture() {}, focus() {} } };
+    const slot = { code: 'slot-1' };
+    let hover = slot, selected = null, shown = null, cleared = 0, rackHit = null, amrHit = null;
+    const setHoveredSlot = value => { hover = value; if (!value) cleared++; };
+    const setSelectedSlot = value => { selected = value; };
+    const showSelection = value => { shown = value; };
+    const getSlotAtPointer = () => slot;
+    const getLabelRackAtPointer = () => rackHit;
+    const getLabelAmrAtPointer = () => amrHit;
+    ${slotPointerDownAndMove}
+    ${slotPointerUp}
+    const event = { button: 0, pointerId: 1, clientX: 100, clientY: 100, preventDefault() {} };
+    handlers.pointerdown(event);
+    assert.strictEqual(hover, slot, 'Pointerdown must preserve the visible tooltip.');
+    handlers.pointermove({ ...event, clientX: 101 });
+    handlers.pointerup({ ...event, clientX: 101 });
+    assert.strictEqual(hover, slot); assert.strictEqual(selected, slot); assert.strictEqual(shown, slot);
+    assert.strictEqual(cleared, 0, 'A click must not hide and reshow tooltip, even transiently.');
+    handlers.pointerdown(event); handlers.pointermove({ ...event, clientX: 120 });
+    assert.strictEqual(hover, null, 'Actual panning must clear stale hover information.');
+    handlers.pointerup({ ...event, clientX: 120 });
+    hover = slot; handlers.pointerdown({ ...event, button: 2 });
+    handlers.pointermove({ ...event, clientX: 120 });
+    assert.strictEqual(hover, null, 'Actual rotation must clear stale hover information.');
+    handlers.pointerup({ ...event, clientX: 120 });
+    for (const kind of ['rack', 'amr']) {
+        hover = slot; rackHit = kind === 'rack' ? {} : null; amrHit = kind === 'amr' ? {} : null;
+        handlers.pointerdown(event); handlers.pointerup(event);
+        assert.strictEqual(hover, null, 'Selecting a billboard must clear old slot information.');
+    }
+`, slotPointerContext);
+
+// Exercise the real sprite drawing for every interaction state.
+const labelSource = warehouseRenderer.slice(
+    warehouseRenderer.indexOf('    function createLabelSprite('),
+    warehouseRenderer.indexOf('    function calculateZoneFloorBounds(')
+);
+const labelContext = vm.createContext({
+    assert, worldUiResolutionScale: 2,
+    document: { createElement() {
+        const context = { strokes: 0, clearRect() {}, fillRect() {}, fillText() {}, strokeRect() { this.strokes++; } };
+        return { getContext() { return context; } };
+    } },
+    THREE: {
+        CanvasTexture: class { constructor(image) { this.image = image; } },
+        SpriteMaterial: class { constructor(options) { Object.assign(this, options); } },
+        Sprite: class { constructor(material) { this.material = material; this.scale = new FollowVector(); } }
+    }
+});
+vm.runInContext(`
+    ${labelSource}
+    const rackLabel = createLabelSprite(THREE, 'W01');
+    const amrLabel = createLabelSprite(THREE, 'AMR001', { sizeScale: 0.5, fontWeight: 400, border: false });
+    assert.strictEqual(rackLabel.scale.x, 3.2);
+    assert.strictEqual(rackLabel.scale.y, 0.9);
+    for (const label of [rackLabel, amrLabel]) assert.strictEqual(label.material.opacity, 0.8);
+    for (const state of ['normal', 'hover', 'selected']) {
+        const rackUpdate = rackLabel.setInteractionState(state);
+        const amrUpdate = amrLabel.setInteractionState(state);
+        for (const progress of [0, 0.5, 1]) {
+            rackUpdate(progress); amrUpdate(progress);
+            assert.strictEqual(amrLabel.scale.x, rackLabel.scale.x / 2);
+            assert.strictEqual(amrLabel.scale.y, rackLabel.scale.y / 2);
+            assert.ok(amrLabel.material.opacity <= 0.8 && rackLabel.material.opacity <= 0.8);
+        }
+        assert.strictEqual(amrLabel.material.opacity, 0.8);
+        assert.strictEqual(rackLabel.material.opacity, 0.8);
+    }
+    const amrCanvas = amrLabel.material.map.image.getContext('2d');
+    const rackCanvas = rackLabel.material.map.image.getContext('2d');
+    assert.strictEqual(amrCanvas.font, '400 64px sans-serif');
+    assert.strictEqual(rackCanvas.font, '700 64px sans-serif');
+    assert.strictEqual(amrCanvas.strokes, 0, 'AMR labels must never draw a border.');
+    assert.strictEqual(rackCanvas.strokes, 4, 'Rack labels retain borders in every state.');
+`, labelContext);
+assert.ok(warehouseRenderer.includes('createLabelSprite(THREE, amr.equipmentName, { sizeScale: 0.5, fontWeight: 400, border: false })'));
+
+console.log('Warehouse 3D data, card, camera, AMR follow and billboard style checks passed.');
