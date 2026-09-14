@@ -26,7 +26,7 @@
             const created = !script;
             if (created) {
                 script = document.createElement('script');
-                script.src = 'js/warehouse-3d.js?v=warehouse-tree-v40';
+                script.src = 'js/warehouse-3d.js?v=warehouse-kpi-split-v54';
                 script.dataset.wmsWarehouse3d = 'true';
             }
             const cleanup = () => {

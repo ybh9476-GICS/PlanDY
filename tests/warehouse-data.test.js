@@ -94,9 +94,47 @@ assert.ok(warehouseRenderer.includes("xAxisRange: 'A3:3'"), 'The floor plan load
 assert.ok(warehouseRenderer.includes("yAxisRange: 'A3:A'"), 'The floor plan loader must discover the final Y coordinate from column A.');
 assert.ok(warehouseRenderer.includes('floorPlanAxis.range'), 'The floor plan loader must fetch the dynamically calculated grid range.');
 assert.ok(!warehouseRenderer.includes('passageTiles'), 'T cells must not render as filled passage tiles.');
-assert.ok(warehouseRenderer.includes('const passageBoundaryWidthMm = 100;'), 'Passage boundaries must be exactly 10cm wide.');
-assert.ok(warehouseRenderer.includes('buildPassageBoundarySegments'), 'Passage boundaries must be derived from exposed T-cell edges.');
-assert.ok(warehouseRenderer.includes("passageBoundaryMaterial = new THREE.MeshBasicMaterial({ color: '#facc15' });"), 'Only the passage boundary must retain the yellow marking.');
+assert.ok(warehouseRenderer.includes("shell.viewport.dataset.warehouseSafetyLines = 'true';"), 'The requested warehouse scene must display passage boundary lines.');
+assert.ok(warehouseRenderer.includes('const passageBoundaryWidthMm = 100;'), 'Passage boundaries must retain the requested 100mm width.');
+assert.ok(warehouseRenderer.includes('const passageBoundaryInsetMm = 100;'), 'Passage boundaries must be inset 100mm from the passage edge.');
+assert.ok(warehouseRenderer.includes("passageBoundaryMaterial = new THREE.MeshBasicMaterial({ color: '#facc15' });"), 'Passage boundaries must use the visible yellow line material.');
+assert.ok(warehouseRenderer.includes('passageBoundaryGeometry?.dispose();'), 'Leaving the page must dispose passage boundary geometry.');
+assert.ok(warehouseRenderer.includes('passageBoundaryMaterial?.dispose();'), 'Leaving the page must dispose passage boundary material.');
+assert.ok(warehouseRenderer.includes("enclosure.name = 'WAREHOUSE-ENCLOSURE';"), 'The warehouse scene must include an enclosure group.');
+assert.strictEqual((warehouseRenderer.match(/addEnclosurePlane\('WAREHOUSE-WALL-/g) || []).length, 4, 'The warehouse enclosure must create four walls.');
+assert.ok(warehouseRenderer.includes("addEnclosurePlane('WAREHOUSE-CEILING'"), 'The warehouse enclosure must include a ceiling.');
+assert.ok(warehouseRenderer.includes("[floorWidth / 2, warehouseHeight / 2, 0]"), 'The back wall must align with the floor-plan boundary.');
+assert.ok(warehouseRenderer.includes("[floorWidth / 2, warehouseHeight / 2, floorDepth]"), 'The front wall must align with the floor-plan boundary.');
+assert.ok(warehouseRenderer.includes("[0, warehouseHeight / 2, floorDepth / 2]"), 'The left wall must align with the floor-plan boundary.');
+assert.ok(warehouseRenderer.includes("[floorWidth, warehouseHeight / 2, floorDepth / 2]"), 'The right wall must align with the floor-plan boundary.');
+assert.ok(!warehouseRenderer.includes('enclosurePadding'), 'Warehouse walls must not remain outside the reference floor-plan boundary.');
+assert.ok(warehouseRenderer.includes("const wallColumnSpacing = 4;"), 'Wall columns must repeat at approximately four-metre intervals.');
+assert.ok(warehouseRenderer.includes("'WAREHOUSE-WALL-COLUMN'"), 'The enclosure must include structural wall columns.');
+assert.ok(warehouseRenderer.includes("addEnclosureBox('WAREHOUSE-WALL-GIRT'"), 'The enclosure must include horizontal wall reinforcement.');
+assert.ok(warehouseRenderer.includes("addEnclosureBox('WAREHOUSE-CEILING-BEAM-X'"), 'The ceiling must include transverse structural beams.');
+assert.ok(warehouseRenderer.includes("addEnclosureBox('WAREHOUSE-CEILING-BEAM-Z'"), 'The ceiling must include longitudinal structural beams.');
+assert.ok(/const structuralSteelMaterial[\s\S]*?color: '#556371'/.test(warehouseRenderer), 'Columns and beams must use the requested structural color.');
+assert.ok(/const wallMaterial[\s\S]*?color: '#607080'/.test(warehouseRenderer), 'Changing structural color must preserve the wall surface color.');
+assert.ok(warehouseRenderer.includes("'WAREHOUSE-CEILING-LIGHT-HOUSING'"), 'Ceiling lights must include visible housings.');
+assert.ok(warehouseRenderer.includes("shell.viewport.dataset.warehouseFloorAligned = 'true';"), 'The viewport must expose floor-boundary alignment for browser verification.');
+assert.ok(warehouseRenderer.includes("group.name = `WAREHOUSE-WALL-STRUCTURE-${side.toUpperCase()}`;"), 'Every wall direction must own a separate structure group.');
+assert.ok(warehouseRenderer.includes("ceilingStructureGroup.name = 'WAREHOUSE-CEILING-STRUCTURE';"), 'Ceiling beams and light housings must use a separate visibility group.');
+assert.ok(warehouseRenderer.includes('updateWarehouseStructureVisibility();'), 'Camera changes must update structure visibility.');
+assert.ok(warehouseRenderer.includes("shell.viewport.dataset.warehouseOcclusionMode = 'camera-aware';"), 'The viewport must expose camera-aware structure occlusion for browser verification.');
+assert.ok(warehouseRenderer.includes("shell.viewport.dataset.warehouseStructureShadows = 'false';"), 'The viewport must expose disabled enclosure shadows for browser verification.');
+assert.ok(
+    /const addEnclosureBox[\s\S]*?mesh\.castShadow = false;[\s\S]*?return mesh;/.test(warehouseRenderer),
+    'Wall columns and ceiling structures must not cast shadows onto the warehouse floor.'
+);
+assert.ok(warehouseRenderer.includes('side: THREE.BackSide'), 'The ceiling must remain visible from inside without blocking the overhead view.');
+assert.ok(warehouseRenderer.includes("const wallTexture = createPanelTexture('wall');"), 'The warehouse walls must use a panel surface texture.');
+assert.ok(!warehouseRenderer.includes("const ceilingTexture = createPanelTexture('ceiling');"), 'The ceiling must not create a different surface texture.');
+assert.ok(warehouseRenderer.includes('const ceilingMaterial = wallMaterial.clone();'), 'The ceiling must clone every wall material property.');
+assert.ok(warehouseRenderer.includes('ceilingMaterial.side = THREE.BackSide;'), 'The matching ceiling material must remain visible from inside.');
+assert.ok(warehouseRenderer.includes("new THREE.AmbientLight('#c7dcef', 0.48)"), 'The warehouse enclosure must receive balanced ambient light.');
+assert.ok(warehouseRenderer.includes('renderer.toneMapping = THREE.ACESFilmicToneMapping;'), 'The renderer must use filmic tone mapping.');
+assert.ok(warehouseRenderer.includes('renderer.shadowMap.type = THREE.PCFSoftShadowMap;'), 'The renderer must use soft shadow maps.');
+assert.ok(warehouseRenderer.includes('enclosureResources.forEach((resource) => resource.dispose());'), 'Leaving the page must dispose enclosure resources.');
 assert.ok(!warehouseRenderer.includes('zoneBoundaryEntries'), 'Zone-code boundary rendering must be removed.');
 assert.ok(!warehouseRenderer.includes('zoneBoundaryMaterial'), 'Zone-code boundary material must be removed.');
 assert.ok(!warehouseRenderer.includes('임시 데이터 표시 중'), 'A GICS connection failure must not silently render stale demo data.');
@@ -105,7 +143,25 @@ assert.ok(warehouseRenderer.includes("mode: event.button === 2 ? 'rotate' : 'pan
 assert.ok(warehouseRenderer.includes("addEventListener('contextmenu'"), 'The 3D canvas must suppress the right-click menu.');
 assert.ok(warehouseRenderer.includes('container.requestFullscreen'), 'The warehouse card must support entering fullscreen.');
 assert.ok(warehouseRenderer.includes('document.exitFullscreen'), 'The warehouse card must support leaving fullscreen.');
-assert.ok(cardRenderer.includes('warehouse-tree-v40'), 'The shared renderer must load the current warehouse renderer.');
+assert.ok(cardRenderer.includes('warehouse-kpi-split-v54'), 'The shared renderer must load the current warehouse renderer.');
+assert.ok(warehouseRenderer.includes('class="warehouse-3d-brand" aria-label="TEST, WMS Test Monitoring"'), 'The top-left toolbar must contain an accessible warehouse brand.');
+assert.ok(warehouseRenderer.includes('class="warehouse-3d-brand-symbol"'), 'The temporary warehouse brand symbol must be rendered as a square element.');
+assert.ok(warehouseRenderer.includes('<strong>TEST</strong>'), 'The warehouse brand must display TEST.');
+assert.ok(warehouseRenderer.includes('<small>WMS Test Monitoring</small>'), 'The warehouse brand must display its description.');
+assert.ok(warehouseStyles.includes('.warehouse-3d-brand-symbol'), 'The temporary square symbol must have a dedicated style.');
+assert.ok(warehouseStyles.includes('flex: 0 0 26px; width: 26px; height: 26px;'), 'The temporary symbol must retain its compact square dimensions.');
+assert.ok(warehouseRenderer.includes('class="warehouse-3d-kpi-list" role="list" aria-label="창고 운영 현황"'), 'The centered toolbar must contain an accessible KPI card list.');
+['전체 적재율', '가용 셀', '입고 진행', '입고 완료', '입고 배정/요청', '출고 진행', '출고 완료', '출고 배정/요청', '미처리 알람'].forEach((label) => {
+    assert.ok(warehouseRenderer.includes(label), `The toolbar KPI list must include ${label}.`);
+});
+assert.strictEqual((warehouseRenderer.match(/class="warehouse-3d-kpi-card/g) || []).length, 9, 'The toolbar must display nine KPI cards.');
+assert.ok(warehouseRenderer.includes('role="progressbar" aria-label="전체 적재율"'), 'The utilization card must expose an accessible progress value.');
+assert.ok(warehouseStyles.includes('grid-template-columns: repeat(9, minmax(0, 1fr));'), 'Desktop KPI cards must remain centered in one row.');
+assert.ok(warehouseStyles.includes('@media (max-width: 1740px)'), 'KPI cards must move to a dedicated centered row before they overlap the toolbar actions.');
+assert.ok(!warehouseRenderer.includes('warehouse-3d-zone-filter'), 'The top toolbar zone dropdown must be removed.');
+assert.ok(!warehouseRenderer.includes('warehouse-3d-search-label'), 'The top toolbar rack and item search must be removed.');
+assert.ok(!warehouseRenderer.includes('class="warehouse-3d-search"'), 'The removed top toolbar search input must not remain in the shell.');
+assert.ok(warehouseRenderer.includes('class="warehouse-3d-object-search"'), 'The left hierarchy search must remain available.');
 assert.ok(warehouseRenderer.includes('<time class="warehouse-3d-current-time" aria-label="현재 시간"></time>'), 'The top-right area must show the current time.');
 assert.ok(
     warehouseRenderer.indexOf('<time class="warehouse-3d-current-time"') < warehouseRenderer.indexOf('<button class="warehouse-3d-reload"')
@@ -274,7 +330,7 @@ assert.ok(warehouseRenderer.includes('originalMaterialsByObject'), 'Rack focus m
 assert.ok(warehouseRenderer.includes('setFocusedRack(labelRack)'), 'Selecting a rack billboard must isolate the selected rack.');
 assert.ok(warehouseRenderer.includes('focusRackInCurrentView(labelRack)'), 'Selecting a rack billboard must fit it in the current camera view.');
 assert.ok(warehouseRenderer.includes('setFocusedRack(null); showSelection(slot)'), 'Selecting a slot must restore all rack opacity.');
-assert.ok(warehouseRenderer.includes('if (focusedRack && !focusedEntry?.group.visible)'), 'Filtering out the focused rack must clear rack isolation.');
+assert.ok(warehouseRenderer.includes('rackEntries.forEach((entry) => { entry.group.visible = true; });'), 'Removing the top filters must keep every rack visible.');
 assert.ok(warehouseRenderer.includes('new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false })'), 'Rack billboard materials must not block foreground rendering.');
 assert.ok(warehouseRenderer.includes('sprite.renderOrder = 1000'), 'Rack billboards must use a dedicated top rendering order.');
 assert.ok(warehouseRenderer.includes('renderer.sortObjects = true'), 'The renderer must preserve billboard and outline ordering.');
@@ -306,6 +362,7 @@ vm.runInNewContext(warehouseRenderer, sandbox);
 const converter = sandbox.window.wmsWarehouse3D.convertGoogleSheetCsv;
 const getFloorPlanAxisRange = sandbox.window.wmsWarehouse3D.getFloorPlanAxisRange;
 const calculateZoneFloorBounds = sandbox.window.wmsWarehouse3D.calculateZoneFloorBounds;
+const getWarehouseStructureOcclusion = sandbox.window.wmsWarehouse3D.getWarehouseStructureOcclusion;
 const buildPassageBoundarySegments = sandbox.window.wmsWarehouse3D.buildPassageBoundarySegments;
 const buildPassageNavigationGraph = sandbox.window.wmsWarehouse3D.buildPassageNavigationGraph;
 const findPassagePath = sandbox.window.wmsWarehouse3D.findPassagePath;
@@ -336,18 +393,42 @@ const frontRackFocus = JSON.parse(JSON.stringify(calculateRackFocusView({
 assert.deepStrictEqual(frontRackFocus.center, { x: 1, y: 3, z: 0.5 }, 'Rack focus must target the physical rack center.');
 assert.ok(Math.abs(frontRackFocus.perspectiveDistance - 8.6117575695736) < 0.000001, 'Perspective focus must fit the rack height with padding.');
 assert.ok(Math.abs(frontRackFocus.orthographicViewHeight - 6.72) < 0.000001, 'Orthographic focus must fit the rack height with padding.');
+const frontStructureOcclusion = JSON.parse(JSON.stringify(getWarehouseStructureOcclusion(
+    { x: 50, y: 5, z: 80 },
+    100,
+    60,
+    10
+)));
+assert.deepStrictEqual(frontStructureOcclusion.hiddenWalls, ['front'], 'The foreground wall structure must hide in the front view.');
+assert.strictEqual(frontStructureOcclusion.ceilingHidden, false, 'A low front view must keep ceiling details visible.');
+const quarterStructureOcclusion = JSON.parse(JSON.stringify(getWarehouseStructureOcclusion(
+    { x: 130, y: 24, z: 90 },
+    100,
+    60,
+    10
+)));
+assert.deepStrictEqual(quarterStructureOcclusion.hiddenWalls.sort(), ['front', 'right'], 'A quarter view must hide both foreground wall structures.');
+assert.strictEqual(quarterStructureOcclusion.ceilingHidden, true, 'A camera above the roof must hide ceiling structure details.');
+const topStructureOcclusion = JSON.parse(JSON.stringify(getWarehouseStructureOcclusion(
+    { x: 50, y: 30, z: 30 },
+    100,
+    60,
+    10
+)));
+assert.deepStrictEqual(topStructureOcclusion.hiddenWalls, [], 'A centered top view must keep all distant wall structures.');
+assert.strictEqual(topStructureOcclusion.ceilingHidden, true, 'A top view must hide ceiling beams and light housings.');
 const contiguousPassageBoundary = JSON.parse(JSON.stringify(buildPassageBoundarySegments([
     { x: 0, y: 0 },
     { x: 500, y: 0 }
-], 500, 100)));
+], 500, 100, 100)));
 assert.deepStrictEqual(contiguousPassageBoundary, [
-    { side: 'top', x: 250, y: 50, width: 500, depth: 100 },
-    { side: 'bottom', x: 250, y: 450, width: 500, depth: 100 },
-    { side: 'left', x: 50, y: 250, width: 100, depth: 500 },
-    { side: 'top', x: 750, y: 50, width: 500, depth: 100 },
-    { side: 'bottom', x: 750, y: 450, width: 500, depth: 100 },
-    { side: 'right', x: 950, y: 250, width: 100, depth: 500 }
-], 'Adjacent T cells must share no internal boundary and every 10cm strip must stay inside the passage.');
+    { side: 'top', x: 300, y: 150, width: 400, depth: 100 },
+    { side: 'bottom', x: 300, y: 350, width: 400, depth: 100 },
+    { side: 'left', x: 150, y: 250, width: 100, depth: 300 },
+    { side: 'top', x: 700, y: 150, width: 400, depth: 100 },
+    { side: 'bottom', x: 700, y: 350, width: 400, depth: 100 },
+    { side: 'right', x: 850, y: 250, width: 100, depth: 300 }
+], 'Adjacent T cells must share no internal boundary and every strip must begin 100mm inside the passage edge.');
 const crossPassageCells = [];
 for (let cellX = 0; cellX < 16; cellX += 1) {
     for (let cellY = 6; cellY < 10; cellY += 1) crossPassageCells.push({ x: cellX * 500, y: cellY * 500 });
@@ -365,6 +446,25 @@ crossPassagePath.slice(1).forEach((node, index) => {
     const previous = crossPassagePath[index];
     assert.strictEqual(Math.abs(node.gridX - previous.gridX) + Math.abs(node.gridY - previous.gridY), 1, 'Every A* step must stay on an adjacent passage node.');
 });
+const countPathTurns = (path) => {
+    let turns = 0;
+    let previousDirection = '';
+    path.slice(1).forEach((node, index) => {
+        const previous = path[index];
+        const direction = `${Math.sign(node.gridX - previous.gridX)}:${Math.sign(node.gridY - previous.gridY)}`;
+        if (previousDirection && direction !== previousDirection) turns += 1;
+        previousDirection = direction;
+    });
+    return turns;
+};
+assert.strictEqual(countPathTurns(crossPassagePath), 1, 'The cross-passage route must reach the turnable intersection before rotating once.');
+const openPassageCells = Array.from({ length: 12 }, (_, cellX) => (
+    Array.from({ length: 12 }, (unused, cellY) => ({ x: cellX * 500, y: cellY * 500 }))
+)).flat();
+const openPassageNavigation = buildPassageNavigationGraph(openPassageCells, 500, 1950);
+const openPassagePath = findPassagePath(openPassageNavigation, '4:4', '16:16');
+assert.ok(openPassagePath.length > 0, 'The AMR must find a route across an open turnable passage area.');
+assert.strictEqual(countPathTurns(openPassagePath), 1, 'Equal-distance routes must minimize turns instead of alternating rotation and movement.');
 const narrowPassage = Array.from({ length: 12 }, (_, cellX) => Array.from({ length: 3 }, (unused, cellY) => ({ x: cellX * 500, y: cellY * 500 }))).flat();
 assert.strictEqual(buildPassageNavigationGraph(narrowPassage, 500, 1600).nodes.length, 0, 'A 1.6m AMR must not enter a passage narrower than its diameter.');
 assert.ok(warehouseRenderer.includes('const amrCount = 5;'), 'The warehouse scene must create exactly five AMRs.');
@@ -372,6 +472,7 @@ assert.ok(warehouseRenderer.includes('const forkliftClearanceDiameterMm = 1950;'
 const forkliftNavigation = buildPassageNavigationGraph(crossPassageCells, 500, 1950);
 assert.ok(findPassagePath(forkliftNavigation, '4:16', '16:4').length > 0, 'A 1.95m forklift turning envelope must remain connected through a 2m cross passage.');
 assert.ok(warehouseRenderer.includes("shell.viewport.dataset.amrPathfinding = amrFleet.length ? 'astar' : 'unavailable';"), 'The viewport must expose the active A* navigation state for verification.');
+assert.ok(warehouseRenderer.includes('const turnWeight = nodesByKey.size + 1;'), 'A* must prefer fewer turns among equal-distance routes.');
 assert.ok(!warehouseRenderer.includes('· 무인 지게차 ${amrFleet.length}대'), 'The removed top-right object summary must not be updated in the scene.');
 assert.ok(warehouseRenderer.includes("group.name = `FORKLIFT-AMR-${index + 1}`;"), 'The round AMR model must be replaced with an unmanned forklift group.');
 assert.ok(warehouseRenderer.includes("mastGroup.name = 'forklift-mast';"), 'The unmanned forklift must have a visible mast.');

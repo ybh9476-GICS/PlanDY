@@ -524,9 +524,105 @@
         container.className = 'warehouse-3d-shell';
         container.innerHTML = `
             <div class="warehouse-3d-toolbar">
-                <div class="warehouse-3d-toolbar-main">
-                    <label>구역 <select class="warehouse-3d-zone-filter"><option value="">전체</option></select></label>
-                    <label class="warehouse-3d-search-label">검색 <input class="warehouse-3d-search" type="search" placeholder="랙·품목 코드 또는 이름"></label>
+                <div class="warehouse-3d-brand" aria-label="TEST, WMS Test Monitoring">
+                    <span class="warehouse-3d-brand-symbol" aria-hidden="true"></span>
+                    <span class="warehouse-3d-brand-copy">
+                        <strong>TEST</strong>
+                        <small>WMS Test Monitoring</small>
+                    </span>
+                </div>
+                <div class="warehouse-3d-kpi-list" role="list" aria-label="창고 운영 현황">
+                    <div class="warehouse-3d-kpi-card is-cyan" role="listitem" data-warehouse-kpi="utilization">
+                        <span class="warehouse-3d-kpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Z"/><path d="m4 12 8 4.5 8-4.5M4 16.5l8 4.5 8-4.5"/></svg>
+                        </span>
+                        <span class="warehouse-3d-kpi-content">
+                            <span class="warehouse-3d-kpi-label">전체 적재율</span>
+                            <strong class="warehouse-3d-kpi-value">78.6%</strong>
+                            <span class="warehouse-3d-kpi-progress" role="progressbar" aria-label="전체 적재율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="78.6"><i style="--warehouse-kpi-progress:78.6%"></i></span>
+                            <small>15,720 / 20,000 셀</small>
+                        </span>
+                    </div>
+                    <div class="warehouse-3d-kpi-card is-teal" role="listitem" data-warehouse-kpi="available">
+                        <span class="warehouse-3d-kpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="m4 6 8-4 8 4v12l-8 4-8-4V6Z"/><path d="m4 6 8 4 8-4M12 10v12"/></svg>
+                        </span>
+                        <span class="warehouse-3d-kpi-content">
+                            <span class="warehouse-3d-kpi-label">가용 셀</span>
+                            <strong class="warehouse-3d-kpi-value">4,280</strong>
+                            <small class="warehouse-3d-kpi-state">21.4%</small>
+                        </span>
+                    </div>
+                    <div class="warehouse-3d-kpi-card is-blue" role="listitem" data-warehouse-kpi="inbound-progress">
+                        <span class="warehouse-3d-kpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v11m0 0-4-4m4 4 4-4"/></svg>
+                        </span>
+                        <span class="warehouse-3d-kpi-content">
+                            <span class="warehouse-3d-kpi-label">입고 진행</span>
+                            <strong class="warehouse-3d-kpi-value">12 <em>건</em></strong>
+                            <small class="warehouse-3d-kpi-state">진행 중</small>
+                        </span>
+                    </div>
+                    <div class="warehouse-3d-kpi-card is-green" role="listitem" data-warehouse-kpi="inbound-complete">
+                        <span class="warehouse-3d-kpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16.5 9"/></svg>
+                        </span>
+                        <span class="warehouse-3d-kpi-content">
+                            <span class="warehouse-3d-kpi-label">입고 완료</span>
+                            <strong class="warehouse-3d-kpi-value">0 <em>건</em></strong>
+                            <small class="warehouse-3d-kpi-state">완료</small>
+                        </span>
+                    </div>
+                    <div class="warehouse-3d-kpi-card is-amber" role="listitem" data-warehouse-kpi="inbound-request">
+                        <span class="warehouse-3d-kpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M9 2h6v4H9zM8 10h8M8 14h5"/></svg>
+                        </span>
+                        <span class="warehouse-3d-kpi-content">
+                            <span class="warehouse-3d-kpi-label">입고 배정/요청</span>
+                            <strong class="warehouse-3d-kpi-value">0 <em>건</em></strong>
+                            <small class="warehouse-3d-kpi-state">배정 대기</small>
+                        </span>
+                    </div>
+                    <div class="warehouse-3d-kpi-card is-blue" role="listitem" data-warehouse-kpi="outbound-progress">
+                        <span class="warehouse-3d-kpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 18V7m0 0-4 4m4-4 4 4"/></svg>
+                        </span>
+                        <span class="warehouse-3d-kpi-content">
+                            <span class="warehouse-3d-kpi-label">출고 진행</span>
+                            <strong class="warehouse-3d-kpi-value">18 <em>건</em></strong>
+                            <small class="warehouse-3d-kpi-state">진행 중</small>
+                        </span>
+                    </div>
+                    <div class="warehouse-3d-kpi-card is-green" role="listitem" data-warehouse-kpi="outbound-complete">
+                        <span class="warehouse-3d-kpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16.5 9"/></svg>
+                        </span>
+                        <span class="warehouse-3d-kpi-content">
+                            <span class="warehouse-3d-kpi-label">출고 완료</span>
+                            <strong class="warehouse-3d-kpi-value">0 <em>건</em></strong>
+                            <small class="warehouse-3d-kpi-state">완료</small>
+                        </span>
+                    </div>
+                    <div class="warehouse-3d-kpi-card is-amber" role="listitem" data-warehouse-kpi="outbound-request">
+                        <span class="warehouse-3d-kpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M9 2h6v4H9zM8 10h8M8 14h5"/></svg>
+                        </span>
+                        <span class="warehouse-3d-kpi-content">
+                            <span class="warehouse-3d-kpi-label">출고 배정/요청</span>
+                            <strong class="warehouse-3d-kpi-value">0 <em>건</em></strong>
+                            <small class="warehouse-3d-kpi-state">배정 대기</small>
+                        </span>
+                    </div>
+                    <div class="warehouse-3d-kpi-card is-red" role="listitem" data-warehouse-kpi="alerts">
+                        <span class="warehouse-3d-kpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></svg>
+                        </span>
+                        <span class="warehouse-3d-kpi-content">
+                            <span class="warehouse-3d-kpi-label">미처리 알람</span>
+                            <strong class="warehouse-3d-kpi-value">3 <em>건</em></strong>
+                            <small class="warehouse-3d-kpi-state">확인 필요</small>
+                        </span>
+                    </div>
                 </div>
                 <div class="warehouse-3d-toolbar-actions">
                     <time class="warehouse-3d-current-time" aria-label="현재 시간"></time>
@@ -625,8 +721,6 @@
             loading: container.querySelector('.warehouse-3d-loading'),
             hoverTooltip: container.querySelector('.warehouse-3d-slot-tooltip'),
             inspector: container.querySelector('.warehouse-3d-inspector'),
-            zoneFilter: container.querySelector('.warehouse-3d-zone-filter'),
-            search: container.querySelector('.warehouse-3d-search'),
             reload: container.querySelector('.warehouse-3d-reload'),
             fullscreen: container.querySelector('.warehouse-3d-fullscreen'),
             viewButtons: [...container.querySelectorAll('[data-warehouse-view]')],
@@ -933,9 +1027,30 @@
             maxY: bounds.maxY + expansion
         }));
     }
-    function buildPassageBoundarySegments(passageCells, cellSize = 500, boundaryWidth = 100) {
+    function getWarehouseStructureOcclusion(cameraPosition, floorWidth, floorDepth, warehouseHeight) {
+        const width = Math.max(0.001, toNumber(floorWidth, 1));
+        const depth = Math.max(0.001, toNumber(floorDepth, 1));
+        const height = Math.max(0.001, toNumber(warehouseHeight, 1));
+        const relativeX = (toNumber(cameraPosition?.x, width / 2) - width / 2) / (width / 2);
+        const relativeZ = (toNumber(cameraPosition?.z, depth / 2) - depth / 2) / (depth / 2);
+        const wallScores = {
+            back: -relativeZ,
+            front: relativeZ,
+            left: -relativeX,
+            right: relativeX
+        };
+        return {
+            wallScores,
+            hiddenWalls: Object.entries(wallScores)
+                .filter(([, score]) => score > 0.18)
+                .map(([side]) => side),
+            ceilingHidden: toNumber(cameraPosition?.y) > height + 0.25
+        };
+    }
+    function buildPassageBoundarySegments(passageCells, cellSize = 500, boundaryWidth = 100, boundaryInset = 100) {
         const size = Math.max(1, toNumber(cellSize, 500));
         const thickness = Math.min(size, Math.max(1, toNumber(boundaryWidth, 100)));
+        const inset = Math.min((size - thickness) / 2, Math.max(0, toNumber(boundaryInset, 100)));
         const cells = [];
         const occupied = new Set();
         (Array.isArray(passageCells) ? passageCells : []).forEach((cell) => {
@@ -949,17 +1064,23 @@
         const hasCell = (x, y) => occupied.has(`${x}:${y}`);
         const segments = [];
         cells.forEach(({ x, y }) => {
+            const leftInset = hasCell(x - size, y) ? 0 : inset;
+            const rightInset = hasCell(x + size, y) ? 0 : inset;
+            const topInset = hasCell(x, y - size) ? 0 : inset;
+            const bottomInset = hasCell(x, y + size) ? 0 : inset;
+            const horizontalWidth = size - leftInset - rightInset;
+            const verticalDepth = size - topInset - bottomInset;
             if (!hasCell(x, y - size)) {
-                segments.push({ side: 'top', x: x + size / 2, y: y + thickness / 2, width: size, depth: thickness });
+                segments.push({ side: 'top', x: x + leftInset + horizontalWidth / 2, y: y + inset + thickness / 2, width: horizontalWidth, depth: thickness });
             }
             if (!hasCell(x, y + size)) {
-                segments.push({ side: 'bottom', x: x + size / 2, y: y + size - thickness / 2, width: size, depth: thickness });
+                segments.push({ side: 'bottom', x: x + leftInset + horizontalWidth / 2, y: y + size - inset - thickness / 2, width: horizontalWidth, depth: thickness });
             }
             if (!hasCell(x - size, y)) {
-                segments.push({ side: 'left', x: x + thickness / 2, y: y + size / 2, width: thickness, depth: size });
+                segments.push({ side: 'left', x: x + inset + thickness / 2, y: y + topInset + verticalDepth / 2, width: thickness, depth: verticalDepth });
             }
             if (!hasCell(x + size, y)) {
-                segments.push({ side: 'right', x: x + size - thickness / 2, y: y + size / 2, width: thickness, depth: size });
+                segments.push({ side: 'right', x: x + size - inset - thickness / 2, y: y + topInset + verticalDepth / 2, width: thickness, depth: verticalDepth });
             }
         });
         return segments;
@@ -1041,13 +1162,15 @@
         if (!(nodesByKey instanceof Map) || !nodesByKey.has(startKey) || !nodesByKey.has(goalKey)) return [];
         if (startKey === goalKey) return [nodesByKey.get(startKey)];
         const goal = nodesByKey.get(goalKey);
+        const turnWeight = nodesByKey.size + 1;
         const heuristic = (key) => {
             const node = nodesByKey.get(key);
             return Math.abs(node.gridX - goal.gridX) + Math.abs(node.gridY - goal.gridY);
         };
-        const open = [{ key: startKey, score: heuristic(startKey) }];
-        const openScores = new Map([[startKey, heuristic(startKey)]]);
-        const distance = new Map([[startKey, 0]]);
+        const startStateKey = `${startKey}|start`;
+        const open = [{ stateKey: startStateKey, key: startKey, direction: '', score: heuristic(startKey) * turnWeight }];
+        const openScores = new Map([[startStateKey, heuristic(startKey) * turnWeight]]);
+        const distance = new Map([[startStateKey, 0]]);
         const cameFrom = new Map();
         const push = (entry) => {
             open.push(entry);
@@ -1080,27 +1203,31 @@
         };
         while (open.length) {
             const currentEntry = pop();
-            if (openScores.get(currentEntry.key) !== currentEntry.score) continue;
-            openScores.delete(currentEntry.key);
+            if (openScores.get(currentEntry.stateKey) !== currentEntry.score) continue;
+            openScores.delete(currentEntry.stateKey);
             if (currentEntry.key === goalKey) {
-                const pathKeys = [goalKey];
-                while (cameFrom.has(pathKeys[0])) pathKeys.unshift(cameFrom.get(pathKeys[0]));
-                return pathKeys.map((key) => nodesByKey.get(key));
+                const pathStates = [currentEntry.stateKey];
+                while (cameFrom.has(pathStates[0])) pathStates.unshift(cameFrom.get(pathStates[0]));
+                return pathStates.map((stateKey) => nodesByKey.get(stateKey.slice(0, stateKey.lastIndexOf('|'))));
             }
-            const currentDistance = distance.get(currentEntry.key);
-            nodesByKey.get(currentEntry.key).neighbors.forEach((neighborKey) => {
-                const nextDistance = currentDistance + 1;
-                if (nextDistance >= (distance.get(neighborKey) ?? Infinity)) return;
-                cameFrom.set(neighborKey, currentEntry.key);
-                distance.set(neighborKey, nextDistance);
-                const score = nextDistance + heuristic(neighborKey);
-                openScores.set(neighborKey, score);
-                push({ key: neighborKey, score });
+            const currentDistance = distance.get(currentEntry.stateKey);
+            const currentNode = nodesByKey.get(currentEntry.key);
+            currentNode.neighbors.forEach((neighborKey) => {
+                const neighbor = nodesByKey.get(neighborKey);
+                const nextDirection = `${Math.sign(neighbor.gridX - currentNode.gridX)}:${Math.sign(neighbor.gridY - currentNode.gridY)}`;
+                const turnCost = currentEntry.direction && currentEntry.direction !== nextDirection ? 1 : 0;
+                const nextDistance = currentDistance + turnWeight + turnCost;
+                const nextStateKey = `${neighborKey}|${nextDirection}`;
+                if (nextDistance >= (distance.get(nextStateKey) ?? Infinity)) return;
+                cameFrom.set(nextStateKey, currentEntry.stateKey);
+                distance.set(nextStateKey, nextDistance);
+                const score = nextDistance + heuristic(neighborKey) * turnWeight;
+                openScores.set(nextStateKey, score);
+                push({ stateKey: nextStateKey, key: neighborKey, direction: nextDirection, score });
             });
         }
         return [];
     }
-
     function findNearestPassageNode(graph, x, y, maxDistance = 1500) {
         const nodesByKey = graph?.nodesByKey;
         const step = Math.max(1, toNumber(graph?.step, 250));
@@ -1209,17 +1336,33 @@
         renderer.sortObjects = true;
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.12;
         renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.domElement.tabIndex = 0;
         renderer.domElement.setAttribute('aria-label', '기준정보 기반 3D 창고');
         shell.viewport.replaceChildren(renderer.domElement, shell.hoverTooltip, shell.cameraViews, shell.legend);
         shell.cameraViews.hidden = false;
 
-        scene.add(new THREE.HemisphereLight('#dbeafe', '#0f172a', 2.2));
-        const sun = new THREE.DirectionalLight('#ffffff', 2.8);
-        sun.position.set(25, 45, 20);
+        const maximumRackHeight = Math.max(0, ...data.rackTypes.map((type) => mm(type.height)));
+        const warehouseHeight = Math.max(8, maximumRackHeight + 3.2);
+        const sceneSpan = Math.max(floorWidth, floorDepth);
+        scene.add(new THREE.HemisphereLight('#dbeafe', '#101923', 1.65));
+        const sun = new THREE.DirectionalLight('#fff7e8', 2.65);
+        sun.position.set(floorWidth * 0.28, warehouseHeight + 28, floorDepth * 0.22);
+        sun.target.position.set(floorWidth / 2, 1.5, floorDepth / 2);
         sun.castShadow = true;
-        scene.add(sun);
+        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.camera.left = -sceneSpan * 0.62;
+        sun.shadow.camera.right = sceneSpan * 0.62;
+        sun.shadow.camera.top = sceneSpan * 0.62;
+        sun.shadow.camera.bottom = -sceneSpan * 0.62;
+        sun.shadow.camera.near = 0.5;
+        sun.shadow.camera.far = warehouseHeight + 80;
+        sun.shadow.bias = -0.00015;
+        sun.shadow.normalBias = 0.035;
+        scene.add(sun, sun.target);
         const fillLight = new THREE.DirectionalLight('#dbeafe', 1.35);
         fillLight.position.set(floorWidth * 0.85, 28, floorDepth * 0.85);
         fillLight.target.position.set(floorWidth / 2, 2.5, floorDepth / 2);
@@ -1248,6 +1391,243 @@
         });
         scene.environment = floorReflectionEnvironment;
 
+        const enclosureResources = [];
+        const enclosure = new THREE.Group();
+        enclosure.name = 'WAREHOUSE-ENCLOSURE';
+        enclosure.userData.kind = 'warehouse-enclosure';
+        const createPanelTexture = (kind) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const context = canvas.getContext('2d');
+            const ceiling = kind === 'ceiling';
+            context.fillStyle = ceiling ? '#c3cad1' : '#b8c1ca';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            if (ceiling) {
+                context.strokeStyle = '#7f8b96';
+                context.lineWidth = 5;
+                for (let value = 0; value <= 512; value += 128) {
+                    context.beginPath();
+                    context.moveTo(value, 0);
+                    context.lineTo(value, 512);
+                    context.stroke();
+                    context.beginPath();
+                    context.moveTo(0, value);
+                    context.lineTo(512, value);
+                    context.stroke();
+                }
+            } else {
+                for (let x = 0; x < 512; x += 16) {
+                    context.fillStyle = (x / 16) % 2 ? '#a7b2bc' : '#c4ccd3';
+                    context.fillRect(x, 0, 8, 512);
+                    context.fillStyle = 'rgba(46, 58, 69, 0.28)';
+                    context.fillRect(x + 15, 0, 1, 512);
+                }
+                context.fillStyle = 'rgba(38, 50, 61, 0.42)';
+                for (let y = 0; y <= 512; y += 128) context.fillRect(0, y, 512, 3);
+            }
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(ceiling ? Math.max(2, enclosureWidth / 8) : Math.max(3, enclosureWidth / 3.2), ceiling ? Math.max(2, enclosureDepth / 8) : Math.max(2, warehouseHeight / 2.4));
+            texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+            return texture;
+        };
+        const enclosureWidth = floorWidth;
+        const enclosureDepth = floorDepth;
+        const wallTexture = createPanelTexture('wall');
+        const wallMaterial = new THREE.MeshPhysicalMaterial({
+            color: '#607080',
+            map: wallTexture,
+            roughness: 0.72,
+            metalness: 0.16,
+            clearcoat: 0.12,
+            clearcoatRoughness: 0.72,
+            envMapIntensity: 0.7,
+            side: THREE.FrontSide
+        });
+        const ceilingMaterial = wallMaterial.clone();
+        ceilingMaterial.side = THREE.BackSide;
+        const lightPanelMaterial = new THREE.MeshBasicMaterial({ color: '#dbeafe', side: THREE.FrontSide });
+        const structuralSteelMaterial = new THREE.MeshPhysicalMaterial({
+            color: '#556371',
+            roughness: 0.48,
+            metalness: 0.72,
+            clearcoat: 0.18,
+            clearcoatRoughness: 0.42,
+            envMapIntensity: 1.05
+        });
+        const lightHousingMaterial = new THREE.MeshStandardMaterial({
+            color: '#526171',
+            roughness: 0.5,
+            metalness: 0.64
+        });
+        const wallStructureGroups = {};
+        ['back', 'front', 'left', 'right'].forEach((side) => {
+            const group = new THREE.Group();
+            group.name = `WAREHOUSE-WALL-STRUCTURE-${side.toUpperCase()}`;
+            group.userData = { kind: 'warehouse-wall-structure', side };
+            wallStructureGroups[side] = group;
+            enclosure.add(group);
+        });
+        const ceilingStructureGroup = new THREE.Group();
+        ceilingStructureGroup.name = 'WAREHOUSE-CEILING-STRUCTURE';
+        ceilingStructureGroup.userData.kind = 'warehouse-ceiling-structure';
+        enclosure.add(ceilingStructureGroup);
+        const cornerColumnEntries = [];
+        enclosureResources.push(
+            wallTexture,
+            wallMaterial,
+            ceilingMaterial,
+            lightPanelMaterial,
+            structuralSteelMaterial,
+            lightHousingMaterial
+        );
+        const addEnclosurePlane = (name, size, position, rotation, material) => {
+            const geometry = new THREE.PlaneGeometry(size[0], size[1]);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.name = name;
+            mesh.position.set(...position);
+            mesh.rotation.set(...rotation);
+            mesh.receiveShadow = true;
+            enclosure.add(mesh);
+            enclosureResources.push(geometry);
+            return mesh;
+        };
+        const addEnclosureBox = (name, size, position, material = structuralSteelMaterial, parent = enclosure) => {
+            const geometry = new THREE.BoxGeometry(...size);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.name = name;
+            mesh.position.set(...position);
+            mesh.castShadow = false;
+            mesh.receiveShadow = true;
+            parent.add(mesh);
+            enclosureResources.push(geometry);
+            return mesh;
+        };
+        addEnclosurePlane('WAREHOUSE-WALL-BACK', [enclosureWidth, warehouseHeight], [floorWidth / 2, warehouseHeight / 2, 0], [0, 0, 0], wallMaterial);
+        addEnclosurePlane('WAREHOUSE-WALL-FRONT', [enclosureWidth, warehouseHeight], [floorWidth / 2, warehouseHeight / 2, floorDepth], [0, Math.PI, 0], wallMaterial);
+        addEnclosurePlane('WAREHOUSE-WALL-LEFT', [enclosureDepth, warehouseHeight], [0, warehouseHeight / 2, floorDepth / 2], [0, Math.PI / 2, 0], wallMaterial);
+        addEnclosurePlane('WAREHOUSE-WALL-RIGHT', [enclosureDepth, warehouseHeight], [floorWidth, warehouseHeight / 2, floorDepth / 2], [0, -Math.PI / 2, 0], wallMaterial);
+
+        const wallColumnSpacing = 4;
+        const wallColumnPositions = new Map();
+        const addWallColumns = (side, startX, startZ, endX, endZ) => {
+            const edgeLength = Math.hypot(endX - startX, endZ - startZ);
+            const divisions = Math.max(1, Math.ceil(edgeLength / wallColumnSpacing));
+            for (let index = 0; index <= divisions; index += 1) {
+                const ratio = index / divisions;
+                const x = startX + (endX - startX) * ratio;
+                const z = startZ + (endZ - startZ) * ratio;
+                const key = `${x.toFixed(3)}:${z.toFixed(3)}`;
+                const column = wallColumnPositions.get(key) || { x, z, sides: new Set() };
+                column.sides.add(side);
+                wallColumnPositions.set(key, column);
+            }
+        };
+        addWallColumns('back', 0, 0, floorWidth, 0);
+        addWallColumns('right', floorWidth, 0, floorWidth, floorDepth);
+        addWallColumns('front', floorWidth, floorDepth, 0, floorDepth);
+        addWallColumns('left', 0, floorDepth, 0, 0);
+        wallColumnPositions.forEach(({ x, z, sides }) => {
+            const columnSides = [...sides];
+            const parent = columnSides.length === 1 ? wallStructureGroups[columnSides[0]] : enclosure;
+            const mesh = addEnclosureBox(
+                'WAREHOUSE-WALL-COLUMN',
+                [0.28, warehouseHeight, 0.28],
+                [x, warehouseHeight / 2, z],
+                structuralSteelMaterial,
+                parent
+            );
+            if (columnSides.length > 1) cornerColumnEntries.push({ mesh, sides: columnSides });
+        });
+
+        let wallGirtCount = 0;
+        for (let height = 2.2; height < warehouseHeight - 0.6; height += 2.2) {
+            addEnclosureBox('WAREHOUSE-WALL-GIRT', [floorWidth, 0.12, 0.14], [floorWidth / 2, height, 0.04], structuralSteelMaterial, wallStructureGroups.back);
+            addEnclosureBox('WAREHOUSE-WALL-GIRT', [floorWidth, 0.12, 0.14], [floorWidth / 2, height, floorDepth - 0.04], structuralSteelMaterial, wallStructureGroups.front);
+            addEnclosureBox('WAREHOUSE-WALL-GIRT', [0.14, 0.12, floorDepth], [0.04, height, floorDepth / 2], structuralSteelMaterial, wallStructureGroups.left);
+            addEnclosureBox('WAREHOUSE-WALL-GIRT', [0.14, 0.12, floorDepth], [floorWidth - 0.04, height, floorDepth / 2], structuralSteelMaterial, wallStructureGroups.right);
+            wallGirtCount += 4;
+        }
+        addEnclosureBox('WAREHOUSE-WALL-TOP-BEAM', [floorWidth, 0.24, 0.22], [floorWidth / 2, warehouseHeight - 0.12, 0], structuralSteelMaterial, wallStructureGroups.back);
+        addEnclosureBox('WAREHOUSE-WALL-TOP-BEAM', [floorWidth, 0.24, 0.22], [floorWidth / 2, warehouseHeight - 0.12, floorDepth], structuralSteelMaterial, wallStructureGroups.front);
+        addEnclosureBox('WAREHOUSE-WALL-TOP-BEAM', [0.22, 0.24, floorDepth], [0, warehouseHeight - 0.12, floorDepth / 2], structuralSteelMaterial, wallStructureGroups.left);
+        addEnclosureBox('WAREHOUSE-WALL-TOP-BEAM', [0.22, 0.24, floorDepth], [floorWidth, warehouseHeight - 0.12, floorDepth / 2], structuralSteelMaterial, wallStructureGroups.right);
+
+        addEnclosurePlane('WAREHOUSE-CEILING', [enclosureWidth, enclosureDepth], [floorWidth / 2, warehouseHeight, floorDepth / 2], [-Math.PI / 2, 0, 0], ceilingMaterial);
+        const ceilingBeamSpacing = 4;
+        let ceilingBeamCount = 0;
+        const depthBeamDivisions = Math.max(1, Math.ceil(floorDepth / ceilingBeamSpacing));
+        for (let index = 0; index <= depthBeamDivisions; index += 1) {
+            const z = floorDepth * index / depthBeamDivisions;
+            addEnclosureBox('WAREHOUSE-CEILING-BEAM-X', [floorWidth, 0.22, 0.18], [floorWidth / 2, warehouseHeight - 0.2, z], structuralSteelMaterial, ceilingStructureGroup);
+            ceilingBeamCount += 1;
+        }
+        const widthBeamDivisions = Math.max(1, Math.ceil(floorWidth / ceilingBeamSpacing));
+        for (let index = 0; index <= widthBeamDivisions; index += 1) {
+            const x = floorWidth * index / widthBeamDivisions;
+            addEnclosureBox('WAREHOUSE-CEILING-BEAM-Z', [0.14, 0.16, floorDepth], [x, warehouseHeight - 0.34, floorDepth / 2], structuralSteelMaterial, ceilingStructureGroup);
+            ceilingBeamCount += 1;
+        }
+
+        const lightPanelLength = Math.max(2.4, Math.min(4.2, floorWidth * 0.16));
+        const lightPanelGeometry = new THREE.PlaneGeometry(lightPanelLength, 0.42);
+        enclosureResources.push(lightPanelGeometry);
+        [0.18, 0.4, 0.62, 0.84].forEach((depthRatio) => {
+            [0.28, 0.72].forEach((widthRatio) => {
+                addEnclosureBox(
+                    'WAREHOUSE-CEILING-LIGHT-HOUSING',
+                    [lightPanelLength + 0.16, 0.1, 0.58],
+                    [floorWidth * widthRatio, warehouseHeight - 0.42, floorDepth * depthRatio],
+                    lightHousingMaterial,
+                    ceilingStructureGroup
+                );
+                const panel = new THREE.Mesh(lightPanelGeometry, lightPanelMaterial);
+                panel.name = 'WAREHOUSE-CEILING-LIGHT';
+                panel.position.set(floorWidth * widthRatio, warehouseHeight - 0.476, floorDepth * depthRatio);
+                panel.rotation.x = Math.PI / 2;
+                ceilingStructureGroup.add(panel);
+            });
+            const ceilingLight = new THREE.PointLight('#dbeafe', 5.5, sceneSpan * 0.78, 1.65);
+            ceilingLight.name = 'WAREHOUSE-AMBIENT-LIGHT';
+            ceilingLight.position.set(floorWidth / 2, warehouseHeight - 0.72, floorDepth * depthRatio);
+            enclosure.add(ceilingLight);
+        });
+        scene.add(new THREE.AmbientLight('#c7dcef', 0.48));
+        scene.add(enclosure);
+        let hiddenWallStructures = new Set();
+        let ceilingStructureHidden = false;
+        const updateWarehouseStructureVisibility = () => {
+            const occlusion = getWarehouseStructureOcclusion(camera.position, floorWidth, floorDepth, warehouseHeight);
+            const nextHiddenWalls = new Set();
+            Object.entries(occlusion.wallScores).forEach(([side, score]) => {
+                const threshold = hiddenWallStructures.has(side) ? 0.12 : 0.22;
+                const hidden = score > threshold;
+                wallStructureGroups[side].visible = !hidden;
+                if (hidden) nextHiddenWalls.add(side);
+            });
+            hiddenWallStructures = nextHiddenWalls;
+            cornerColumnEntries.forEach(({ mesh, sides }) => {
+                mesh.visible = sides.every(side => !hiddenWallStructures.has(side));
+            });
+            const ceilingThreshold = ceilingStructureHidden ? warehouseHeight - 0.15 : warehouseHeight + 0.25;
+            ceilingStructureHidden = camera.position.y > ceilingThreshold;
+            ceilingStructureGroup.visible = !ceilingStructureHidden;
+            shell.viewport.dataset.warehouseHiddenStructures = [...hiddenWallStructures].sort().join(',');
+            shell.viewport.dataset.warehouseCeilingStructureHidden = String(ceilingStructureHidden);
+        };
+        shell.viewport.dataset.warehouseWallCount = '4';
+        shell.viewport.dataset.warehouseColumnCount = String(wallColumnPositions.size);
+        shell.viewport.dataset.warehouseWallGirtCount = String(wallGirtCount);
+        shell.viewport.dataset.warehouseCeilingBeamCount = String(ceilingBeamCount);
+        shell.viewport.dataset.warehouseFloorAligned = 'true';
+        shell.viewport.dataset.warehouseOcclusionMode = 'camera-aware';
+        shell.viewport.dataset.warehouseStructureShadows = 'false';
+        shell.viewport.dataset.warehouseCeiling = 'true';
+        shell.viewport.dataset.warehouseSafetyLines = 'true';
+
         const floor = new THREE.Mesh(
             new THREE.PlaneGeometry(floorWidth, floorDepth),
             new THREE.MeshPhysicalMaterial({
@@ -1266,10 +1646,12 @@
         const passageCellSize = mm(data.meta?.floorPlanCellSize || 500);
         const passageCells = Array.isArray(data.meta?.passageCells) ? data.meta.passageCells : [];
         const passageBoundaryWidthMm = 100;
+        const passageBoundaryInsetMm = 100;
         const passageBoundarySegments = buildPassageBoundarySegments(
             passageCells,
             data.meta?.floorPlanCellSize || 500,
-            passageBoundaryWidthMm
+            passageBoundaryWidthMm,
+            passageBoundaryInsetMm
         );
         let passageBoundaryGeometry = null;
         let passageBoundaryMaterial = null;
@@ -2066,13 +2448,6 @@
         };
         amrFleet.forEach((amr, index) => assignForkliftTask(amr, performance.now() + index * 420));
 
-        data.zones.forEach((zone) => {
-            const option = document.createElement('option');
-            option.value = zone.code;
-            option.textContent = `${zone.code} · ${zone.name}`;
-            shell.zoneFilter.appendChild(option);
-        });
-
         let yaw = Math.PI / 4;
         let pitch = Math.PI / 6;
         let distance = Math.max(floorWidth, floorDepth) * 1.08;
@@ -2111,6 +2486,7 @@
             const horizontal = distance * Math.cos(pitch);
             camera.position.set(target.x + horizontal * Math.sin(yaw), target.y + distance * Math.sin(pitch), target.z + horizontal * Math.cos(yaw));
             camera.lookAt(target);
+            updateWarehouseStructureVisibility();
         };
         const updateProjectionMatrices = () => {
             perspectiveCamera.aspect = viewportAspect;
@@ -2640,7 +3016,7 @@
             });
             shell.objectOverview.setAttribute('aria-pressed', String(
                 !selectedZoneCode && !selectedRack && !followedAmr && !selectedOutline.visible
-                && !shell.zoneFilter.value && !shell.search.value && !shell.objectSearch.value.trim()
+                && !shell.objectSearch.value.trim()
             ));
         };
         const renderObjectList = () => {
@@ -2705,8 +3081,6 @@
             if (deselect) return;
             if (item.kind === 'zone') setSelectedZone(item.code);
             else if (item.kind === 'rack') {
-                // Explicitly selecting a rack should reveal it even if the top toolbar hid it.
-                if (!item.value.group.visible) { shell.zoneFilter.value = ''; shell.search.value = ''; applyFilters(); }
                 const rack = item.value.rackData;
                 setSelectedRack(rack); setFocusedRack(rack); focusRackInCurrentView(rack); showSelection(rack);
             } else setSelectedAmr(item.value);
@@ -2719,10 +3093,7 @@
         shell.objectOverview.addEventListener('click', () => {
             clearPanelSelection();
             shell.objectSearch.value = '';
-            shell.zoneFilter.value = '';
-            shell.search.value = '';
             renderObjectList();
-            applyFilters();
             applyCameraView('quarter');
             shell.objectOverview.focus();
             shell.zoneButtons.scrollTop = 0;
@@ -3070,23 +3441,10 @@
         }, { signal });
 
         const applyFilters = () => {
-            const zone = shell.zoneFilter.value;
-            const query = shell.search.value.trim().toLowerCase();
-            rackEntries.forEach((entry) => {
-                const visible = (!zone || entry.rack.zoneCode === zone) && (!query || entry.searchText.includes(query));
-                entry.group.visible = visible;
-            });
-            const focusedEntry = focusedRack && rackEntries.find((entry) => entry.rack === focusedRack.rack);
-            if (focusedRack && !focusedEntry?.group.visible) {
-                setSelectedRack(null);
-                setFocusedRack(null);
-                showDefaultInspector();
-            }
+            rackEntries.forEach((entry) => { entry.group.visible = true; });
             shell.syncObjectSelection();
             requestRender();
         };
-        shell.zoneFilter.addEventListener('change', applyFilters, { signal });
-        shell.search.addEventListener('input', applyFilters, { signal });
         applyFilters();
         requestRender();
 
@@ -3109,6 +3467,7 @@
             selectedOutline.userData.material.dispose();
             passageBoundaryGeometry?.dispose();
             passageBoundaryMaterial?.dispose();
+            enclosureResources.forEach((resource) => resource.dispose());
             amrResources.forEach((resource) => resource.dispose());
             zoneVisualizationEntries.forEach(({ geometry, material }) => { geometry.dispose(); material.dispose(); });
             scene.traverse((object) => {
@@ -3219,6 +3578,7 @@
         getFloorPlanAxisRange,
         convertGoogleSheetCsv,
         calculateZoneFloorBounds,
+        getWarehouseStructureOcclusion,
         buildPassageBoundarySegments,
         buildPassageNavigationGraph,
         findPassagePath,
