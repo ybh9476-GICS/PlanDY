@@ -105,7 +105,7 @@ assert.ok(warehouseRenderer.includes("mode: event.button === 2 ? 'rotate' : 'pan
 assert.ok(warehouseRenderer.includes("addEventListener('contextmenu'"), 'The 3D canvas must suppress the right-click menu.');
 assert.ok(warehouseRenderer.includes('container.requestFullscreen'), 'The warehouse card must support entering fullscreen.');
 assert.ok(warehouseRenderer.includes('document.exitFullscreen'), 'The warehouse card must support leaving fullscreen.');
-assert.ok(cardRenderer.includes('warehouse-panel-resize-v30'), 'The shared renderer must load the current warehouse renderer.');
+assert.ok(cardRenderer.includes('warehouse-tree-v40'), 'The shared renderer must load the current warehouse renderer.');
 assert.ok(warehouseRenderer.includes('<time class="warehouse-3d-current-time" aria-label="현재 시간"></time>'), 'The top-right area must show the current time.');
 assert.ok(
     warehouseRenderer.indexOf('<time class="warehouse-3d-current-time"') < warehouseRenderer.indexOf('<button class="warehouse-3d-reload"')
@@ -123,7 +123,30 @@ assert.ok(warehouseRenderer.includes('shell.currentTime.textContent = formatLoca
 assert.ok(warehouseRenderer.includes("].join('-') + ' ' + ["), 'The date and time must use YYYY-MM-DD HH:mm:ss separators.');
 assert.ok(warehouseRenderer.includes('const currentTimeTimer = setInterval(updateCurrentTime, 1000);'), 'The current time must refresh every second.');
 assert.ok(warehouseRenderer.includes('clearInterval(currentTimeTimer);'), 'Leaving the 3D screen must stop its clock timer.');
-assert.ok(warehouseRenderer.includes('<aside class="warehouse-3d-side-panel warehouse-3d-side-panel-left" aria-label="좌측 정보 패널"></aside>'), 'An empty left-side panel must be reserved for future content.');
+assert.ok(warehouseRenderer.includes('<aside class="warehouse-3d-side-panel warehouse-3d-side-panel-left" aria-label="객체 선택 패널">'), 'The left-side panel must contain the object selector.');
+assert.ok(warehouseRenderer.includes('class="warehouse-3d-zone-buttons warehouse-3d-object-list" aria-label="창고 객체 탐색"'), 'Object selection buttons must be grouped accessibly.');
+assert.ok(warehouseRenderer.includes("const selectableZones = data.zones.filter"), 'Zone buttons must be generated from zones that have a visible 3D rack footprint.');
+assert.ok(warehouseRenderer.includes("selectableZones.map((zone) =>"), 'Only current 3D warehouse zones must receive selection buttons.');
+assert.ok(warehouseRenderer.includes("calculateZoneFloorBounds(data.racks, data.rackTypes, 500)"), 'Zone volumes must be based on rack footprints with a 0.5m margin.');
+assert.ok(warehouseRenderer.includes("opacity: 0.08"), 'Selected zone volumes must remain lightly transparent.');
+assert.ok(warehouseRenderer.includes("depthWrite: false"), 'Zone volumes must not hide or corrupt depth-rendered warehouse objects.');
+assert.ok(!warehouseRenderer.includes("clickTargets.push(mesh);\n            zoneVisualizationEntries"), 'Zone volumes must not become viewport click targets.');
+assert.ok(warehouseRenderer.includes("const showZoneSelection = (zoneCode) =>"), 'Zone selection must populate the right information panel.');
+assert.ok(warehouseRenderer.includes("entry.mesh.visible = isSelected || isHovered;"), 'Zone hover and selection must independently keep the volume visible.');
+assert.ok(warehouseRenderer.includes("shell.viewport.dataset.visibleZoneCodes"), 'Browser verification must be able to observe the currently visible zone volumes.');
+assert.ok(warehouseRenderer.includes('const deselect = isObjectSelected(item);'), 'Clicking the selected list item must toggle the selection off.');
+assert.ok(warehouseRenderer.includes("shell.objectOverview.addEventListener('click', () => {"), 'Integrated overview must provide a return to the full warehouse.');
+for (const kind of ['zone', 'rack', 'equipment']) {
+    assert.ok(warehouseRenderer.includes(`data-warehouse-object-section="${kind}"`), `${kind} must have its own expandable section.`);
+}
+assert.ok(warehouseRenderer.includes('equipment: amrFleet.map'), 'Equipment rows must represent the real 3D fleet, not mockup entries.');
+assert.ok(warehouseRenderer.includes('rack: rackEntries.map'), 'Rack rows must represent the real rendered racks.');
+assert.ok(warehouseRenderer.includes('const query = shell.objectSearch.value.trim().toLocaleLowerCase();'), 'Search must read one query for all object groups.');
+assert.ok(warehouseRenderer.includes('shell.syncObjectSelection?.();'), 'Viewport selections must synchronize back to the list.');
+assert.ok(warehouseStyles.includes('height: 32px; min-height: 32px;'), 'List rows must keep the approved compact height.');
+assert.ok(warehouseStyles.includes('overscroll-behavior: contain;'), 'Scrolling long lists must stay inside the panel.');
+assert.ok(warehouseRenderer.includes("setSelectedZone('', false);"), 'Selecting a viewport object or empty space must clear the zone selection.');
+assert.ok(warehouseStyles.includes('.warehouse-3d-zone-button[aria-pressed="true"]'), 'The selected zone button must have a persistent visual state.');
 assert.ok(
     warehouseRenderer.indexOf('warehouse-3d-side-panel-left') < warehouseRenderer.indexOf('warehouse-3d-viewport')
         && warehouseRenderer.indexOf('warehouse-3d-viewport') < warehouseRenderer.indexOf('warehouse-3d-inspector'),
@@ -134,8 +157,8 @@ assert.ok(warehouseStyles.includes('--warehouse-right-panel-width: 230px;'), 'Th
 assert.ok(warehouseStyles.includes('.warehouse-3d-toolbar-actions {'), 'The clock and icon actions must share a right-aligned toolbar group.');
 assert.ok(warehouseStyles.includes('width: 34px; height: 34px; min-height: 34px; padding: 0;'), 'Toolbar icons must use compact square buttons.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-fullscreen[aria-pressed="true"] .warehouse-3d-fullscreen-exit'), 'Fullscreen icon must reflect its current state.');
-assert.ok(warehouseStyles.includes('grid-template-areas: "left-panel left-resizer viewport right-resizer inspector";'), 'Desktop layout must place resizers on both panel boundaries.');
-assert.ok(warehouseStyles.includes('grid-template-areas: "viewport" "left-panel" "inspector";'), 'Narrow screens must stack the viewport and both panels safely.');
+assert.ok(warehouseStyles.includes('"left-panel left-resizer viewport right-resizer inspector"') && warehouseStyles.includes('"left-panel left-resizer bottom-panel right-resizer inspector"'), 'Desktop layout must keep both panel boundaries alongside the viewport and its bottom panel.');
+assert.ok(warehouseStyles.includes('grid-template-areas: "viewport" "bottom-panel" "left-panel" "inspector";'), 'Narrow screens must stack the viewport and both panels safely.');
 assert.strictEqual((warehouseRenderer.match(/data-panel-resizer="/g) || []).length, 2, 'Both side panels must have one resize boundary.');
 assert.ok(warehouseRenderer.includes('const minimumPanelWidth = 230;'), 'Side panels must not shrink below their current 230px width.');
 assert.ok(warehouseRenderer.includes('mainWidth / 2'), 'A side panel must never exceed half of the main view.');
@@ -146,7 +169,7 @@ assert.ok(warehouseRenderer.includes('panelResizeObserver.disconnect();'), 'Leav
 assert.ok(warehouseStyles.includes('cursor: ew-resize; touch-action: none;'), 'Panel boundaries must show a horizontal resize cursor.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-panel-resizer { display: none; }'), 'Stacked narrow-screen panels must hide horizontal resize handles.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-shell:fullscreen'), 'Fullscreen warehouse layout styles are missing.');
-assert.ok(warehouseStyles.includes('height: 540px; min-height: 540px;'), 'The regular warehouse viewport must keep a stable height.');
+assert.ok(warehouseStyles.includes('height: 589px; min-height: 589px;') && warehouseStyles.includes('grid-template-rows: minmax(0, 1fr) 49px;'), 'The regular warehouse must keep a 540px viewport plus its 49px bottom panel.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-shell:fullscreen .warehouse-3d-main { flex: 1; height: auto; min-height: 0; }'), 'Fullscreen must override the regular warehouse height.');
 assert.ok(warehouseStyles.includes('cursor: default'), 'The 3D canvas must use the normal cursor.');
 assert.ok(warehouseRenderer.includes('if (!viewportWidth || !viewportHeight) return;'), 'A hidden warehouse viewport must not trigger a resize.');
@@ -187,12 +210,14 @@ assert.ok(!warehouseStyles.includes('.warehouse-3d-camera-controls'), 'The proje
 assert.ok(warehouseStyles.includes('.warehouse-3d-projection-toggle[data-projection="orthographic"]'), 'The P/O icon colors must invert in Orthographic mode.');
 assert.ok(warehouseStyles.includes('width: 36px; height: 36px;'), 'Projection icons must inherit the same desktop button size as the view buttons.');
 assert.ok(warehouseStyles.includes('.warehouse-3d-camera-views button[aria-pressed="true"]'), 'The selected camera view must have an active visual state.');
-assert.ok(
-    warehouseRenderer.indexOf('<span class="warehouse-3d-source-status"') > warehouseRenderer.indexOf('<div class="warehouse-3d-legend"'),
-    'The Google Sheets connection status must be placed inside the bottom legend.'
-);
+assert.ok(!warehouseRenderer.includes('warehouse-3d-source-status'), 'The former connection summary element must be removed.');
+assert.ok(!warehouseRenderer.includes('shell.sourceStatus'), 'Loading and fullscreen flows must not write to the removed summary.');
+assert.ok(warehouseRenderer.includes('<div class="warehouse-3d-bottom-panel" aria-label="하단 패널"></div>'), 'Preserve an empty bottom panel for future use.');
+assert.ok(warehouseStyles.includes('height: 49px; min-height: 49px; flex: 0 0 49px;'), 'The empty bottom panel must not collapse.');
+assert.ok(warehouseRenderer.indexOf('<div class="warehouse-3d-legend"') < warehouseRenderer.indexOf('data-panel-resizer="right"'), 'The legend must be inside the viewport, before the right-side panel.');
+assert.ok(warehouseStyles.includes('position: absolute; right: 12px; bottom: 12px; z-index: 5;'), 'Anchor the legend to the bottom-right of the viewport.');
+assert.ok(warehouseRenderer.includes('shell.viewport.replaceChildren(renderer.domElement, shell.hoverTooltip, shell.cameraViews, shell.legend);'), 'Scene initialization must preserve the new legend overlay.');
 assert.ok(!warehouseRenderer.includes('warehouse-3d-help'), 'The bottom-right mouse operation guide must be removed.');
-assert.ok(warehouseStyles.includes('margin-left: auto; padding: 0'), 'The connection status must align to the former bottom-right guide position.');
 assert.ok(warehouseRenderer.includes('data-warehouse-view="utilization"'), 'The utilization view toggle is missing.');
 assert.ok(warehouseRenderer.includes('data-warehouse-view="status"'), 'The inventory status view toggle is missing.');
 assert.ok(
@@ -237,7 +262,7 @@ assert.ok(warehouseRenderer.includes('warehouse-3d-slot-tooltip'), 'Slot hover i
 assert.ok(warehouseRenderer.includes('const labelTargets = []'), 'Rack billboards must have a separate priority hit-target list.');
 assert.ok(warehouseRenderer.includes('labelTargets.push(label)'), 'Each rack billboard must be registered in the priority hit-target list.');
 assert.ok(/if \(labelRack\) \{\s*setHoveredSlot\(null\);\s*setHoveredRack\(labelRack\);\s*return;\s*\}\s*const slot = getSlotAtPointer\(event\);/.test(warehouseRenderer), 'Billboard hover must run before slot hover detection.');
-assert.ok(/if \(labelRack\) \{\s*setSelectedSlot\(null\);\s*setHoveredSlot\(null\);\s*setSelectedRack\(labelRack\);\s*setFocusedRack\(labelRack\);\s*focusRackInCurrentView\(labelRack\);\s*showSelection\(labelRack\);\s*return;\s*\}\s*const slot = getSlotAtPointer\(event\);/.test(warehouseRenderer), 'Billboard selection must clear slot information, isolate and fit the rack before slot selection.');
+assert.ok(/if \(labelRack\) \{\s*setSelectedZone\('', false\);\s*setSelectedSlot\(null\);\s*setHoveredSlot\(null\);\s*setSelectedRack\(labelRack\);\s*setFocusedRack\(labelRack\);\s*focusRackInCurrentView\(labelRack\);\s*showSelection\(labelRack\);\s*return;\s*\}\s*const slot = getSlotAtPointer\(event\);/.test(warehouseRenderer), 'Billboard selection must clear zone and slot information, isolate and fit the rack before slot selection.');
 assert.ok(warehouseRenderer.includes("normal: { fill: 'rgba(5, 15, 30, 0.92)'"), 'Rack billboards must have a normal visual state.');
 assert.ok(warehouseRenderer.includes("hover: { fill: 'rgba(15, 52, 96, 0.96)'"), 'Rack billboard hover must use a lighter blue based on the normal state.');
 assert.ok(warehouseRenderer.includes("selected: { fill: '#2563EB'"), 'Rack billboard selected state must use a stronger blue based on the normal state.');
@@ -527,7 +552,18 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(parseEquipmentMaster([
 assert.throws(() => parseEquipmentMaster('설비 코드,설비명\nAMR-001,A\n AMR-001 ,B'), /중복/);
 assert.throws(() => parseEquipmentMaster('설비 코드,모델명\nAMR-001,A'), /설비 마스터/);
 assert.ok(warehouseRenderer.includes("equipmentByCode.get(amr.equipmentCode)?.name || amr.equipmentCode"));
-assert.ok(warehouseRenderer.includes("amr.label.userData = { kind: 'amr-label', amr };"));
+assert.ok(warehouseRenderer.includes("amr.label.userData = { ...amr.label.userData, kind: 'amr-label', amr };"));
+const parseEquipmentStatus = sandbox.window.wmsWarehouse3D.parseEquipmentStatus;
+assert.deepStrictEqual(JSON.parse(JSON.stringify(parseEquipmentStatus([
+    '설비 상태 정보', '설비 상태,설비 코드,통신 연결',
+    '대기, AMR-001 ,online', '충전,AMR-002,OFFLINE'
+].join('\n')))), [
+    { equipmentCode: 'AMR-001', communicationStatus: 'ONLINE', equipmentStatus: '대기' },
+    { equipmentCode: 'AMR-002', communicationStatus: 'OFFLINE', equipmentStatus: '충전' }
+]);
+assert.throws(() => parseEquipmentStatus('설비 코드,통신 연결,설비 상태\nAMR-001,ONLINE,대기\n AMR-001 ,OFFLINE,고장'), /중복/);
+assert.ok(warehouseRenderer.includes("config?.sheets?.equipmentStatus || '설비 상태 정보'"));
+assert.ok(warehouseRenderer.includes("const equipmentStatusByCode = new Map"));
 
 // Run the actual selection/follow code without WebGL to protect camera angles.
 class FollowVector {
@@ -543,6 +579,69 @@ class FollowVector {
         return this;
     }
 }
+// Execute the actual docking calculation against controlled rack/aisle coordinates.
+class DockVector extends FollowVector {
+    clone() { return new DockVector(this.x, this.y, this.z); }
+    lengthSq() { return this.x ** 2 + this.y ** 2 + this.z ** 2; }
+    length() { return Math.sqrt(this.lengthSq()); }
+    normalize() { const n = this.length(); return this.set(this.x / n, this.y / n, this.z / n); }
+    dot(v) { return this.x * v.x + this.y * v.y + this.z * v.z; }
+}
+const stackerDimensionsSource = warehouseRenderer.slice(
+    warehouseRenderer.indexOf('        const stackerDimensions = '),
+    warehouseRenderer.indexOf('        const createForkliftModel = ')
+);
+const dockingSource = warehouseRenderer.slice(
+    warehouseRenderer.indexOf('        const getDockTarget = '),
+    warehouseRenderer.indexOf('        rackEntries.forEach((entry) => {', warehouseRenderer.indexOf('        const getDockTarget = '))
+);
+const dockingContext = vm.createContext({
+    assert, THREE: { Vector3: DockVector }, mm: v => v / 1000,
+    getForkTargetHeight, forkThickness: 0.055, passageNavigation: {}, amrComponent: ['dock'],
+    dockZ: -1000,
+    findNearestPassageNode: () => ({ key: 'dock', x: 0, y: dockingContext.dockZ })
+});
+vm.runInContext(`${stackerDimensionsSource}\n${dockingSource}
+    const slot = { position: [0, 1, 0.45], boxSize: [0.9, 0.6, 0.9], depth: 1, depthCount: 1,
+        rackWidth: 1, locationCode: 'TEST-01', group: { localToWorld(v) { return v; } } };
+    const dock = getDockTarget(slot);
+    assert.ok(dock);
+    assert.ok(Math.abs(dock.forkExtension + stackerDimensions.mastZ + stackerDimensions.forkCenterZ - 1.45) < 1e-9);
+    dockZ = -700;
+    assert.equal(getDockTarget(slot), null, 'Do not let support legs enter the rack.');
+    dockZ = -2500;
+    assert.equal(getDockTarget(slot), null, 'Reject unreachable cells instead of clamping and misaligning the load.');
+`, dockingContext);
+assert.ok(warehouseRenderer.includes("group.userData.modelType = 'slim-autonomous-stacker'"));
+assert.ok(warehouseRenderer.includes("color: '#32b5e5'"));
+assert.ok(warehouseRenderer.includes("box('stacker-support-leg'"));
+assert.ok(warehouseRenderer.includes("box('stacker-fork-tine'"));
+assert.ok(!warehouseRenderer.includes('const guardTopGeometry'));
+assert.ok(!warehouseRenderer.includes('const counterweightGeometry'));
+const forkHeightSource = warehouseRenderer.slice(
+    warehouseRenderer.indexOf('        const setForkHeight = '),
+    warehouseRenderer.indexOf('        const setForkExtension = ')
+);
+vm.runInNewContext(`${forkHeightSource}
+    const a = { carriage: {position:{}}, mastMiddle:{position:{}}, mastUpper:{position:{}}, group:{userData:{}} };
+    setForkHeight(a, 0.06);
+    assert.equal(a.forkHeight, 0.06, 'The lowest shelf must be reachable below travel height.');
+    setForkHeight(a, travelForkHeight);
+    assert.equal(a.forkHeight, 0.08);
+    setForkHeight(a, 4.99);
+    assert.equal(a.carriage.position.y, 4.99);
+`, { assert, forkThickness: 0.055, travelForkHeight: 0.08 });
+
+const inspectorContext = vm.createContext({ assert });
+vm.runInContext(warehouseRenderer.slice(warehouseRenderer.indexOf('    function escapeHtml('), warehouseRenderer.indexOf('    const slotColorPalette'))
+    + warehouseRenderer.slice(warehouseRenderer.indexOf('    function getAmrInspectorHtml('), warehouseRenderer.indexOf('    function getAmrEquipmentStatusColor(')), inspectorContext);
+const getAmrInspectorHtml = vm.runInContext('getAmrInspectorHtml', inspectorContext);
+assert.ok(getAmrInspectorHtml({ communicationStatus: 'OFFLINE' }).includes('오프라인 (OFFLINE)'));
+assert.ok(getAmrInspectorHtml({}).includes('미설정'));
+const escapedInspector = getAmrInspectorHtml({equipmentCode:'<code>', equipmentName:'<img src=x onerror=alert(1)>', equipmentStatus:'<script>bad</script>'});
+assert.ok(!escapedInspector.includes('<img') && !escapedInspector.includes('<script>'));
+assert.ok(escapedInspector.includes('&lt;code&gt;'));
+
 const followSource = warehouseRenderer.slice(
     warehouseRenderer.indexOf('        const setSelectedAmr = (amr) => {'),
     warehouseRenderer.indexOf('        const fadeWorldObject = ')
@@ -554,14 +653,18 @@ const followContext = vm.createContext({
     floorWidth: 55.5, floorDepth: 33, projectionMode: 'orthographic', alignedCameraView: null, signal: {},
     target: new FollowVector(28, 2.5, 16), distance: 60, orthographicViewHeight: 50,
     minimumCameraDistance: 8, maximumCameraDistance: 140, perspectiveHalfFov: Math.PI / 8,
-    yaw: 0.65, pitch: 0.45, shell: { viewport: { dataset: {} } },
+    yaw: 0.65, pitch: 0.45, shell: { viewport: { dataset: {} }, inspector: { innerHTML: '' } },
+    getAmrInspectorHtml,
+    showDefaultInspector() { followContext.shell.inspector.innerHTML = '<h5>선택 정보</h5>'; },
     easeOutCubic: t => 1 - (1 - t) ** 3,
     setAmrLabelState() {}, setHoveredSlot() {}, requestRender() {}, updateProjectionMatrices() {}, updateCamera() {}
 });
 vm.runInContext(`
     ${followSource}
-    const robot = { equipmentCode: 'AMR-001', group: { position: new THREE.Vector3(5, 0, 8) } };
+    const robot = { equipmentCode: 'AMR-001', equipmentName: 'AMR001', communicationStatus: 'ONLINE', equipmentStatus: '대기', group: { position: new THREE.Vector3(5, 0, 8) } };
     setSelectedAmr(robot);
+    assert.ok(shell.inspector.innerHTML.includes('<h5>AMR001</h5>'));
+    for (const text of ['설비 코드', 'AMR-001', '설비명', '통신 연결 상태', '온라인 (ONLINE)', '설비 상태', '대기']) assert.ok(shell.inspector.innerHTML.includes(text));
     updateAmrFollow(1250);
     assert.ok(distance < 60 && distance > 14, 'Focus must animate, not jump.');
     updateAmrFollow(1500);
@@ -574,6 +677,10 @@ vm.runInContext(`
     setSelectedAmr(null); robot.group.position.x += 2; updateAmrFollow(1700);
     assert.strictEqual(target.x, 7, 'Clearing selection must stop following.');
     assert.strictEqual(shell.viewport.dataset.followingAmrCode, '');
+    assert.strictEqual(shell.inspector.innerHTML, '<h5>선택 정보</h5>', 'Deselecting must not leave stale AMR details.');
+    shell.inspector.innerHTML = '<h5>랙 정보</h5>';
+    setSelectedAmr(null);
+    assert.strictEqual(shell.inspector.innerHTML, '<h5>랙 정보</h5>', 'No active AMR means unrelated inspector information must be preserved.');
     setSelectedAmr(robot); amrFocusTransition.zoomCancelled = true; distance = 25;
     updateAmrFollow(1500);
     assert.strictEqual(distance, 25, 'Manual wheel zoom must not be overwritten.');
@@ -641,7 +748,7 @@ const slotPointerContext = vm.createContext({
     projectionMode: 'perspective', alignedCameraView: null, floorWidth: 55, floorDepth: 33, signal: {},
     getEquivalentCameraDistance: () => 25,
     updateCamera() {}, requestRender() {}, setHoveredRack() {}, setHoveredAmr() {},
-    setSelectedAmr() {}, setSelectedRack() {}, setFocusedRack() {}, showDefaultInspector() {}, focusRackInCurrentView() {}
+    setSelectedAmr() {}, setSelectedZone() {}, setSelectedRack() {}, setFocusedRack() {}, showDefaultInspector() {}, focusRackInCurrentView() {}
 });
 vm.runInContext(`
     const handlers = {};
@@ -685,7 +792,11 @@ const labelSource = warehouseRenderer.slice(
 const labelContext = vm.createContext({
     assert, worldUiResolutionScale: 2,
     document: { createElement() {
-        const context = { strokes: 0, clearRect() {}, fillRect() {}, fillText() {}, strokeRect() { this.strokes++; } };
+        const context = {
+            strokes: 0, lineStrokes: 0, arcs: [], texts: [], roundedRects: [], clearRect() {}, beginPath() {}, fill() {}, stroke() { this.lineStrokes++; },
+            fillRect() {}, fillText(text) { this.texts.push(String(text)); },
+            arc(...args) { this.arcs.push(args); }, roundRect(...args) { this.roundedRects.push(args); }, strokeRect() { this.strokes++; }
+        };
         return { getContext() { return context; } };
     } },
     THREE: {
@@ -697,17 +808,20 @@ const labelContext = vm.createContext({
 vm.runInContext(`
     ${labelSource}
     const rackLabel = createLabelSprite(THREE, 'W01');
-    const amrLabel = createLabelSprite(THREE, 'AMR001', { sizeScale: 0.5, fontWeight: 400, border: false });
+    const amrLabel = createAmrLabelSprite(THREE, { name: 'AMR001', communicationStatus: 'ONLINE', equipmentStatus: '대기' });
+    const offlineAmrLabel = createAmrLabelSprite(THREE, { name: 'AMR002', communicationStatus: 'OFFLINE', equipmentStatus: '고장' });
     assert.strictEqual(rackLabel.scale.x, 3.2);
     assert.strictEqual(rackLabel.scale.y, 0.9);
+    assert.strictEqual(amrLabel.scale.x, 1.84, 'AMR billboard width must be 15% larger than the previous 1.6m width.');
+    assert.strictEqual(amrLabel.scale.y, 1.035, 'The grouped billboard height must contain separate upper and lower UI rows.');
     for (const label of [rackLabel, amrLabel]) assert.strictEqual(label.material.opacity, 0.8);
     for (const state of ['normal', 'hover', 'selected']) {
         const rackUpdate = rackLabel.setInteractionState(state);
         const amrUpdate = amrLabel.setInteractionState(state);
         for (const progress of [0, 0.5, 1]) {
             rackUpdate(progress); amrUpdate(progress);
-            assert.strictEqual(amrLabel.scale.x, rackLabel.scale.x / 2);
-            assert.strictEqual(amrLabel.scale.y, rackLabel.scale.y / 2);
+            assert.ok(Math.abs(amrLabel.scale.x - rackLabel.scale.x * 0.575) < 1e-10);
+            assert.ok(Math.abs(amrLabel.scale.y - rackLabel.scale.y * 1.15) < 1e-10);
             assert.ok(amrLabel.material.opacity <= 0.8 && rackLabel.material.opacity <= 0.8);
         }
         assert.strictEqual(amrLabel.material.opacity, 0.8);
@@ -719,7 +833,23 @@ vm.runInContext(`
     assert.strictEqual(rackCanvas.font, '700 64px sans-serif');
     assert.strictEqual(amrCanvas.strokes, 0, 'AMR labels must never draw a border.');
     assert.strictEqual(rackCanvas.strokes, 4, 'Rack labels retain borders in every state.');
+    assert.strictEqual(amrCanvas.arcs.length, 20, 'AMR labels must draw a center dot and four wireless signal arcs in every interaction state.');
+    assert.strictEqual(amrCanvas.lineStrokes, 16, 'The wireless icon must have two signal arcs on each side.');
+    assert.strictEqual(amrCanvas.roundedRects.length, 8, 'Status and AMR name must remain two separate UI panels.');
+    assert.ok(amrCanvas.texts.includes('AMR001'));
+    assert.ok(amrCanvas.texts.includes('대기'));
+    assert.strictEqual(amrLabel.userData.communicationStatus, 'ONLINE');
+    assert.strictEqual(amrLabel.userData.communicationColor, '#00FF00');
+    assert.strictEqual(amrLabel.userData.equipmentStatusColor, '#475569');
+    assert.strictEqual(offlineAmrLabel.userData.communicationStatus, 'OFFLINE');
+    assert.strictEqual(offlineAmrLabel.userData.communicationColor, '#9ca3af');
+    assert.strictEqual(offlineAmrLabel.userData.equipmentStatusColor, '#dc2626');
 `, labelContext);
-assert.ok(warehouseRenderer.includes('createLabelSprite(THREE, amr.equipmentName, { sizeScale: 0.5, fontWeight: 400, border: false })'));
+assert.ok(warehouseRenderer.includes('amr.label = createAmrLabelSprite(THREE, {'));
+assert.ok(warehouseRenderer.includes("const communicationColor = isOnline ? '#00FF00' : '#9ca3af';"));
+assert.ok(warehouseRenderer.includes('The upper status row has no shared frame'));
+assert.ok(warehouseRenderer.includes('context.roundRect(230, 48, 378, 116, 28)'));
+assert.ok(warehouseRenderer.includes('context.fillText(statusText, 419, 106, 330)'));
+assert.ok(warehouseRenderer.includes('amr.label.position.set(0, 3.26, 0)'));
 
 console.log('Warehouse 3D data, card, camera, AMR follow and billboard style checks passed.');

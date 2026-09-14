@@ -409,12 +409,30 @@
         });
     }
 
+    function parseEquipmentStatus(csv) {
+        const records = csvToRecords(csv, ['설비 코드', '통신 연결', '설비 상태'], '설비 상태 정보');
+        const seen = new Set();
+        return records.filter(row => String(row['설비 코드'] || '').trim()).map(row => {
+            const equipmentCode = String(row['설비 코드']).trim();
+            if (seen.has(equipmentCode)) throw new Error(`설비 상태 정보의 설비 코드가 중복되었습니다: ${equipmentCode}`);
+            seen.add(equipmentCode);
+            return {
+                equipmentCode,
+                communicationStatus: String(row['통신 연결'] || '').trim().toUpperCase(),
+                equipmentStatus: String(row['설비 상태'] || '').trim()
+            };
+        });
+    }
+
     async function loadGoogleSheetData(config, signal) {
         const documentId = config?.documentId;
         // Labels are optional: a missing equipment sheet must not hide the warehouse.
         const equipmentPromise = loadGoogleSheetTable(documentId, config?.sheets?.equipment || '설비 마스터', 'A1:F1000', signal)
             .then(csv => ({ equipment: parseEquipmentMaster(csv) }))
             .catch(error => ({ equipment: [], equipmentLoadWarning: `설비명 연결 실패 — 설비 코드로 표시합니다. ${error.message}` }));
+        const equipmentStatusPromise = loadGoogleSheetTable(documentId, config?.sheets?.equipmentStatus || '설비 상태 정보', 'A1:O1000', signal)
+            .then(csv => ({ equipmentStatuses: parseEquipmentStatus(csv) }))
+            .catch(error => ({ equipmentStatuses: [], equipmentStatusLoadWarning: `설비 상태 연결 실패 — 통신·상태를 미설정으로 표시합니다. ${error.message}` }));
         const floorPlanDefinition = googleSheetDefinitions.floorPlan;
         const floorPlanSheetName = config?.sheets?.floorPlan || floorPlanDefinition.sheetName;
         const otherEntriesPromise = Promise.all(Object.entries(googleSheetDefinitions)
@@ -424,11 +442,12 @@
                 const csv = await loadGoogleSheetTable(documentId, sheetName, definition.range, signal);
                 return [key, csv];
             }));
-        const [xAxisCsv, yAxisCsv, otherEntries, equipmentResult] = await Promise.all([
+        const [xAxisCsv, yAxisCsv, otherEntries, equipmentResult, equipmentStatusResult] = await Promise.all([
             loadGoogleSheetTable(documentId, floorPlanSheetName, floorPlanDefinition.xAxisRange, signal),
             loadGoogleSheetTable(documentId, floorPlanSheetName, floorPlanDefinition.yAxisRange, signal),
             otherEntriesPromise,
-            equipmentPromise
+            equipmentPromise,
+            equipmentStatusPromise
         ]);
         const floorPlanAxis = getFloorPlanAxisRange(xAxisCsv, yAxisCsv);
         const floorPlanCsv = await loadGoogleSheetTable(documentId, floorPlanSheetName, floorPlanAxis.range, signal);
@@ -437,7 +456,9 @@
             floorPlanAxis
         });
         data.equipment = equipmentResult.equipment;
+        data.equipmentStatuses = equipmentStatusResult.equipmentStatuses;
         data.meta.equipmentLoadWarning = equipmentResult.equipmentLoadWarning || '';
+        data.meta.equipmentStatusLoadWarning = equipmentStatusResult.equipmentStatusLoadWarning || '';
         return data;
     }
 
@@ -521,7 +542,33 @@
                 </div>
             </div>
             <div class="warehouse-3d-main">
-                <aside class="warehouse-3d-side-panel warehouse-3d-side-panel-left" aria-label="좌측 정보 패널"></aside>
+                <aside class="warehouse-3d-side-panel warehouse-3d-side-panel-left" aria-label="객체 선택 패널">
+                    <div class="warehouse-3d-object-tools">
+                        <label class="warehouse-3d-object-search-label">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg>
+                            <input class="warehouse-3d-object-search" type="search" placeholder="검색" aria-label="구역·랙·설비 통합 검색" autocomplete="off"/>
+                        </label>
+                    </div>
+                    <nav class="warehouse-3d-zone-buttons warehouse-3d-object-list" aria-label="창고 객체 탐색">
+                        <button class="warehouse-3d-object-heading warehouse-3d-object-overview" type="button" aria-pressed="true" title="선택과 필터를 해제하고 전체 창고 보기">
+                            <svg class="warehouse-3d-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-7v3h4v2H6v-2h4v-3H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/></svg><span>통합 관제</span>
+                        </button>
+                        <details class="warehouse-3d-object-section" data-warehouse-object-section="zone" open>
+                            <summary class="warehouse-3d-object-heading"><svg class="warehouse-3d-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 5 6-3 8 3 6-3v17l-6 3-8-3-6 3V5Zm7 .3v11.9l6 2.3V7.6L9 5.3Z"/></svg><span>구역</span><svg class="warehouse-3d-section-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7"/></svg></summary>
+                            <div class="warehouse-3d-object-children" role="group" aria-label="구역 선택"></div>
+                        </details>
+                        <details class="warehouse-3d-object-section" data-warehouse-object-section="rack" open>
+                            <summary class="warehouse-3d-object-heading"><svg class="warehouse-3d-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 2h3v3h12V2h3v20h-3v-3H6v3H3V2Zm3 6v3h12V8H6Zm0 6v2h12v-2H6Z"/><path d="M8 2h4v3H8zm5 6h3v3h-3zm-5 6h4v2H8z"/></svg><span>랙</span><svg class="warehouse-3d-section-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7"/></svg></summary>
+                            <div class="warehouse-3d-object-children" role="group" aria-label="랙 선택"></div>
+                        </details>
+                        <details class="warehouse-3d-object-section" data-warehouse-object-section="equipment" open>
+                            <summary class="warehouse-3d-object-heading"><svg class="warehouse-3d-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 2h2v3h5a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h5V2ZM7 10v3h3v-3H7Zm7 0v3h3v-3h-3Zm-6 7v2h8v-2H8ZM0 9h2v8H0zm22 0h2v8h-2z"/></svg><span>설비</span><svg class="warehouse-3d-section-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7"/></svg></summary>
+                            <div class="warehouse-3d-object-children" role="group" aria-label="설비 선택"></div>
+                        </details>
+                        <p class="warehouse-3d-object-empty" hidden>표시할 항목이 없습니다.</p>
+                    </nav>
+                    <div class="warehouse-3d-object-total" role="status" aria-live="polite">0개</div>
+                </aside>
                 <div class="warehouse-3d-panel-resizer warehouse-3d-panel-resizer-left" data-panel-resizer="left"
                     role="separator" aria-label="좌측 패널 너비 조절" aria-orientation="vertical"
                     aria-valuemin="230" aria-valuenow="230" tabindex="0"></div>
@@ -554,6 +601,13 @@
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 9h16M4 14h16M9 4v16M14 4v16"/></svg>
                             </button>
                     </div>
+                    <div class="warehouse-3d-legend" aria-label="선택한 재고 보기의 색상 범례">
+                        <div class="warehouse-3d-view-toggle" role="group" aria-label="재고 색상 보기 기준">
+                            <button type="button" data-warehouse-view="utilization" aria-pressed="true">적재율</button>
+                            <button type="button" data-warehouse-view="status" aria-pressed="false">재고 상태</button>
+                        </div>
+                        <div class="warehouse-3d-legend-items"></div>
+                    </div>
                 </div>
                 <div class="warehouse-3d-panel-resizer warehouse-3d-panel-resizer-right" data-panel-resizer="right"
                     role="separator" aria-label="우측 패널 너비 조절" aria-orientation="vertical"
@@ -562,15 +616,7 @@
                     <h5>선택 정보</h5>
                     <p>랙이나 적재 상자를 선택하면 상세 정보가 표시됩니다.</p>
                 </aside>
-            </div>
-            <div class="warehouse-3d-legend" aria-label="선택한 재고 보기의 색상 범례">
-                <div class="warehouse-3d-view-toggle" role="group" aria-label="재고 색상 보기 기준">
-                    <span>보기</span>
-                    <button type="button" data-warehouse-view="utilization" aria-pressed="true">적재율</button>
-                    <button type="button" data-warehouse-view="status" aria-pressed="false">재고 상태</button>
-                </div>
-                <div class="warehouse-3d-legend-items"></div>
-                <span class="warehouse-3d-source-status" role="status">기준정보를 확인하는 중입니다.</span>
+                <div class="warehouse-3d-bottom-panel" aria-label="하단 패널"></div>
             </div>`;
         return {
             root: container,
@@ -589,9 +635,15 @@
             cameraViewButtons: [...container.querySelectorAll('[data-warehouse-camera-view]')],
             gridToggle: container.querySelector('[data-warehouse-grid-toggle]'),
             legendItems: container.querySelector('.warehouse-3d-legend-items'),
-            sourceStatus: container.querySelector('.warehouse-3d-source-status'),
+            legend: container.querySelector('.warehouse-3d-legend'),
             currentTime: container.querySelector('.warehouse-3d-current-time'),
             leftPanel: container.querySelector('.warehouse-3d-side-panel-left'),
+            zoneButtons: container.querySelector('.warehouse-3d-zone-buttons'),
+            objectSections: [...container.querySelectorAll('[data-warehouse-object-section]')],
+            objectOverview: container.querySelector('.warehouse-3d-object-overview'),
+            objectEmpty: container.querySelector('.warehouse-3d-object-empty'),
+            objectSearch: container.querySelector('.warehouse-3d-object-search'),
+            objectTotal: container.querySelector('.warehouse-3d-object-total'),
             rightPanel: container.querySelector('.warehouse-3d-inspector'),
             panelResizers: [...container.querySelectorAll('[data-panel-resizer]')]
         };
@@ -745,6 +797,107 @@
         applyScale(displayedScale);
         material.opacity = baseOpacity;
         sprite.renderOrder = 1000;
+        return sprite;
+    }
+
+    function getAmrInspectorHtml(amr) {
+        const code = amr.equipmentCode || '미설정';
+        const name = amr.equipmentName || code;
+        const communication = String(amr.communicationStatus || '').trim().toUpperCase();
+        const communicationText = communication === 'ONLINE' ? '온라인 (ONLINE)'
+            : communication === 'OFFLINE' ? '오프라인 (OFFLINE)' : '미설정';
+        return `<h5>${escapeHtml(name)}</h5><dl class="warehouse-3d-amr-details"><dt>설비 코드</dt><dd>${escapeHtml(code)}</dd><dt>설비명</dt><dd>${escapeHtml(name)}</dd><dt>통신 연결 상태</dt><dd>${escapeHtml(communicationText)}</dd><dt>설비 상태</dt><dd>${escapeHtml(amr.equipmentStatus || '미설정')}</dd></dl>`;
+    }
+
+    function getAmrEquipmentStatusColor(status) {
+        const value = String(status || '').trim().toUpperCase();
+        if (/(오류|고장|비상|ERROR|FAULT|ALARM)/.test(value)) return '#dc2626';
+        if (/(충전|CHARG)/.test(value)) return '#7c3aed';
+        if (/(이동|주행|운송|DRIV|MOV|TRANSPORT)/.test(value)) return '#2563eb';
+        if (/(작업|상차|하차|피킹|적치|WORK|PICK|LOAD|UNLOAD)/.test(value)) return '#d97706';
+        if (/(완료|COMPLETE|DONE)/.test(value)) return '#15803d';
+        return '#475569';
+    }
+
+    function createAmrLabelSprite(THREE, { name, communicationStatus, equipmentStatus }) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 320 * worldUiResolutionScale;
+        canvas.height = 180 * worldUiResolutionScale;
+        const context = canvas.getContext('2d');
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
+        const sprite = new THREE.Sprite(material);
+        const statusText = String(equipmentStatus || '').trim() || '미설정';
+        const isOnline = String(communicationStatus || '').trim().toUpperCase() === 'ONLINE';
+        const communicationColor = isOnline ? '#00FF00' : '#9ca3af';
+        const equipmentStatusColor = getAmrEquipmentStatusColor(statusText);
+        const visuals = {
+            normal: { fill: 'rgba(5, 15, 30, 0.92)', scale: 1 },
+            hover: { fill: 'rgba(15, 52, 96, 0.96)', scale: 1.06 },
+            selected: { fill: '#2563EB', scale: 1.1 }
+        };
+        const baseOpacity = 0.8;
+        const applyScale = scale => sprite.scale.set(1.84 * scale, 1.035 * scale, 1);
+        let displayedScale = 1;
+        const drawLabel = (state = 'normal') => {
+            const visual = visuals[state] || visuals.normal;
+            context.clearRect(0, 0, canvas.width, canvas.height);
+
+            // The upper status row has no shared frame: only the wireless icon and status label are drawn.
+            context.strokeStyle = communicationColor;
+            context.lineWidth = 14;
+            context.lineCap = 'round';
+            [[36, 0.78], [62, 0.72]].forEach(([radius, angle]) => {
+                context.beginPath();
+                context.arc(110, 106, radius, -angle, angle);
+                context.stroke();
+                context.beginPath();
+                context.arc(110, 106, radius, Math.PI - angle, Math.PI + angle);
+                context.stroke();
+            });
+            context.beginPath();
+            context.fillStyle = communicationColor;
+            context.arc(110, 106, 17, 0, Math.PI * 2);
+            context.fill();
+
+            context.fillStyle = equipmentStatusColor;
+            context.beginPath();
+            context.roundRect(230, 48, 378, 116, 28);
+            context.fill();
+            context.fillStyle = '#ffffff';
+            context.font = '600 50px sans-serif';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(statusText, 419, 106, 330);
+
+            // Keep the AMR name as a visually separate lower UI panel.
+            context.fillStyle = visual.fill;
+            context.beginPath();
+            context.roundRect(8, 188, 624, 164, 28);
+            context.fill();
+            context.fillStyle = '#ffffff';
+            context.font = '400 64px sans-serif';
+            context.fillText(String(name || ''), 320, 270, 560);
+            texture.needsUpdate = true;
+        };
+        sprite.setInteractionState = (state = 'normal') => {
+            const visual = visuals[state] || visuals.normal;
+            drawLabel(state);
+            const startScale = displayedScale;
+            const targetScale = visual.scale;
+            material.opacity = baseOpacity * 0.82;
+            return progress => {
+                displayedScale = startScale + (targetScale - startScale) * progress;
+                applyScale(displayedScale);
+                material.opacity = baseOpacity * (0.82 + 0.18 * progress);
+            };
+        };
+        drawLabel('normal');
+        applyScale(displayedScale);
+        material.opacity = baseOpacity;
+        sprite.renderOrder = 1000;
+        sprite.userData = { communicationStatus: isOnline ? 'ONLINE' : 'OFFLINE', equipmentStatus: statusText, communicationColor, equipmentStatusColor };
         return sprite;
     }
 
@@ -1059,7 +1212,7 @@
         renderer.shadowMap.enabled = true;
         renderer.domElement.tabIndex = 0;
         renderer.domElement.setAttribute('aria-label', '기준정보 기반 3D 창고');
-        shell.viewport.replaceChildren(renderer.domElement, shell.hoverTooltip, shell.cameraViews);
+        shell.viewport.replaceChildren(renderer.domElement, shell.hoverTooltip, shell.cameraViews, shell.legend);
         shell.cameraViews.hidden = false;
 
         scene.add(new THREE.HemisphereLight('#dbeafe', '#0f172a', 2.2));
@@ -1149,8 +1302,8 @@
         const amrFleet = [];
         const amrLabelTargets = [];
         const equipmentByCode = new Map((data.equipment || []).map(item => [item.code, item]));
+        const equipmentStatusByCode = new Map((data.equipmentStatuses || []).map(item => [item.equipmentCode, item]));
         const amrResources = [];
-        const amrColors = ['#38bdf8', '#fb7185', '#a78bfa', '#f97316', '#22c55e'];
         const simplifyPath = (path) => path.filter((node, index) => {
             if (index === 0 || index === path.length - 1) return true;
             const previous = path[index - 1];
@@ -1160,128 +1313,139 @@
         });
         const travelForkHeight = 0.08;
         const forkThickness = 0.055;
+        // Metres, measured from the navigation pivot. Keep docking and geometry in sync.
+        const stackerDimensions = Object.freeze({
+            mastZ: -0.24,
+            forkLength: 0.98,
+            forkCenterZ: 0.57,
+            maxExtension: 1.85,
+            frontReach: 0.82,
+            rackClearance: 0.1
+        });
         const createForkliftModel = (index) => {
             const group = new THREE.Group();
             group.name = `FORKLIFT-AMR-${index + 1}`;
             group.userData.kind = 'forklift-amr';
             group.userData.amrId = index + 1;
-            const shadowGeometry = new THREE.CircleGeometry(0.82, 32);
+            group.userData.modelType = 'slim-autonomous-stacker';
+            const shadowGeometry = new THREE.CircleGeometry(0.72, 32);
             const shadowMaterial = new THREE.MeshBasicMaterial({ color: '#020617', transparent: true, opacity: 0.42, depthWrite: false });
             const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
             shadow.rotation.x = -Math.PI / 2;
             shadow.position.y = 0.018;
             group.add(shadow);
-            const bodyGeometry = new THREE.BoxGeometry(1.42, 0.38, 1.3);
             const bodyMaterial = new THREE.MeshPhysicalMaterial({
-                color: amrColors[index % amrColors.length],
-                roughness: 0.24,
-                metalness: 0.4,
-                clearcoat: 0.8,
-                clearcoatRoughness: 0.12
+                color: '#32b5e5', roughness: 0.35, metalness: 0.25,
+                clearcoat: 0.5, clearcoatRoughness: 0.22
             });
-            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-            body.name = 'forklift-body';
-            body.position.set(0, 0.24, -0.08);
-            body.castShadow = true;
-            body.receiveShadow = true;
-            group.add(body);
-            const darkMaterial = new THREE.MeshPhysicalMaterial({ color: '#172033', roughness: 0.32, metalness: 0.62 });
-            const steelMaterial = new THREE.MeshPhysicalMaterial({ color: '#94a3b8', roughness: 0.22, metalness: 0.82 });
-            const forkMaterial = new THREE.MeshPhysicalMaterial({ color: '#dbe3ee', roughness: 0.18, metalness: 0.9 });
-            const counterweightGeometry = new THREE.BoxGeometry(1.18, 0.5, 0.44);
-            const counterweight = new THREE.Mesh(counterweightGeometry, darkMaterial);
-            counterweight.position.set(0, 0.48, -0.48);
-            counterweight.castShadow = true;
-            group.add(counterweight);
-            const wheelGeometry = new THREE.CylinderGeometry(0.19, 0.19, 0.12, 18);
+            const darkMaterial = new THREE.MeshPhysicalMaterial({ color: '#151d25', roughness: 0.48, metalness: 0.38 });
+            const steelMaterial = new THREE.MeshPhysicalMaterial({ color: '#657581', roughness: 0.28, metalness: 0.8 });
+            const forkMaterial = new THREE.MeshPhysicalMaterial({ color: '#303b45', roughness: 0.38, metalness: 0.75 });
             const wheelMaterial = new THREE.MeshPhysicalMaterial({ color: '#050b14', roughness: 0.72, metalness: 0.08 });
-            [[-0.7, -0.38], [0.7, -0.38], [-0.7, 0.34], [0.7, 0.34]].forEach(([x, z]) => {
-                const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-                wheel.rotation.z = Math.PI / 2;
-                wheel.position.set(x, 0.2, z);
-                wheel.castShadow = true;
-                group.add(wheel);
+            const yellowMaterial = new THREE.MeshStandardMaterial({ color: '#facc15', roughness: 0.55 });
+            const greenMaterial = new THREE.MeshStandardMaterial({ color: '#32efd4', emissive: '#10bfa0', emissiveIntensity: 0.8 });
+            const redMaterial = new THREE.MeshStandardMaterial({ color: '#ef4444', emissive: '#991b1b', emissiveIntensity: 0.3 });
+            const screenMaterial = new THREE.MeshStandardMaterial({ color: '#99d9f2', emissive: '#267eab', emissiveIntensity: 0.45 });
+            const addPart = (name, geometry, material, position, parent = group) => {
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.name = name;
+                mesh.position.set(...position);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                parent.add(mesh);
+                amrResources.push(geometry);
+                return mesh;
+            };
+            const box = (name, size, position, material = darkMaterial, parent = group) =>
+                addPart(name, new THREE.BoxGeometry(...size), material, position, parent);
+            // Chamfered, tall blue cabinet: no operator cab, roof or counterweight.
+            const bodyProfile = new THREE.Shape();
+            bodyProfile.moveTo(-0.44, 0.22);
+            bodyProfile.lineTo(0.44, 0.22);
+            bodyProfile.lineTo(0.44, 1.64);
+            bodyProfile.lineTo(0.31, 1.82);
+            bodyProfile.lineTo(-0.31, 1.82);
+            bodyProfile.lineTo(-0.44, 1.64);
+            bodyProfile.closePath();
+            addPart('forklift-body', new THREE.ExtrudeGeometry(bodyProfile, {
+                depth: 0.44, bevelEnabled: true, bevelSize: 0.015, bevelThickness: 0.015,
+                bevelSegments: 1, steps: 1
+            }), bodyMaterial, [0, 0, -0.76]);
+            box('stacker-base', [0.94, 0.16, 0.54], [0, 0.17, -0.51]);
+            box('stacker-bumper', [0.92, 0.1, 0.07], [0, 0.12, -0.8]);
+            box('stacker-safety-band', [0.9, 0.035, 0.012], [0, 0.27, -0.781], yellowMaterial);
+            const fasciaProfile = new THREE.Shape();
+            fasciaProfile.moveTo(-0.29, 0.34);
+            fasciaProfile.lineTo(0.29, 0.34);
+            fasciaProfile.lineTo(0.1, 0.72);
+            fasciaProfile.lineTo(0.1, 1.35);
+            fasciaProfile.lineTo(0.34, 1.67);
+            fasciaProfile.lineTo(-0.34, 1.67);
+            fasciaProfile.lineTo(-0.1, 1.35);
+            fasciaProfile.lineTo(-0.1, 0.72);
+            fasciaProfile.closePath();
+            addPart('stacker-black-fascia', new THREE.ExtrudeGeometry(fasciaProfile, {
+                depth: 0.012, bevelEnabled: false
+            }), darkMaterial, [0, 0, -0.788]);
+            box('stacker-status-light', [0.025, 0.48, 0.015], [0, 0.95, -0.798], greenMaterial);
+            box('stacker-console', [0.26, 0.16, 0.025], [0.22, 1.67, -0.76]);
+            box('stacker-display', [0.2, 0.1, 0.012], [0.22, 1.67, -0.78], screenMaterial);
+            const stop = addPart('stacker-emergency-stop', new THREE.CylinderGeometry(0.043, 0.043, 0.04, 12), redMaterial, [-0.24, 1.57, -0.79]);
+            stop.rotation.x = Math.PI / 2;
+            [-0.44, 0.44].forEach((x) => {
+                const drive = addPart('stacker-drive-wheel', new THREE.CylinderGeometry(0.11, 0.11, 0.075, 16), wheelMaterial, [x, 0.11, -0.54]);
+                drive.rotation.z = Math.PI / 2;
+                box('stacker-support-leg', [0.12, 0.05, 1.04], [x, 0.055, 0.24]);
+                const roller = addPart('stacker-load-roller', new THREE.CylinderGeometry(0.047, 0.047, 0.1, 12), wheelMaterial, [x, 0.047, 0.68]);
+                roller.rotation.z = Math.PI / 2;
+                box('stacker-leg-marker', [0.125, 0.015, 0.1], [x, 0.086, 0.64], yellowMaterial);
+                box('stacker-side-safety-band', [0.016, 0.035, 0.4], [x * 1.03, 0.27, -0.51], yellowMaterial);
+                [0.42, 0.51].forEach(y => box('stacker-vent', [0.016, 0.035, 0.18], [x * 1.04, y, -0.51]));
             });
-            const guardGeometry = new THREE.BoxGeometry(0.07, 1.65, 0.07);
-            const guardTopGeometry = new THREE.BoxGeometry(1.16, 0.07, 0.75);
-            [-0.54, 0.54].forEach((x) => {
-                [-0.39, 0.29].forEach((z) => {
-                    const guardPost = new THREE.Mesh(guardGeometry, darkMaterial);
-                    guardPost.position.set(x, 1.22, z);
-                    guardPost.castShadow = true;
-                    group.add(guardPost);
-                });
-            });
-            const guardTop = new THREE.Mesh(guardTopGeometry, darkMaterial);
-            guardTop.position.set(0, 2.06, -0.05);
-            guardTop.castShadow = true;
-            group.add(guardTop);
+            box('stacker-sensor-tower', [0.18, 0.75, 0.18], [0, 2.15, -0.53]);
+            box('stacker-sensor-head', [0.36, 0.2, 0.28], [0, 2.57, -0.53]);
+            [-0.11, 0, 0.11].forEach(x => box('stacker-sensor-window', [0.045, 0.055, 0.012], [x, 2.57, -0.676], screenMaterial));
+            [greenMaterial, yellowMaterial, redMaterial].forEach((material, i) =>
+                box('stacker-signal-tower', [0.06, 0.09, 0.022], [0, 2.13 + i * 0.095, -0.63], material));
+            addPart('stacker-lidar', new THREE.CylinderGeometry(0.075, 0.075, 0.07, 16), redMaterial, [0, 2.72, -0.53]);
             const mastGroup = new THREE.Group();
             mastGroup.name = 'forklift-mast';
-            mastGroup.position.z = 0.5;
-            const mastRailGeometry = new THREE.BoxGeometry(0.09, 2.45, 0.1);
-            [-0.59, 0.59].forEach((x) => {
-                const rail = new THREE.Mesh(mastRailGeometry, steelMaterial);
-                rail.position.set(x, 1.38, 0);
-                rail.castShadow = true;
-                mastGroup.add(rail);
-            });
+            mastGroup.position.z = stackerDimensions.mastZ;
+            [-0.31, 0.31].forEach(x => box('stacker-outer-mast', [0.075, 2.45, 0.1], [x, 1.3, 0], darkMaterial, mastGroup));
+            box('stacker-mast-crossbar', [0.69, 0.08, 0.1], [0, 2.5, 0], darkMaterial, mastGroup);
             const mastMiddle = new THREE.Group();
-            const middleRailGeometry = new THREE.BoxGeometry(0.065, 2.25, 0.075);
-            [-0.48, 0.48].forEach((x) => {
-                const rail = new THREE.Mesh(middleRailGeometry, darkMaterial);
-                rail.position.set(x, 1.32, 0.015);
-                rail.castShadow = true;
-                mastMiddle.add(rail);
-            });
+            [-0.23, 0.23].forEach(x => box('stacker-middle-mast', [0.055, 2.25, 0.075], [x, 1.22, 0.02], steelMaterial, mastMiddle));
             mastGroup.add(mastMiddle);
             const mastUpper = new THREE.Group();
-            const upperRailGeometry = new THREE.BoxGeometry(0.05, 2.05, 0.055);
-            [-0.38, 0.38].forEach((x) => {
-                const rail = new THREE.Mesh(upperRailGeometry, steelMaterial);
-                rail.position.set(x, 1.22, 0.03);
-                rail.castShadow = true;
-                mastUpper.add(rail);
-            });
+            [-0.16, 0.16].forEach(x => box('stacker-inner-mast', [0.045, 2.05, 0.055], [x, 1.12, 0.04], darkMaterial, mastUpper));
             mastGroup.add(mastUpper);
             const carriage = new THREE.Group();
             carriage.name = 'forklift-carriage';
             carriage.position.y = travelForkHeight;
-            const carriageGeometry = new THREE.BoxGeometry(1.08, 0.48, 0.09);
-            const carriageBack = new THREE.Mesh(carriageGeometry, darkMaterial);
-            carriageBack.position.set(0, 0.25, 0.08);
-            carriageBack.castShadow = true;
-            carriage.add(carriageBack);
+            const reachRails = [-0.24, 0.24].map(x => {
+                const rail = box('stacker-reach-guide', [0.075, 0.025, 1], [x, -0.025, 0.06], steelMaterial, carriage);
+                rail.scale.z = 0.12;
+                return rail;
+            });
             const forkAssembly = new THREE.Group();
             forkAssembly.name = 'forklift-forks';
-            const forkGeometry = new THREE.BoxGeometry(0.11, forkThickness, 0.92);
-            [-0.37, 0.37].forEach((x) => {
-                const fork = new THREE.Mesh(forkGeometry, forkMaterial);
-                fork.position.set(x, 0, 0.56);
-                fork.castShadow = true;
-                fork.receiveShadow = true;
-                forkAssembly.add(fork);
+            box('stacker-carriage-back', [0.62, 0.13, 0.07], [0, 0.35, 0.065], darkMaterial, forkAssembly);
+            [-0.24, 0.24].forEach((x) => {
+                box('stacker-fork-heel', [0.095, 0.39, 0.06], [x, 0.19, 0.08], forkMaterial, forkAssembly);
+                box('stacker-fork-tine', [0.11, forkThickness, stackerDimensions.forkLength], [x, 0, stackerDimensions.forkCenterZ], forkMaterial, forkAssembly);
             });
             const loadAnchor = new THREE.Group();
             loadAnchor.name = 'forklift-load-anchor';
-            loadAnchor.position.set(0, forkThickness / 2, 0.58);
+            loadAnchor.position.set(0, forkThickness / 2, stackerDimensions.forkCenterZ);
             forkAssembly.add(loadAnchor);
             carriage.add(forkAssembly);
             mastGroup.add(carriage);
             group.add(mastGroup);
-            const lidarGeometry = new THREE.CylinderGeometry(0.13, 0.16, 0.18, 20);
-            const lidarMaterial = new THREE.MeshPhysicalMaterial({ color: '#dbeafe', emissive: '#38bdf8', emissiveIntensity: 0.55, roughness: 0.15 });
-            const lidar = new THREE.Mesh(lidarGeometry, lidarMaterial);
-            lidar.position.set(0, 2.19, -0.05);
-            lidar.castShadow = true;
-            group.add(lidar);
             amrResources.push(
-                shadowGeometry, shadowMaterial, bodyGeometry, bodyMaterial, darkMaterial, steelMaterial, forkMaterial,
-                counterweightGeometry, wheelGeometry, wheelMaterial, guardGeometry, guardTopGeometry,
-                mastRailGeometry, middleRailGeometry, upperRailGeometry, carriageGeometry, forkGeometry,
-                lidarGeometry, lidarMaterial
+                shadowGeometry, shadowMaterial, bodyMaterial, darkMaterial, steelMaterial, forkMaterial,
+                wheelMaterial, yellowMaterial, greenMaterial, redMaterial, screenMaterial
             );
-            return { group, carriage, forkAssembly, loadAnchor, mastMiddle, mastUpper };
+            return { group, carriage, forkAssembly, loadAnchor, mastMiddle, mastUpper, reachRails };
         };
         const chooseAmrDestination = (amr) => {
             if (amrComponent.length < 2) return amr.currentKey;
@@ -1332,10 +1496,17 @@
                     placedLoad: null
                 };
                 amr.equipmentName = equipmentByCode.get(amr.equipmentCode)?.name || amr.equipmentCode;
-                amr.label = createLabelSprite(THREE, amr.equipmentName, { sizeScale: 0.5, fontWeight: 400, border: false });
+                const equipmentStatus = equipmentStatusByCode.get(amr.equipmentCode) || {};
+                amr.communicationStatus = equipmentStatus.communicationStatus || 'OFFLINE';
+                amr.equipmentStatus = equipmentStatus.equipmentStatus || '미설정';
+                amr.label = createAmrLabelSprite(THREE, {
+                    name: amr.equipmentName,
+                    communicationStatus: amr.communicationStatus,
+                    equipmentStatus: amr.equipmentStatus
+                });
                 amr.label.name = amr.equipmentName;
-                amr.label.position.set(0, 3.0, 0);
-                amr.label.userData = { kind: 'amr-label', amr };
+                amr.label.position.set(0, 3.26, 0);
+                amr.label.userData = { ...amr.label.userData, kind: 'amr-label', amr };
                 amr.group.userData.equipmentCode = amr.equipmentCode;
                 amr.group.add(amr.label);
                 amrLabelTargets.push(amr.label);
@@ -1392,6 +1563,7 @@
         const clickTargets = [];
         const labelTargets = [];
         const slotMeshEntries = [];
+        const zoneVisualizationEntries = [];
         const geometryCache = new Map();
         const outlineGeometryCache = new Map();
         const outlineTubeGeometryCache = new Map();
@@ -1721,6 +1893,29 @@
             });
         });
 
+        const zoneColors = ['#38bdf8', '#a78bfa', '#f59e0b', '#22c55e', '#fb7185'];
+        const zoneColorByCode = new Map(data.zones.map((zone, index) => [zone.code, zoneColors[index % zoneColors.length]]));
+        calculateZoneFloorBounds(data.racks, data.rackTypes, 500).forEach((bounds) => {
+            const entries = rackEntries.filter((entry) => entry.rack.zoneCode === bounds.zoneCode);
+            const height = Math.max(0.4, ...entries.map((entry) => mm(entry.type.height))) + 0.4;
+            const geometry = new THREE.BoxGeometry(mm(bounds.maxX - bounds.minX), height, mm(bounds.maxY - bounds.minY));
+            const material = new THREE.MeshBasicMaterial({
+                color: zoneColorByCode.get(bounds.zoneCode) || zoneColors[0],
+                transparent: true,
+                opacity: 0.08,
+                depthWrite: false,
+                side: THREE.DoubleSide
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.name = `ZONE-${bounds.zoneCode}-VISUALIZATION`;
+            mesh.position.set(mm((bounds.minX + bounds.maxX) / 2), height / 2, mm((bounds.minY + bounds.maxY) / 2));
+            mesh.visible = false;
+            mesh.renderOrder = 7;
+            mesh.userData = { kind: 'zone-visualization', zoneCode: bounds.zoneCode };
+            scene.add(mesh);
+            zoneVisualizationEntries.push({ zoneCode: bounds.zoneCode, mesh, geometry, material });
+        });
+
         const forkliftTaskTargets = [];
         const reservedTaskKeys = new Set();
         const reservedDockKeys = new Set();
@@ -1750,7 +1945,11 @@
                 const toSlot = slotWorld.clone().sub(dockWorld);
                 toSlot.y = 0;
                 const distanceToSlot = toSlot.length();
-                if (!(distanceToSlot > 0.4) || distanceToSlot > 2.4) continue;
+                const clearanceToFace = dockWorld.clone().sub(faceWorld).dot(outward);
+                const forkExtension = distanceToSlot - (stackerDimensions.mastZ + stackerDimensions.forkCenterZ);
+                // The chassis/low support legs stay in the aisle; only the lifting forks reach into the cell.
+                if (clearanceToFace < stackerDimensions.frontReach + stackerDimensions.rackClearance
+                    || forkExtension < 0 || forkExtension > stackerDimensions.maxExtension) continue;
                 return {
                     key: slot.locationCode,
                     slot,
@@ -1758,7 +1957,7 @@
                     slotWorld,
                     facingYaw: Math.atan2(toSlot.x, toSlot.z),
                     forkHeight: getForkTargetHeight(slot, forkThickness),
-                    forkExtension: Math.max(0.08, Math.min(0.95, distanceToSlot - 1.08)),
+                    forkExtension,
                     side
                 };
             }
@@ -1788,7 +1987,7 @@
                 getMaterial(color, { roughness: 0.2, metalness: 0.12, clearcoat: 0.86, clearcoatRoughness: 0.08 })
             );
             load.name = 'forklift-carried-load';
-            load.position.set(0, size[1] / 2 + 0.035, 0.08);
+            load.position.set(0, size[1] / 2 + 0.035, 0);
             load.castShadow = true;
             load.receiveShadow = true;
             load.userData.loadSize = size;
@@ -1946,7 +2145,8 @@
             return Math.abs(offset) < 0.025;
         };
         const setForkHeight = (amr, height) => {
-            amr.forkHeight = Math.max(travelForkHeight, height);
+            // A first-level cell may sit below travel height; keep only a physical floor clearance here.
+            amr.forkHeight = Math.max(forkThickness / 2 + 0.01, height);
             amr.carriage.position.y = amr.forkHeight;
             const extensionHeight = Math.max(0, amr.forkHeight - 1.35);
             amr.mastMiddle.position.y = Math.min(2.2, extensionHeight * 0.48);
@@ -1956,6 +2156,10 @@
         const setForkExtension = (amr, extension) => {
             amr.forkExtension = Math.max(0, extension);
             amr.forkAssembly.position.z = amr.forkExtension;
+            amr.reachRails.forEach(rail => {
+                rail.scale.z = amr.forkExtension + 0.12;
+                rail.position.z = 0.06 + amr.forkExtension / 2;
+            });
             amr.group.userData.forkExtension = amr.forkExtension;
         };
         const handleForkliftLoad = (amr) => {
@@ -2126,6 +2330,7 @@
             if (previous && previous !== followedAmr) setAmrLabelState(previous, previous === hoveredAmr ? 'hover' : 'normal');
             if (followedAmr) {
                 setAmrLabelState(followedAmr, 'selected');
+                shell.inspector.innerHTML = getAmrInspectorHtml(followedAmr);
                 cameraFocusTransitionToken += 1;
                 // Keep at least 14m vertically and 10m horizontally in view.
                 const viewHeight = Math.max(14, 10 / Math.max(0.1, viewportAspect));
@@ -2137,6 +2342,8 @@
                 };
             }
             shell.viewport.dataset.followingAmrCode = followedAmr?.equipmentCode || '';
+            if (!followedAmr && previous) showDefaultInspector();
+            shell.syncObjectSelection?.();
             requestRender();
         };
         const amrFollowTarget = new THREE.Vector3();
@@ -2346,9 +2553,182 @@
             selectedRack = rackData || null;
             if (selectedRack?.outlines?.selected) fadeWorldObject(selectedRack.outlines.selected, true, { duration: 180, reset: true });
             if (selectedRack) setRackLabelState(selectedRack, 'selected');
+            shell.syncObjectSelection?.();
             requestRender();
         };
-        const showDefaultInspector = () => { shell.inspector.innerHTML = '<h5>선택 정보</h5><p>랙이나 적재 상자를 선택하면 상세 정보가 표시됩니다.</p>'; };
+        const showDefaultInspector = () => { shell.inspector.innerHTML = '<h5>선택 정보</h5><p>구역, 랙, 설비 또는 적재 상자를 선택하면 상세 정보가 표시됩니다.</p>'; };
+        let hoveredZoneCode = '';
+        let selectedZoneCode = '';
+        const getZoneStatistics = (zoneCode) => {
+            const entries = rackEntries.filter((entry) => entry.rack.zoneCode === zoneCode);
+            const slots = entries.flatMap((entry) => entry.slots);
+            return {
+                rackCount: entries.length,
+                locationCount: slots.length,
+                occupiedLocationCount: slots.filter((slot) => slot.occupied).length,
+                stockQuantity: entries.reduce((total, entry) => total + entry.stocks.reduce((sum, stock) => sum + Number(stock.quantity || 0), 0), 0)
+            };
+        };
+        const showZoneSelection = (zoneCode) => {
+            const zone = zoneByCode.get(zoneCode);
+            if (!zone) { showDefaultInspector(); return; }
+            const statistics = getZoneStatistics(zoneCode);
+            const defaultRackType = rackTypeByCode.get(zone.defaultRackTypeCode);
+            const rackTypeText = defaultRackType
+                ? `${escapeHtml(defaultRackType.code)} · ${escapeHtml(defaultRackType.name)}`
+                : escapeHtml(zone.defaultRackTypeCode || '미설정');
+            shell.inspector.innerHTML = `<h5>${escapeHtml(zone.code)} · ${escapeHtml(zone.name || '구역')}</h5><dl><dt>용도</dt><dd>${escapeHtml(zone.purpose || '미설정')}</dd><dt>기본 랙</dt><dd>${rackTypeText}</dd><dt>랙 수</dt><dd>${statistics.rackCount}개</dd><dt>로케이션</dt><dd>${statistics.locationCount}개</dd><dt>적재 위치</dt><dd>${statistics.occupiedLocationCount}개</dd><dt>재고 수량</dt><dd>${statistics.stockQuantity}</dd></dl>`;
+        };
+        const syncZoneVisualization = () => {
+            zoneVisualizationEntries.forEach((entry) => {
+                const isSelected = entry.zoneCode === selectedZoneCode;
+                const isHovered = entry.zoneCode === hoveredZoneCode;
+                entry.mesh.visible = isSelected || isHovered;
+                entry.material.opacity = isSelected ? 0.08 : 0.065;
+            });
+            shell.zoneButtons.querySelectorAll('[data-warehouse-zone-code]').forEach((button) => {
+                const zoneCode = button.dataset.warehouseZoneCode || '';
+                button.setAttribute('aria-pressed', String(zoneCode === selectedZoneCode));
+            });
+            shell.viewport.dataset.selectedZoneCode = selectedZoneCode;
+            shell.viewport.dataset.hoveredZoneCode = hoveredZoneCode;
+            shell.viewport.dataset.visibleZoneCodes = zoneVisualizationEntries
+                .filter((entry) => entry.mesh.visible)
+                .map((entry) => entry.zoneCode)
+                .join(',');
+            shell.viewport.dataset.zoneVisualizationCount = String(zoneVisualizationEntries.length);
+            shell.syncObjectSelection?.();
+            requestRender();
+        };
+        const setHoveredZone = (zoneCode) => {
+            const nextZoneCode = zoneByCode.has(zoneCode) ? zoneCode : '';
+            if (hoveredZoneCode === nextZoneCode) return;
+            hoveredZoneCode = nextZoneCode;
+            syncZoneVisualization();
+        };
+        const setSelectedZone = (zoneCode, updateInspector = true) => {
+            selectedZoneCode = zoneByCode.has(zoneCode) ? zoneCode : '';
+            syncZoneVisualization();
+            if (!updateInspector) return;
+            if (selectedZoneCode) showZoneSelection(selectedZoneCode);
+            else showDefaultInspector();
+        };
+        const clearObjectSelectionForZone = () => {
+            setSelectedAmr(null);
+            setSelectedSlot(null);
+            setHoveredSlot(null);
+            setHoveredRack(null);
+            setSelectedRack(null);
+            setFocusedRack(null);
+        };
+        const selectableZones = data.zones.filter((zone) => zoneVisualizationEntries.some((entry) => entry.zoneCode === zone.code));
+        const communicationIcon = (online) => `<svg class="warehouse-3d-connection-icon ${online ? 'is-online' : 'is-offline'}" viewBox="0 0 24 24" role="img" aria-label="${online ? '온라인' : '오프라인'}"><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/>${online ? '' : '<path d="m3 3 18 18"/>'}</svg>`;
+        const objectGroups = {
+            zone: selectableZones.map((zone) => ({ code: zone.code, name: zone.code, detail: zone.name || zone.purpose || '구역', value: zone })),
+            rack: rackEntries.map(entry => ({ code: entry.rack.code, name: entry.rack.code, detail: entry.rack.zoneCode || '', value: entry })),
+            equipment: amrFleet.map(amr => ({ code: amr.equipmentCode, name: amr.equipmentName, detail: amr.equipmentStatus, value: amr }))
+        };
+        let visibleObjectItems = [];
+        let expandedBeforeSearch = null;
+        const clearObjectPreview = () => { setHoveredZone(''); setHoveredRack(null); setHoveredAmr(null); };
+        const isObjectSelected = (item) => item.kind === 'zone' ? selectedZoneCode === item.code
+            : item.kind === 'rack' ? selectedRack === item.value.rackData : followedAmr === item.value;
+        shell.syncObjectSelection = () => {
+            shell.zoneButtons.querySelectorAll('[data-warehouse-object-index]').forEach(button => {
+                const item = visibleObjectItems[Number(button.dataset.warehouseObjectIndex)];
+                button.setAttribute('aria-pressed', String(Boolean(item && isObjectSelected(item))));
+            });
+            shell.objectOverview.setAttribute('aria-pressed', String(
+                !selectedZoneCode && !selectedRack && !followedAmr && !selectedOutline.visible
+                && !shell.zoneFilter.value && !shell.search.value && !shell.objectSearch.value.trim()
+            ));
+        };
+        const renderObjectList = () => {
+            const query = shell.objectSearch.value.trim().toLocaleLowerCase();
+            if (query && !expandedBeforeSearch) {
+                expandedBeforeSearch = new Map(shell.objectSections.map(section => [section.dataset.warehouseObjectSection, section.open]));
+            }
+            visibleObjectItems = [];
+            shell.objectSections.forEach(section => {
+                const kind = section.dataset.warehouseObjectSection;
+                const items = objectGroups[kind].filter(item =>
+                    `${item.code} ${item.name} ${item.detail || ''}`.toLocaleLowerCase().includes(query));
+                section.hidden = Boolean(query && !items.length);
+                if (query && items.length) section.open = true;
+                else if (!query && expandedBeforeSearch) section.open = expandedBeforeSearch.get(kind);
+                section.querySelector('.warehouse-3d-object-children').innerHTML = items.map(item => {
+                    const index = visibleObjectItems.push({ ...item, kind }) - 1;
+                    const zone = kind === 'zone';
+                    const equipment = kind === 'equipment';
+                    const detail = equipment
+                        ? `${communicationIcon(item.value.communicationStatus === 'ONLINE')}<span class="warehouse-3d-object-status" style="--warehouse-equipment-status-color:${getAmrEquipmentStatusColor(item.detail)}">${escapeHtml(item.detail || '미설정')}</span>`
+                        : `<small>${escapeHtml(item.detail)}</small>`;
+                    const icon = zone ? `<i class="warehouse-3d-object-swatch" style="background:${zoneColorByCode.get(item.code) || zoneColors[0]}" aria-hidden="true"></i>` : '';
+                    return `<button type="button" class="warehouse-3d-object-row${zone ? ' warehouse-3d-zone-button' : ''}${equipment ? ' is-equipment' : ''}" data-warehouse-object-index="${index}" data-warehouse-object-kind="${kind}" data-warehouse-object-code="${escapeHtml(item.code)}"${zone ? ` data-warehouse-zone-code="${escapeHtml(item.code)}"` : ''} aria-pressed="false" title="${escapeHtml(`${item.code} · ${item.name} · ${item.detail || ''}`)}">${icon}<span class="warehouse-3d-object-name">${escapeHtml(item.name)}</span>${detail}</button>`;
+                }).join('') || '<p class="warehouse-3d-object-empty">표시할 항목이 없습니다.</p>';
+            });
+            if (!query) expandedBeforeSearch = null;
+            const total = Object.values(objectGroups).reduce((count, items) => count + items.length, 0);
+            shell.objectEmpty.hidden = !query || visibleObjectItems.length > 0;
+            shell.objectTotal.textContent = query ? `${visibleObjectItems.length} / ${total}개` : `${total}개`;
+            shell.syncObjectSelection();
+        };
+        const clearPanelSelection = () => {
+            cameraFocusTransitionToken += 1;
+            clearObjectPreview();
+            clearObjectSelectionForZone();
+            setSelectedZone('');
+        };
+        const getObjectListItem = (node) => {
+            const button = node?.closest?.('[data-warehouse-object-index]');
+            return button && shell.zoneButtons.contains(button) ? visibleObjectItems[Number(button.dataset.warehouseObjectIndex)] : null;
+        };
+        const previewObjectListItem = (item) => {
+            clearObjectPreview();
+            if (!item) return;
+            if (item.kind === 'zone') setHoveredZone(item.code);
+            else if (item.kind === 'rack') setHoveredRack(item.value.rackData);
+            else setHoveredAmr(item.value);
+        };
+        shell.zoneButtons.addEventListener('pointerover', event => {
+            const item = getObjectListItem(event.target);
+            if (item !== getObjectListItem(event.relatedTarget)) previewObjectListItem(item);
+        }, { signal });
+        shell.zoneButtons.addEventListener('pointerleave', clearObjectPreview, { signal });
+        shell.zoneButtons.addEventListener('focusin', event => previewObjectListItem(getObjectListItem(event.target)), { signal });
+        shell.zoneButtons.addEventListener('focusout', event => { if (!shell.zoneButtons.contains(event.relatedTarget)) clearObjectPreview(); }, { signal });
+        shell.zoneButtons.addEventListener('click', event => {
+            const item = getObjectListItem(event.target);
+            if (!item) return;
+            const deselect = isObjectSelected(item);
+            clearPanelSelection();
+            if (deselect) return;
+            if (item.kind === 'zone') setSelectedZone(item.code);
+            else if (item.kind === 'rack') {
+                // Explicitly selecting a rack should reveal it even if the top toolbar hid it.
+                if (!item.value.group.visible) { shell.zoneFilter.value = ''; shell.search.value = ''; applyFilters(); }
+                const rack = item.value.rackData;
+                setSelectedRack(rack); setFocusedRack(rack); focusRackInCurrentView(rack); showSelection(rack);
+            } else setSelectedAmr(item.value);
+        }, { signal });
+        shell.objectSearch.addEventListener('input', () => {
+            clearObjectPreview();
+            renderObjectList();
+            shell.zoneButtons.scrollTop = 0;
+        }, { signal });
+        shell.objectOverview.addEventListener('click', () => {
+            clearPanelSelection();
+            shell.objectSearch.value = '';
+            shell.zoneFilter.value = '';
+            shell.search.value = '';
+            renderObjectList();
+            applyFilters();
+            applyCameraView('quarter');
+            shell.objectOverview.focus();
+            shell.zoneButtons.scrollTop = 0;
+        }, { signal });
+        renderObjectList();
+        syncZoneVisualization();
         const cameraViewPresets = {
             quarter: { yaw: Math.PI / 4, pitch: Math.PI / 6, distanceScale: 1.08, targetY: 2.5 },
             top: { yaw: 0, pitch: Math.PI / 2 - 0.01, distanceScale: 1.82, targetY: 0 },
@@ -2555,10 +2935,10 @@
             updateCamera();
             requestRender();
         }, { signal, passive: false });
-        renderer.domElement.addEventListener('keydown', (event) => {
-            if (event.key !== 'Escape' || !followedAmr) return;
+        shell.root.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape' || (!followedAmr && !selectedZoneCode && !selectedRack)) return;
             event.preventDefault();
-            setSelectedAmr(null);
+            clearPanelSelection();
         }, { signal });
 
         const raycaster = new THREE.Raycaster();
@@ -2653,6 +3033,7 @@
             if (button !== 0 || moved > 5) return;
             const labelAmr = getLabelAmrAtPointer(event);
             if (labelAmr) {
+                setSelectedZone('', false);
                 setSelectedSlot(null);
                 setHoveredSlot(null);
                 setHoveredRack(null);
@@ -2666,6 +3047,7 @@
             setSelectedAmr(null);
             const labelRack = getLabelRackAtPointer(event);
             if (labelRack) {
+                setSelectedZone('', false);
                 setSelectedSlot(null);
                 setHoveredSlot(null);
                 setSelectedRack(labelRack);
@@ -2675,7 +3057,7 @@
                 return;
             }
             const slot = getSlotAtPointer(event);
-            if (slot) { setHoveredSlot(slot); setSelectedSlot(slot); setSelectedRack(null); setFocusedRack(null); showSelection(slot); return; }
+            if (slot) { setSelectedZone('', false); setHoveredSlot(slot); setSelectedSlot(slot); setSelectedRack(null); setFocusedRack(null); showSelection(slot); return; }
             setHoveredSlot(null);
             const rect = renderer.domElement.getBoundingClientRect();
             pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -2683,8 +3065,8 @@
             raycaster.setFromCamera(pointer, camera);
             const hits = raycaster.intersectObjects(clickTargets, false).filter((hit) => isRaycastTargetVisible(hit.object));
             const hit = hits[0];
-            if (hit?.object.userData?.kind) { setSelectedSlot(null); setFocusedRack(null); setSelectedRack(hit.object.userData); showSelection(hit.object.userData); }
-            else { setSelectedSlot(null); setSelectedRack(null); setFocusedRack(null); showDefaultInspector(); }
+            if (hit?.object.userData?.kind) { setSelectedZone('', false); setSelectedSlot(null); setFocusedRack(null); setSelectedRack(hit.object.userData); showSelection(hit.object.userData); }
+            else { setSelectedZone('', false); setSelectedSlot(null); setSelectedRack(null); setFocusedRack(null); showDefaultInspector(); }
         }, { signal });
 
         const applyFilters = () => {
@@ -2700,6 +3082,7 @@
                 setFocusedRack(null);
                 showDefaultInspector();
             }
+            shell.syncObjectSelection();
             requestRender();
         };
         shell.zoneFilter.addEventListener('change', applyFilters, { signal });
@@ -2727,6 +3110,7 @@
             passageBoundaryGeometry?.dispose();
             passageBoundaryMaterial?.dispose();
             amrResources.forEach((resource) => resource.dispose());
+            zoneVisualizationEntries.forEach(({ geometry, material }) => { geometry.dispose(); material.dispose(); });
             scene.traverse((object) => {
                 if (object.material?.map) object.material.map.dispose();
                 if (object.type === 'Sprite' && object.material) object.material.dispose();
@@ -2783,8 +3167,7 @@
                 if (document.fullscreenElement === container) await document.exitFullscreen();
                 else await container.requestFullscreen({ navigationUI: 'hide' });
             } catch (error) {
-                shell.sourceStatus.classList.add('is-warning');
-                shell.sourceStatus.textContent = `전체화면을 열지 못했습니다. — ${error?.message || '브라우저 권한을 확인해 주세요.'}`;
+                shell.fullscreen.title = `전체화면을 열지 못했습니다. — ${error?.message || '브라우저 권한을 확인해 주세요.'}`;
             }
         }, { signal: abortController.signal });
         document.addEventListener('fullscreenchange', syncFullscreenButton, { signal: abortController.signal });
@@ -2792,7 +3175,6 @@
         if (options.googleSheet?.documentId) {
             shell.reload.hidden = false;
             shell.reload.addEventListener('click', () => mount(container, options), { signal: abortController.signal });
-            shell.sourceStatus.textContent = 'Google Sheets 기준정보를 불러오는 중입니다.';
         }
         try {
             const source = options.dataSource || 'data/warehouse-demo.json';
@@ -2811,21 +3193,11 @@
                 return controller;
             }
             if (abortController.signal.aborted || !container.isConnected) return controller;
-            if (options.googleSheet?.documentId) {
-                const loadedAt = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                shell.sourceStatus.classList.add('is-connected');
-                const unmappedCount = data.meta?.unmappedFloorRackCodes?.length || 0;
-                const unplacedCount = data.meta?.unplacedRackCodes?.length || 0;
-                if (unmappedCount) shell.sourceStatus.classList.add('is-warning');
-                const layoutErrorCount = data.meta?.layoutErrors?.length || 0;
-                const outOfRangeCount = data.meta?.outOfRangeLocationCodes?.length || 0;
-                if (layoutErrorCount || outOfRangeCount) shell.sourceStatus.classList.add('is-warning');
-                shell.sourceStatus.textContent = `Google Sheets 연결됨 · ${loadedAt} · 평면도 배치 ${data.meta?.floorPlanAppliedCount || 0}개 · 재고 ${data.inventory.length}건${unplacedCount ? ` · 미배치 ${unplacedCount}개` : ''}${unmappedCount ? ` · 미등록 랙코드 ${unmappedCount}개` : ''}${layoutErrorCount ? ` · 배치 오류 ${layoutErrorCount}개` : ''}${outOfRangeCount ? ` · 범위초과 위치 ${outOfRangeCount}개` : ''}`;
-            } else shell.sourceStatus.textContent = '내장 임시 기준정보를 표시하고 있습니다.';
-            if (data.meta?.equipmentLoadWarning) {
-                shell.sourceStatus.classList.add('is-warning');
-                shell.sourceStatus.textContent += ` · ${data.meta.equipmentLoadWarning}`;
-            }
+            // The bottom panel is intentionally empty; retain nonfatal diagnostics in the console only.
+            const warnings = [data.meta?.equipmentLoadWarning, data.meta?.equipmentStatusLoadWarning,
+                ...(data.meta?.layoutErrors || []), ...(data.meta?.unmappedFloorRackCodes || []),
+                ...(data.meta?.unplacedRackCodes || []), ...(data.meta?.outOfRangeLocationCodes || [])].filter(Boolean);
+            if (warnings.length) console.warn('[3D 창고 기준정보]', warnings);
             disposeScene = startWarehouseScene(THREE, shell, data, abortController.signal);
         } catch (error) {
             if (error?.name !== 'AbortError') showError(shell, [error?.message || '알 수 없는 오류가 발생했습니다.', '네트워크 연결과 Three.js 모듈 주소를 확인해 주세요.']);
@@ -2843,6 +3215,7 @@
         validateWarehouseData,
         parseCsv,
         parseEquipmentMaster,
+        parseEquipmentStatus,
         getFloorPlanAxisRange,
         convertGoogleSheetCsv,
         calculateZoneFloorBounds,
