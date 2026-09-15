@@ -133,6 +133,8 @@
         const floorPlanByRack = new Map();
         const floorPlanCells = [];
         const passageCells = [];
+        const dockCells = [];
+        const stationCells = [];
         const unmappedFloorRackCodes = new Set();
         records.floorPlan.forEach((row) => {
             const y = Number(row['Y\\X']);
@@ -145,7 +147,10 @@
                 floorPlanCells.push({ x, y, value: cellValue });
                 const normalizedValue = cellValue.toUpperCase();
                 if (normalizedValue === 'T') passageCells.push({ x, y });
-                if (normalizedValue === 'F' || normalizedValue === 'T') return;
+                if (normalizedValue === 'S') stationCells.push({ x, y });
+                const dockCodeMatch = /^D(\d+)$/.exec(normalizedValue);
+                if (dockCodeMatch) dockCells.push({ x, y, code: `D${dockCodeMatch[1]}` });
+                if (normalizedValue === 'F' || normalizedValue === 'T' || normalizedValue === 'S' || dockCodeMatch) return;
                 const rackCode = rackCodesFromMaster.has(cellValue) ? cellValue : '';
                 if (!rackCode) {
                     unmappedFloorRackCodes.add(cellValue);
@@ -334,6 +339,15 @@
                     x: (cell.x - 1) * floorPlanCellSize,
                     y: (cell.y - 1) * floorPlanCellSize
                 })),
+                dockCells: dockCells.map((cell) => ({
+                    x: (cell.x - 1) * floorPlanCellSize,
+                    y: (cell.y - 1) * floorPlanCellSize,
+                    code: cell.code
+                })),
+                stationCells: stationCells.map((cell) => ({
+                    x: (cell.x - 1) * floorPlanCellSize,
+                    y: (cell.y - 1) * floorPlanCellSize
+                })),
                 source: 'googleSheets',
                 documentId: options.documentId || '',
                 floorPlanRange: options.floorPlanAxis?.range || '',
@@ -399,13 +413,17 @@
     }
 
     function parseEquipmentMaster(csv) {
-        const records = csvToRecords(csv, ['설비 코드', '설비명'], '설비 마스터');
+        const records = csvToRecords(csv, ['설비 코드', '설비명', '사용 여부'], '설비 마스터');
         const seen = new Set();
         return records.filter(row => String(row['설비 코드'] || '').trim()).map(row => {
             const code = String(row['설비 코드']).trim();
             if (seen.has(code)) throw new Error(`설비 코드가 중복되었습니다: ${code}`);
             seen.add(code);
-            return { code, name: String(row['설비명'] || '').trim() || code };
+            return {
+                code,
+                name: String(row['설비명'] || '').trim() || code,
+                enabled: String(row['사용 여부'] || '').trim().toUpperCase() === 'Y'
+            };
         });
     }
 
@@ -1047,6 +1065,116 @@
             ceilingHidden: toNumber(cameraPosition?.y) > height + 0.25
         };
     }
+    function calculateLoadingDockLayout(
+        racks,
+        rackTypes,
+        floorWidth,
+        floorDepth,
+        rackCode = 'W04',
+        dockCells = [],
+        floorPlanCellSize = 500
+    ) {
+        const width = Math.max(0, toNumber(floorWidth));
+        const depth = Math.max(0, toNumber(floorDepth));
+        if (!width || !depth) return null;
+
+        const buildLayout = (bounds, candidateSides, source, sourceCode, cellCount = 0) => {
+            const distances = {
+                back: Math.max(0, bounds.minZ),
+                front: Math.max(0, depth - bounds.maxZ),
+                left: Math.max(0, bounds.minX),
+                right: Math.max(0, width - bounds.maxX)
+            };
+            const side = candidateSides.reduce((nearest, candidate) =>
+                distances[candidate] < distances[nearest] ? candidate : nearest
+            );
+            const halfTruckWidth = 1100;
+            const edgeClearance = 250;
+            const clampAlongWall = (value, maximum) => Math.min(
+                Math.max(halfTruckWidth + edgeClearance, value),
+                Math.max(halfTruckWidth + edgeClearance, maximum - halfTruckWidth - edgeClearance)
+            );
+            const centerX = (bounds.minX + bounds.maxX) / 2;
+            const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+            const sideSettings = {
+                back: { anchorX: clampAlongWall(centerX, width), anchorZ: 0, outwardX: 0, outwardZ: -1, yaw: Math.PI },
+                front: { anchorX: clampAlongWall(centerX, width), anchorZ: depth, outwardX: 0, outwardZ: 1, yaw: 0 },
+                left: { anchorX: 0, anchorZ: clampAlongWall(centerZ, depth), outwardX: -1, outwardZ: 0, yaw: -Math.PI / 2 },
+                right: { anchorX: width, anchorZ: clampAlongWall(centerZ, depth), outwardX: 1, outwardZ: 0, yaw: Math.PI / 2 }
+            };
+            return { rackCode: sourceCode, source, cellCount, side, bounds, distances, ...sideSettings[side] };
+        };
+
+        const size = Math.max(1, toNumber(floorPlanCellSize, 500));
+        const markedDockCells = (Array.isArray(dockCells) ? dockCells : [])
+            .map((cell) => ({
+                x: toNumber(cell?.x, NaN),
+                y: toNumber(cell?.y, NaN),
+                code: /^D\d+$/.test(String(cell?.code || '').toUpperCase()) ? String(cell.code).toUpperCase() : 'D01'
+            }))
+            .filter((cell) => Number.isFinite(cell.x) && Number.isFinite(cell.y));
+        if (markedDockCells.length) {
+            const primaryDockCode = [...new Set(markedDockCells.map((cell) => cell.code))].sort()[0];
+            const primaryDockCells = markedDockCells.filter((cell) => cell.code === primaryDockCode);
+            const bounds = {
+                minX: Math.min(...primaryDockCells.map((cell) => cell.x)),
+                maxX: Math.max(...primaryDockCells.map((cell) => cell.x)) + size,
+                minZ: Math.min(...primaryDockCells.map((cell) => cell.y)),
+                maxZ: Math.max(...primaryDockCells.map((cell) => cell.y)) + size
+            };
+            return buildLayout(bounds, ['front', 'back', 'left', 'right'], 'floorPlanDock', primaryDockCode, primaryDockCells.length);
+        }
+
+        const rack = (Array.isArray(racks) ? racks : []).find((item) => String(item?.code || '').trim() === rackCode);
+        const type = (Array.isArray(rackTypes) ? rackTypes : []).find((item) => item?.code === rack?.rackTypeCode);
+        if (!rack || !type) return null;
+        const rackLength = Math.max(0, toNumber(type.bayWidth) * Math.max(1, Math.round(toNumber(rack.bayCount, 1))));
+        const rackWidth = Math.max(0, toNumber(type.depth) * Math.max(1, Math.round(toNumber(rack.rackRowCount, 1))));
+        const startX = toNumber(rack.startX);
+        const startZ = toNumber(rack.startY);
+        const bounds = rack.direction === 'vertical'
+            ? { minX: startX, maxX: startX + rackWidth, minZ: startZ, maxZ: startZ + rackLength }
+            : { minX: startX, maxX: startX + rackLength, minZ: startZ, maxZ: startZ + rackWidth };
+        const candidateSides = rack.direction === 'vertical' ? ['right', 'left'] : ['front', 'back'];
+        return buildLayout(bounds, candidateSides, 'rack', rackCode);
+    }
+
+    function calculateLoadingYardLayout(loadingDockLayout, floorWidth, floorDepth, yardDepth = 11000, shoulder = 2000) {
+        if (!loadingDockLayout) return null;
+        const width = Math.max(0, toNumber(floorWidth));
+        const depth = Math.max(0, toNumber(floorDepth));
+        const approachDepth = Math.max(1000, toNumber(yardDepth, 11000));
+        const sideShoulder = Math.max(0, toNumber(shoulder, 2000));
+        if (!width || !depth) return null;
+        const layouts = {
+            back: {
+                centerX: width / 2,
+                centerZ: -approachDepth / 2,
+                sizeX: width + sideShoulder * 2,
+                sizeZ: approachDepth
+            },
+            front: {
+                centerX: width / 2,
+                centerZ: depth + approachDepth / 2,
+                sizeX: width + sideShoulder * 2,
+                sizeZ: approachDepth
+            },
+            left: {
+                centerX: -approachDepth / 2,
+                centerZ: depth / 2,
+                sizeX: approachDepth,
+                sizeZ: depth + sideShoulder * 2
+            },
+            right: {
+                centerX: width + approachDepth / 2,
+                centerZ: depth / 2,
+                sizeX: approachDepth,
+                sizeZ: depth + sideShoulder * 2
+            }
+        };
+        return { side: loadingDockLayout.side, approachDepth, ...layouts[loadingDockLayout.side] };
+    }
+
     function buildPassageBoundarySegments(passageCells, cellSize = 500, boundaryWidth = 100, boundaryInset = 100) {
         const size = Math.max(1, toNumber(cellSize, 500));
         const thickness = Math.min(size, Math.max(1, toNumber(boundaryWidth, 100)));
@@ -1322,10 +1450,32 @@
             depthExtent
         };
     }
+    function getRackDepthFramePositions(rackRowCount, depthCount, rackDepth) {
+        const rows = Math.max(1, Math.round(Number(rackRowCount) || 1));
+        const depths = Math.max(1, Math.round(Number(depthCount) || 1));
+        const depth = Math.max(0, Number(rackDepth) || 0);
+        const spacing = depth / depths;
+        return Array.from({ length: rows * depths + 1 }, (_, index) => index * spacing);
+    }
     function startWarehouseScene(THREE, shell, data, signal) {
         const mm = (value) => Number(value || 0) / 1000;
         const floorWidth = mm(data.meta?.floorWidth || 52000);
         const floorDepth = mm(data.meta?.floorDepth || 58000);
+        const warehouseFloorElevation = 1.2;
+        const loadingDockLayout = calculateLoadingDockLayout(
+            data.racks, data.rackTypes,
+            data.meta?.floorWidth || 52000,
+            data.meta?.floorDepth || 58000,
+            'W04',
+            data.meta?.dockCells,
+            data.meta?.floorPlanCellSize || 500
+        );
+        const openWallSide = loadingDockLayout?.side || '';
+        const loadingYardLayout = calculateLoadingYardLayout(
+            loadingDockLayout,
+            data.meta?.floorWidth || 52000,
+            data.meta?.floorDepth || 58000
+        );
         const scene = new THREE.Scene();
         scene.background = new THREE.Color('#07111f');
 
@@ -1347,11 +1497,11 @@
 
         const maximumRackHeight = Math.max(0, ...data.rackTypes.map((type) => mm(type.height)));
         const warehouseHeight = Math.max(8, maximumRackHeight + 3.2);
-        const sceneSpan = Math.max(floorWidth, floorDepth);
+        const sceneSpan = Math.max(floorWidth, floorDepth) + (loadingYardLayout ? 11 : 0);
         scene.add(new THREE.HemisphereLight('#dbeafe', '#101923', 1.65));
         const sun = new THREE.DirectionalLight('#fff7e8', 2.65);
-        sun.position.set(floorWidth * 0.28, warehouseHeight + 28, floorDepth * 0.22);
-        sun.target.position.set(floorWidth / 2, 1.5, floorDepth / 2);
+        sun.position.set(floorWidth * 0.28, warehouseFloorElevation + warehouseHeight + 28, floorDepth * 0.22);
+        sun.target.position.set(floorWidth / 2, warehouseFloorElevation + 1.5, floorDepth / 2);
         sun.castShadow = true;
         sun.shadow.mapSize.set(2048, 2048);
         sun.shadow.camera.left = -sceneSpan * 0.62;
@@ -1365,7 +1515,7 @@
         scene.add(sun, sun.target);
         const fillLight = new THREE.DirectionalLight('#dbeafe', 1.35);
         fillLight.position.set(floorWidth * 0.85, 28, floorDepth * 0.85);
-        fillLight.target.position.set(floorWidth / 2, 2.5, floorDepth / 2);
+        fillLight.target.position.set(floorWidth / 2, warehouseFloorElevation + 2.5, floorDepth / 2);
         fillLight.castShadow = false;
         scene.add(fillLight, fillLight.target);
 
@@ -1395,6 +1545,7 @@
         const enclosure = new THREE.Group();
         enclosure.name = 'WAREHOUSE-ENCLOSURE';
         enclosure.userData.kind = 'warehouse-enclosure';
+        enclosure.position.y = warehouseFloorElevation;
         const createPanelTexture = (kind) => {
             const canvas = document.createElement('canvas');
             canvas.width = 512;
@@ -1506,10 +1657,15 @@
             enclosureResources.push(geometry);
             return mesh;
         };
-        addEnclosurePlane('WAREHOUSE-WALL-BACK', [enclosureWidth, warehouseHeight], [floorWidth / 2, warehouseHeight / 2, 0], [0, 0, 0], wallMaterial);
-        addEnclosurePlane('WAREHOUSE-WALL-FRONT', [enclosureWidth, warehouseHeight], [floorWidth / 2, warehouseHeight / 2, floorDepth], [0, Math.PI, 0], wallMaterial);
-        addEnclosurePlane('WAREHOUSE-WALL-LEFT', [enclosureDepth, warehouseHeight], [0, warehouseHeight / 2, floorDepth / 2], [0, Math.PI / 2, 0], wallMaterial);
-        addEnclosurePlane('WAREHOUSE-WALL-RIGHT', [enclosureDepth, warehouseHeight], [floorWidth, warehouseHeight / 2, floorDepth / 2], [0, -Math.PI / 2, 0], wallMaterial);
+        const wallDefinitions = {
+            back: ['WAREHOUSE-WALL-BACK', [enclosureWidth, warehouseHeight], [floorWidth / 2, warehouseHeight / 2, 0], [0, 0, 0]],
+            front: ['WAREHOUSE-WALL-FRONT', [enclosureWidth, warehouseHeight], [floorWidth / 2, warehouseHeight / 2, floorDepth], [0, Math.PI, 0]],
+            left: ['WAREHOUSE-WALL-LEFT', [enclosureDepth, warehouseHeight], [0, warehouseHeight / 2, floorDepth / 2], [0, Math.PI / 2, 0]],
+            right: ['WAREHOUSE-WALL-RIGHT', [enclosureDepth, warehouseHeight], [floorWidth, warehouseHeight / 2, floorDepth / 2], [0, -Math.PI / 2, 0]]
+        };
+        Object.entries(wallDefinitions).forEach(([side, [name, size, position, rotation]]) => {
+            if (side !== openWallSide) addEnclosurePlane(name, size, position, rotation, wallMaterial);
+        });
 
         const wallColumnSpacing = 4;
         const wallColumnPositions = new Map();
@@ -1526,10 +1682,10 @@
                 wallColumnPositions.set(key, column);
             }
         };
-        addWallColumns('back', 0, 0, floorWidth, 0);
-        addWallColumns('right', floorWidth, 0, floorWidth, floorDepth);
-        addWallColumns('front', floorWidth, floorDepth, 0, floorDepth);
-        addWallColumns('left', 0, floorDepth, 0, 0);
+        if (openWallSide !== 'back') addWallColumns('back', 0, 0, floorWidth, 0);
+        if (openWallSide !== 'right') addWallColumns('right', floorWidth, 0, floorWidth, floorDepth);
+        if (openWallSide !== 'front') addWallColumns('front', floorWidth, floorDepth, 0, floorDepth);
+        if (openWallSide !== 'left') addWallColumns('left', 0, floorDepth, 0, 0);
         wallColumnPositions.forEach(({ x, z, sides }) => {
             const columnSides = [...sides];
             const parent = columnSides.length === 1 ? wallStructureGroups[columnSides[0]] : enclosure;
@@ -1545,16 +1701,15 @@
 
         let wallGirtCount = 0;
         for (let height = 2.2; height < warehouseHeight - 0.6; height += 2.2) {
-            addEnclosureBox('WAREHOUSE-WALL-GIRT', [floorWidth, 0.12, 0.14], [floorWidth / 2, height, 0.04], structuralSteelMaterial, wallStructureGroups.back);
-            addEnclosureBox('WAREHOUSE-WALL-GIRT', [floorWidth, 0.12, 0.14], [floorWidth / 2, height, floorDepth - 0.04], structuralSteelMaterial, wallStructureGroups.front);
-            addEnclosureBox('WAREHOUSE-WALL-GIRT', [0.14, 0.12, floorDepth], [0.04, height, floorDepth / 2], structuralSteelMaterial, wallStructureGroups.left);
-            addEnclosureBox('WAREHOUSE-WALL-GIRT', [0.14, 0.12, floorDepth], [floorWidth - 0.04, height, floorDepth / 2], structuralSteelMaterial, wallStructureGroups.right);
-            wallGirtCount += 4;
+            if (openWallSide !== 'back') { addEnclosureBox('WAREHOUSE-WALL-GIRT', [floorWidth, 0.12, 0.14], [floorWidth / 2, height, 0.04], structuralSteelMaterial, wallStructureGroups.back); wallGirtCount += 1; }
+            if (openWallSide !== 'front') { addEnclosureBox('WAREHOUSE-WALL-GIRT', [floorWidth, 0.12, 0.14], [floorWidth / 2, height, floorDepth - 0.04], structuralSteelMaterial, wallStructureGroups.front); wallGirtCount += 1; }
+            if (openWallSide !== 'left') { addEnclosureBox('WAREHOUSE-WALL-GIRT', [0.14, 0.12, floorDepth], [0.04, height, floorDepth / 2], structuralSteelMaterial, wallStructureGroups.left); wallGirtCount += 1; }
+            if (openWallSide !== 'right') { addEnclosureBox('WAREHOUSE-WALL-GIRT', [0.14, 0.12, floorDepth], [floorWidth - 0.04, height, floorDepth / 2], structuralSteelMaterial, wallStructureGroups.right); wallGirtCount += 1; }
         }
-        addEnclosureBox('WAREHOUSE-WALL-TOP-BEAM', [floorWidth, 0.24, 0.22], [floorWidth / 2, warehouseHeight - 0.12, 0], structuralSteelMaterial, wallStructureGroups.back);
-        addEnclosureBox('WAREHOUSE-WALL-TOP-BEAM', [floorWidth, 0.24, 0.22], [floorWidth / 2, warehouseHeight - 0.12, floorDepth], structuralSteelMaterial, wallStructureGroups.front);
-        addEnclosureBox('WAREHOUSE-WALL-TOP-BEAM', [0.22, 0.24, floorDepth], [0, warehouseHeight - 0.12, floorDepth / 2], structuralSteelMaterial, wallStructureGroups.left);
-        addEnclosureBox('WAREHOUSE-WALL-TOP-BEAM', [0.22, 0.24, floorDepth], [floorWidth, warehouseHeight - 0.12, floorDepth / 2], structuralSteelMaterial, wallStructureGroups.right);
+        if (openWallSide !== 'back') addEnclosureBox('WAREHOUSE-WALL-TOP-BEAM', [floorWidth, 0.24, 0.22], [floorWidth / 2, warehouseHeight - 0.12, 0], structuralSteelMaterial, wallStructureGroups.back);
+        if (openWallSide !== 'front') addEnclosureBox('WAREHOUSE-WALL-TOP-BEAM', [floorWidth, 0.24, 0.22], [floorWidth / 2, warehouseHeight - 0.12, floorDepth], structuralSteelMaterial, wallStructureGroups.front);
+        if (openWallSide !== 'left') addEnclosureBox('WAREHOUSE-WALL-TOP-BEAM', [0.22, 0.24, floorDepth], [0, warehouseHeight - 0.12, floorDepth / 2], structuralSteelMaterial, wallStructureGroups.left);
+        if (openWallSide !== 'right') addEnclosureBox('WAREHOUSE-WALL-TOP-BEAM', [0.22, 0.24, floorDepth], [floorWidth, warehouseHeight - 0.12, floorDepth / 2], structuralSteelMaterial, wallStructureGroups.right);
 
         addEnclosurePlane('WAREHOUSE-CEILING', [enclosureWidth, enclosureDepth], [floorWidth / 2, warehouseHeight, floorDepth / 2], [-Math.PI / 2, 0, 0], ceilingMaterial);
         const ceilingBeamSpacing = 4;
@@ -1600,7 +1755,7 @@
         let hiddenWallStructures = new Set();
         let ceilingStructureHidden = false;
         const updateWarehouseStructureVisibility = () => {
-            const occlusion = getWarehouseStructureOcclusion(camera.position, floorWidth, floorDepth, warehouseHeight);
+            const occlusion = getWarehouseStructureOcclusion(camera.position, floorWidth, floorDepth, warehouseFloorElevation + warehouseHeight);
             const nextHiddenWalls = new Set();
             Object.entries(occlusion.wallScores).forEach(([side, score]) => {
                 const threshold = hiddenWallStructures.has(side) ? 0.12 : 0.22;
@@ -1612,13 +1767,15 @@
             cornerColumnEntries.forEach(({ mesh, sides }) => {
                 mesh.visible = sides.every(side => !hiddenWallStructures.has(side));
             });
-            const ceilingThreshold = ceilingStructureHidden ? warehouseHeight - 0.15 : warehouseHeight + 0.25;
+            const ceilingHeight = warehouseFloorElevation + warehouseHeight;
+            const ceilingThreshold = ceilingStructureHidden ? ceilingHeight - 0.15 : ceilingHeight + 0.25;
             ceilingStructureHidden = camera.position.y > ceilingThreshold;
             ceilingStructureGroup.visible = !ceilingStructureHidden;
             shell.viewport.dataset.warehouseHiddenStructures = [...hiddenWallStructures].sort().join(',');
             shell.viewport.dataset.warehouseCeilingStructureHidden = String(ceilingStructureHidden);
         };
-        shell.viewport.dataset.warehouseWallCount = '4';
+        shell.viewport.dataset.warehouseWallCount = String(openWallSide ? 3 : 4);
+        shell.viewport.dataset.warehouseOpenWall = openWallSide || 'none';
         shell.viewport.dataset.warehouseColumnCount = String(wallColumnPositions.size);
         shell.viewport.dataset.warehouseWallGirtCount = String(wallGirtCount);
         shell.viewport.dataset.warehouseCeilingBeamCount = String(ceilingBeamCount);
@@ -1628,8 +1785,9 @@
         shell.viewport.dataset.warehouseCeiling = 'true';
         shell.viewport.dataset.warehouseSafetyLines = 'true';
 
+        shell.viewport.dataset.warehouseFloorElevation = String(warehouseFloorElevation);
         const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(floorWidth, floorDepth),
+            new THREE.BoxGeometry(floorWidth, warehouseFloorElevation, floorDepth),
             new THREE.MeshPhysicalMaterial({
                 color: '#17603f',
                 roughness: 0.18,
@@ -1639,10 +1797,163 @@
                 envMapIntensity: 1.6
             })
         );
-        floor.rotation.x = -Math.PI / 2;
-        floor.position.set(floorWidth / 2, -0.02, floorDepth / 2);
+        floor.name = 'WAREHOUSE-RAISED-FLOOR';
+        floor.position.set(floorWidth / 2, warehouseFloorElevation / 2, floorDepth / 2);
         floor.receiveShadow = true;
         scene.add(floor);
+
+        const dockCells = Array.isArray(data.meta?.dockCells) ? data.meta.dockCells : [];
+        shell.viewport.dataset.warehouseDockCellCount = String(dockCells.length);
+        shell.viewport.dataset.warehouseDockCodes = [...new Set(dockCells.map((cell) => cell.code).filter(Boolean))].sort().join(',');
+        const stationCells = Array.isArray(data.meta?.stationCells) ? data.meta.stationCells : [];
+        shell.viewport.dataset.warehouseStationCellCount = String(stationCells.length);
+        shell.viewport.dataset.warehouseDockDisplay = 'line';
+        shell.viewport.dataset.warehouseDockColor = '#ffffff';
+
+        let loadingYard = null;
+        if (loadingYardLayout) {
+            loadingYard = new THREE.Mesh(
+                new THREE.BoxGeometry(mm(loadingYardLayout.sizeX), 0.12, mm(loadingYardLayout.sizeZ)),
+                new THREE.MeshPhysicalMaterial({
+                    color: '#39434c',
+                    roughness: 0.92,
+                    metalness: 0.02,
+                    clearcoat: 0.05,
+                    clearcoatRoughness: 0.9
+                })
+            );
+            loadingYard.name = 'WAREHOUSE-LOADING-YARD';
+            loadingYard.userData = { kind: 'loading-yard', side: loadingYardLayout.side };
+            loadingYard.position.set(mm(loadingYardLayout.centerX), -0.06, mm(loadingYardLayout.centerZ));
+            loadingYard.receiveShadow = true;
+            scene.add(loadingYard);
+        }
+        shell.viewport.dataset.warehouseLoadingYard = loadingYard ? 'true' : 'false';
+        shell.viewport.dataset.warehouseLoadingYardSide = loadingYardLayout?.side || 'none';
+        shell.viewport.dataset.warehouseLoadingYardDepth = loadingYardLayout ? String(mm(loadingYardLayout.approachDepth)) : '0';
+
+        const truckResources = [];
+        const createStaticTruck = (layout) => {
+            if (!layout) return null;
+            const truck = new THREE.Group();
+            truck.name = 'WAREHOUSE-STATIC-5T-TRUCK';
+            truck.userData = {
+                kind: 'static-5t-truck',
+                rackCode: layout.rackCode,
+                loadingSide: layout.side,
+                cargoDimensions: { length: 6.2, width: 2.2, height: 2.3 },
+                cargoFloorHeight: warehouseFloorElevation
+            };
+            const materials = {
+                cargo: new THREE.MeshPhysicalMaterial({ color: '#d9dde0', roughness: 0.58, metalness: 0.08, clearcoat: 0.16 }),
+                cargoTrim: new THREE.MeshStandardMaterial({ color: '#7d858b', roughness: 0.52, metalness: 0.38 }),
+                cab: new THREE.MeshPhysicalMaterial({ color: '#b8bec2', roughness: 0.52, metalness: 0.1, clearcoat: 0.2 }),
+                glass: new THREE.MeshPhysicalMaterial({ color: '#555b61', roughness: 0.18, metalness: 0.12, transparent: true, opacity: 0.9, depthWrite: false }),
+                dark: new THREE.MeshStandardMaterial({ color: '#252a2e', roughness: 0.62, metalness: 0.34 }),
+                rubber: new THREE.MeshStandardMaterial({ color: '#090b0d', roughness: 0.88, metalness: 0.02 }),
+                hub: new THREE.MeshStandardMaterial({ color: '#626a70', roughness: 0.38, metalness: 0.68 }),
+                light: new THREE.MeshStandardMaterial({ color: '#dce2e5', emissive: '#9ca8ae', emissiveIntensity: 0.16 }),
+                tail: new THREE.MeshStandardMaterial({ color: '#7f4a4a', emissive: '#3d1f1f', emissiveIntensity: 0.12 }),
+                shadow: new THREE.MeshBasicMaterial({ color: '#020617', transparent: true, opacity: 0.34, depthWrite: false })
+            };
+            truckResources.push(...Object.values(materials));
+            const addPart = (name, geometry, material, position, rotation = null) => {
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.name = name;
+                mesh.position.set(...position);
+                if (rotation) mesh.rotation.set(...rotation);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                truck.add(mesh);
+                truckResources.push(geometry);
+                return mesh;
+            };
+            const box = (name, size, position, material = materials.dark) =>
+                addPart(name, new THREE.BoxGeometry(...size), material, position);
+            const createCabGeometry = () => {
+                const halfWidth = 1.04;
+                const profile = [
+                    [0.76, 6.25],
+                    [2.78, 6.25],
+                    [2.78, 7.45],
+                    [1.96, 8.1],
+                    [0.76, 8.1]
+                ];
+                const vertices = [];
+                [-halfWidth, halfWidth].forEach((x) => {
+                    profile.forEach(([y, z]) => vertices.push(x, y, z));
+                });
+                const indices = [
+                    0, 2, 1, 0, 3, 2, 0, 4, 3,
+                    5, 6, 7, 5, 7, 8, 5, 8, 9
+                ];
+                for (let index = 0; index < profile.length; index += 1) {
+                    const next = (index + 1) % profile.length;
+                    indices.push(index, next, profile.length + next, index, profile.length + next, profile.length + index);
+                }
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+                geometry.setIndex(indices);
+                geometry.computeVertexNormals();
+                return geometry;
+            };
+            const cargoLength = 6.2;
+            const cargoWidth = 2.2;
+            const cargoHeight = 2.3;
+            box('truck-cargo-box', [cargoWidth, cargoHeight, cargoLength], [0, warehouseFloorElevation + cargoHeight / 2, cargoLength / 2], materials.cargo);
+            box('truck-cargo-lower-trim', [cargoWidth + 0.05, 0.07, cargoLength - 0.12], [0, warehouseFloorElevation + 0.06, cargoLength / 2], materials.cargoTrim);
+            box('truck-rear-door-left', [cargoWidth / 2 - 0.05, cargoHeight - 0.16, 0.055], [-cargoWidth / 4, warehouseFloorElevation + cargoHeight / 2, -0.03], materials.cargo);
+            box('truck-rear-door-right', [cargoWidth / 2 - 0.05, cargoHeight - 0.16, 0.055], [cargoWidth / 4, warehouseFloorElevation + cargoHeight / 2, -0.03], materials.cargo);
+            box('truck-rear-door-seam', [0.035, cargoHeight - 0.1, 0.07], [0, warehouseFloorElevation + cargoHeight / 2, -0.065], materials.cargoTrim);
+            box('truck-chassis', [2.05, 0.18, 7.35], [0, 0.82, 3.85], materials.dark);
+            box('truck-rear-bumper', [2.2, 0.18, 0.18], [0, 0.54, -0.12], materials.cargoTrim);
+            addPart('truck-cab-shell', createCabGeometry(), materials.cab, [0, 0, 0]);
+            box('truck-windshield', [1.72, 0.9, 0.045], [0, 2.34, 7.79], materials.glass).rotation.x = -0.69;
+            [-1, 1].forEach((side) => {
+                const sideWindowShape = new THREE.Shape();
+                sideWindowShape.moveTo(side * -0.82, -0.34);
+                sideWindowShape.lineTo(side * -0.15, -0.33);
+                sideWindowShape.lineTo(side * 0.34, -0.27);
+                sideWindowShape.lineTo(side * 0.29, 0.39);
+                sideWindowShape.lineTo(side * -0.36, 0.43);
+                sideWindowShape.closePath();
+                addPart(
+                    'truck-side-window',
+                    new THREE.ShapeGeometry(sideWindowShape),
+                    materials.glass,
+                    [side * 1.045, 2.24, 7.18],
+                    [0, side > 0 ? Math.PI / 2 : -Math.PI / 2, 0]
+                );
+            });
+            box('truck-front-panel', [1.72, 0.48, 0.045], [0, 1.24, 8.12], materials.cab);
+            box('truck-front-bumper', [2.18, 0.2, 0.18], [0, 0.69, 8.12], materials.cargoTrim);
+            box('truck-license-plate', [0.48, 0.2, 0.04], [0, 0.96, 8.155], materials.cargoTrim);
+            [-0.72, 0.72].forEach((x) => {
+                box('truck-headlight', [0.3, 0.18, 0.05], [x, 1.39, 8.148], materials.light);
+                box('truck-tail-light', [0.24, 0.2, 0.05], [x, 0.86, -0.13], materials.tail);
+            });
+            const addWheel = (x, z) => {
+                const wheel = addPart('truck-wheel', new THREE.CylinderGeometry(0.49, 0.49, 0.25, 24), materials.rubber, [x, 0.49, z], [0, 0, Math.PI / 2]);
+                const hub = addPart('truck-wheel-hub', new THREE.CylinderGeometry(0.22, 0.22, 0.26, 20), materials.hub, [x, 0.49, z], [0, 0, Math.PI / 2]);
+                wheel.userData.axle = z;
+                hub.userData.axle = z;
+            };
+            [-1.02, 1.02].forEach((x) => {
+                addWheel(x, 1.12);
+                addWheel(x, 7.12);
+            });
+            const shadow = addPart('truck-shadow', new THREE.PlaneGeometry(2.5, 8.45), materials.shadow, [0, 0.012, 4], [-Math.PI / 2, 0, 0]);
+            shadow.castShadow = false;
+            truck.position.set(mm(layout.anchorX), 0, mm(layout.anchorZ));
+            truck.rotation.y = layout.yaw;
+            scene.add(truck);
+            return truck;
+        };
+        const staticTruck = createStaticTruck(loadingDockLayout);
+        shell.viewport.dataset.warehouseTruck = staticTruck ? 'static-5t' : 'none';
+        shell.viewport.dataset.warehouseTruckRack = staticTruck ? loadingDockLayout.rackCode : '';
+        shell.viewport.dataset.warehouseTruckCargoSize = staticTruck ? '6.2x2.2x2.3' : '';
+
         const passageCellSize = mm(data.meta?.floorPlanCellSize || 500);
         const passageCells = Array.isArray(data.meta?.passageCells) ? data.meta.passageCells : [];
         const passageBoundaryWidthMm = 100;
@@ -1666,15 +1977,54 @@
             const passageMatrix = new THREE.Matrix4();
             passageBoundarySegments.forEach((segment, index) => {
                 passageMatrix.makeScale(mm(segment.width), 1, mm(segment.depth));
-                passageMatrix.setPosition(mm(segment.x), 0.006, mm(segment.y));
+                passageMatrix.setPosition(mm(segment.x), warehouseFloorElevation + 0.006, mm(segment.y));
                 passageBoundaries.setMatrixAt(index, passageMatrix);
             });
             passageBoundaries.instanceMatrix.needsUpdate = true;
             passageBoundaries.renderOrder = 3;
             scene.add(passageBoundaries);
         }
+        const dockBoundarySegments = buildPassageBoundarySegments(
+            dockCells,
+            data.meta?.floorPlanCellSize || 500,
+            passageBoundaryWidthMm,
+            passageBoundaryInsetMm
+        );
+        let dockBoundaryGeometry = null;
+        let dockBoundaryMaterial = null;
+        if (dockBoundarySegments.length) {
+            dockBoundaryGeometry = new THREE.BoxGeometry(1, 0.012, 1);
+            dockBoundaryMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+            const dockBoundaries = new THREE.InstancedMesh(
+                dockBoundaryGeometry,
+                dockBoundaryMaterial,
+                dockBoundarySegments.length
+            );
+            dockBoundaries.name = 'WAREHOUSE-LOADING-DOCK-LINES';
+            dockBoundaries.userData = { kind: 'loading-dock-lines', source: 'floorPlan', code: 'D' };
+            const dockBoundaryMatrix = new THREE.Matrix4();
+            dockBoundarySegments.forEach((segment, index) => {
+                dockBoundaryMatrix.makeScale(mm(segment.width), 1, mm(segment.depth));
+                dockBoundaryMatrix.setPosition(mm(segment.x), warehouseFloorElevation + 0.008, mm(segment.y));
+                dockBoundaries.setMatrixAt(index, dockBoundaryMatrix);
+            });
+            dockBoundaries.instanceMatrix.needsUpdate = true;
+            dockBoundaries.renderOrder = 4;
+            scene.add(dockBoundaries);
+        }
+        shell.viewport.dataset.warehouseDockLineCount = String(dockBoundarySegments.length);
         const forkliftClearanceDiameterMm = 1950;
-        const amrCount = 5;
+        const configuredAmrEquipment = (data.equipment || []).filter((item) =>
+            item.enabled && /^AMR-/i.test(String(item.code || ''))
+        );
+        const fallbackAmrEquipment = data.meta?.equipmentLoadWarning
+            ? Array.from({ length: 5 }, (_, index) => {
+                const code = `AMR-${String(index + 1).padStart(3, '0')}`;
+                return { code, name: code, enabled: true };
+            })
+            : [];
+        const amrEquipment = configuredAmrEquipment.length ? configuredAmrEquipment : fallbackAmrEquipment;
+        const amrCount = amrEquipment.length;
         const passageNavigation = buildPassageNavigationGraph(
             passageCells,
             data.meta?.floorPlanCellSize || 500,
@@ -1854,15 +2204,16 @@
         };
         if (amrComponent.length) {
             for (let index = 0; index < amrCount; index += 1) {
+                const configuredEquipment = amrEquipment[index];
                 const startKey = amrComponent[Math.floor(index * amrComponent.length / amrCount) % amrComponent.length];
                 const startNode = passageNavigation.nodesByKey.get(startKey);
                 const model = createForkliftModel(index);
-                model.group.position.set(mm(startNode.x), 0, mm(startNode.y));
+                model.group.position.set(mm(startNode.x), warehouseFloorElevation, mm(startNode.y));
                 scene.add(model.group);
                 const amr = {
                     ...model,
                     index,
-                    equipmentCode: `AMR-${String(index + 1).padStart(3, '0')}`,
+                    equipmentCode: configuredEquipment.code,
                     currentKey: startKey,
                     route: [startNode],
                     waypointIndex: 0,
@@ -1877,7 +2228,7 @@
                     carriedLoad: null,
                     placedLoad: null
                 };
-                amr.equipmentName = equipmentByCode.get(amr.equipmentCode)?.name || amr.equipmentCode;
+                amr.equipmentName = configuredEquipment.name || equipmentByCode.get(amr.equipmentCode)?.name || amr.equipmentCode;
                 const equipmentStatus = equipmentStatusByCode.get(amr.equipmentCode) || {};
                 amr.communicationStatus = equipmentStatus.communicationStatus || 'OFFLINE';
                 amr.equipmentStatus = equipmentStatus.equipmentStatus || '미설정';
@@ -1921,6 +2272,7 @@
             0, 0.006, floorDepth, 0, 0.006, 0
         ], 3));
         grid.add(new THREE.LineSegments(boundaryGeometry, new THREE.LineBasicMaterial({ color: '#2f7454' })));
+        grid.position.y = warehouseFloorElevation;
         scene.add(grid);
 
         const rackTypeByCode = new Map(data.rackTypes.map((type) => [type.code, type]));
@@ -2107,6 +2459,8 @@
             const levelHeight = mm(type.levelHeight) || height / Math.max(1, type.levels);
             const length = bayWidth * rack.bayCount;
             const rackRowCount = Math.max(1, Math.round(Number(rack.rackRowCount) || 1));
+            const depthCount = Math.max(1, Math.round(Number(type.depthCount) || 1));
+            const slotDepth = depth / depthCount;
             const rackWidth = depth * rackRowCount;
             const group = new THREE.Group();
             group.name = rack.code;
@@ -2115,22 +2469,25 @@
                 roughness: 0.2,
                 metalness: 0.78,
                 clearcoat: 0.62,
-                clearcoatRoughness: 0.14
+                clearcoatRoughness: 0.14,
+                castShadow: false
             };
             const rackData = { kind: 'rack', rack, type, zone: zoneByCode.get(rack.zoneCode) };
             const postSize = Math.min(0.1, Math.max(0.055, bayWidth * 0.045));
+            const depthFramePositions = getRackDepthFramePositions(rackRowCount, depthCount, depth);
             for (let bay = 0; bay <= rack.bayCount; bay += 1) {
                 const x = bay * bayWidth;
-                for (let rackRow = 0; rackRow <= rackRowCount; rackRow += 1) {
-                    addBox(group, [postSize, height, postSize], [x, height / 2, rackRow * depth], rackFrameColor, rackData, rackFrameMaterial);
-                }
+                depthFramePositions.forEach((z) =>
+                    addBox(group, [postSize, height, postSize], [x, height / 2, z], rackFrameColor, rackData, rackFrameMaterial)
+                );
             }
             for (let level = 0; level <= type.levels; level += 1) {
                 const y = Math.min(height, level * levelHeight);
+                depthFramePositions.forEach((z) =>
+                    addBox(group, [length, 0.08, 0.09], [length / 2, y, z], rackFrameColor, rackData, rackFrameMaterial)
+                );
                 for (let rackRow = 0; rackRow < rackRowCount; rackRow += 1) {
                     const rowStart = rackRow * depth;
-                    addBox(group, [length, 0.08, 0.09], [length / 2, y, rowStart], rackFrameColor, rackData, rackFrameMaterial);
-                    addBox(group, [length, 0.08, 0.09], [length / 2, y, rowStart + depth], rackFrameColor, rackData, rackFrameMaterial);
                     if (level < type.levels) addBox(
                         group,
                         [length, 0.035, depth],
@@ -2148,8 +2505,6 @@
                 }
             }
             const stocks = inventoryByRack.get(rack.code) || [];
-            const depthCount = Math.max(1, Math.round(Number(type.depthCount) || 1));
-            const slotDepth = depth / depthCount;
             const boxWidth = Math.max(0.08, bayWidth * 0.92);
             const boxHeight = Math.max(0.08, levelHeight * 0.82);
             const boxDepth = Math.max(0.08, slotDepth * 0.9);
@@ -2254,9 +2609,9 @@
             const startX = mm(rack.startX);
             const startZ = mm(rack.startY);
             if (rack.direction === 'vertical') {
-                group.position.set(startX + rackWidth, 0, startZ);
+                group.position.set(startX + rackWidth, warehouseFloorElevation, startZ);
                 group.rotation.y = -Math.PI / 2;
-            } else group.position.set(startX, 0, startZ);
+            } else group.position.set(startX, warehouseFloorElevation, startZ);
             scene.add(group);
             group.updateMatrixWorld(true);
             rackData.focusBounds = new THREE.Box3(
@@ -2290,7 +2645,7 @@
             });
             const mesh = new THREE.Mesh(geometry, material);
             mesh.name = `ZONE-${bounds.zoneCode}-VISUALIZATION`;
-            mesh.position.set(mm((bounds.minX + bounds.maxX) / 2), height / 2, mm((bounds.minY + bounds.maxY) / 2));
+            mesh.position.set(mm((bounds.minX + bounds.maxX) / 2), warehouseFloorElevation + height / 2, mm((bounds.minY + bounds.maxY) / 2));
             mesh.visible = false;
             mesh.renderOrder = 7;
             mesh.userData = { kind: 'zone-visualization', zoneCode: bounds.zoneCode };
@@ -2323,7 +2678,7 @@
                     1250
                 );
                 if (!dockNode || !amrComponent.includes(dockNode.key)) continue;
-                const dockWorld = new THREE.Vector3(mm(dockNode.x), 0, mm(dockNode.y));
+                const dockWorld = new THREE.Vector3(mm(dockNode.x), warehouseFloorElevation, mm(dockNode.y));
                 const toSlot = slotWorld.clone().sub(dockWorld);
                 toSlot.y = 0;
                 const distanceToSlot = toSlot.length();
@@ -2450,8 +2805,10 @@
 
         let yaw = Math.PI / 4;
         let pitch = Math.PI / 6;
-        let distance = Math.max(floorWidth, floorDepth) * 1.08;
-        const target = new THREE.Vector3(floorWidth / 2, 2.5, floorDepth / 2);
+        let distance = sceneSpan * 1.08;
+        const cameraCenterX = floorWidth / 2 + (loadingDockLayout?.outwardX || 0) * 1.8;
+        const cameraCenterZ = floorDepth / 2 + (loadingDockLayout?.outwardZ || 0) * 1.8;
+        const target = new THREE.Vector3(cameraCenterX, warehouseFloorElevation + 2.5, cameraCenterZ);
         const perspectiveHalfFov = perspectiveCamera.fov * Math.PI / 360;
         const minimumCameraDistance = 8;
         const maximumCameraDistance = 140;
@@ -2580,7 +2937,7 @@
             const offsetZ = targetZ - amr.group.position.z;
             const remaining = Math.hypot(offsetX, offsetZ);
             if (remaining < 0.0001) {
-                amr.group.position.set(targetX, 0, targetZ);
+                amr.group.position.set(targetX, warehouseFloorElevation, targetZ);
                 amr.currentKey = waypoint.key;
                 amr.waypointIndex += 1;
                 return;
@@ -3125,8 +3482,8 @@
             alignedCameraView = cameraViewPresets[viewName] ? viewName : 'quarter';
             yaw = preset.yaw;
             pitch = getCameraViewPitch(alignedCameraView);
-            distance = Math.max(floorWidth, floorDepth) * preset.distanceScale;
-            target.set(floorWidth / 2, preset.targetY, floorDepth / 2);
+            distance = sceneSpan * preset.distanceScale;
+            target.set(cameraCenterX, warehouseFloorElevation + preset.targetY, cameraCenterZ);
             orthographicViewHeight = getPerspectiveViewHeight(distance);
             updateProjectionMatrices();
             updateCamera();
@@ -3467,7 +3824,14 @@
             selectedOutline.userData.material.dispose();
             passageBoundaryGeometry?.dispose();
             passageBoundaryMaterial?.dispose();
+            dockBoundaryGeometry?.dispose();
+            dockBoundaryMaterial?.dispose();
             enclosureResources.forEach((resource) => resource.dispose());
+            floor.geometry.dispose();
+            floor.material.dispose();
+            loadingYard?.geometry.dispose();
+            loadingYard?.material.dispose();
+            truckResources.forEach((resource) => resource.dispose());
             amrResources.forEach((resource) => resource.dispose());
             zoneVisualizationEntries.forEach(({ geometry, material }) => { geometry.dispose(); material.dispose(); });
             scene.traverse((object) => {
@@ -3578,6 +3942,9 @@
         getFloorPlanAxisRange,
         convertGoogleSheetCsv,
         calculateZoneFloorBounds,
+        calculateLoadingDockLayout,
+        calculateLoadingYardLayout,
+        getRackDepthFramePositions,
         getWarehouseStructureOcclusion,
         buildPassageBoundarySegments,
         buildPassageNavigationGraph,

@@ -57,6 +57,605 @@
           }
         ]
       }
+    },
+    {
+      "id": "terms-inbound-process-v3",
+      "menuId": "custom-1786691916656",
+      "readingIndex": 0,
+      "rowIndex": 0,
+      "cardIndex": 0,
+      "card": {
+        "title": "자동화 물류창고 입고 프로세스",
+        "description": "입고 예정 → 하역·검수 → 자동 이재 → 최종 적치 흐름",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2Type": "text",
+        "table2": null,
+        "body2": "",
+        "body2Html": "",
+        "imageId": "",
+        "image": "",
+        "editLocked": false,
+        "lockSource": "",
+        "lockMessage": "",
+        "contentBlocks": [
+          {
+            "type": "table",
+            "table": {
+              "title": "보정된 입고 순서",
+              "hasHeader": true,
+              "hasFirstColumnHeader": false,
+              "columnWidths": [
+                10,
+                28,
+                62
+              ],
+              "rows": [
+                [
+                  "단계",
+                  "표준 용어",
+                  "처리 내용"
+                ],
+                [
+                  "0",
+                  "입고 예정 등록 / ASN",
+                  "발주서·ASN 수신 → 예정 품목·수량·차량 정보 등록"
+                ],
+                [
+                  "1",
+                  "차량 도착 및 도크 배정",
+                  "트럭·입고 문서 확인 → 하역 도크·작업 순서 배정"
+                ],
+                [
+                  "2",
+                  "하역 및 입고 대기",
+                  "트럭 하역 → 대기장·검수장 배치 → 팔레트·박스에 HU 부여"
+                ],
+                [
+                  "3",
+                  "입고 검수",
+                  "문서·실물의 품목·수량·로트·유통기한·파손 비교 → 이상품 보류·격리"
+                ],
+                [
+                  "4",
+                  "입고 등록 / Goods Receipt",
+                  "HU 바코드·팔레트 ID 스캔 → 실입고 수량 등록 → 필요 시 물류 라벨 발행"
+                ],
+                [
+                  "5",
+                  "컨베이어 투입 및 자동 식별",
+                  "HU 컨베이어 투입 → 품목·HU·목적지 자동 확인"
+                ],
+                [
+                  "6",
+                  "적치 로케이션 결정 및 작업 생성",
+                  "품목 속성·공간·중량·로트·회전율 검토 → 적치 위치 결정·작업 생성"
+                ],
+                [
+                  "7",
+                  "자동화 작업 배정",
+                  "WMS 작업 → 컨베이어·AMR·리프트·셔틀 작업으로 분할 → 실행 순서 결정"
+                ],
+                [
+                  "8",
+                  "분기 스테이션 및 입고 버퍼",
+                  "목적 경로 선택 → 입고 버퍼 대기 → 다음 구간 확인 후 방출"
+                ],
+                [
+                  "9",
+                  "AMR 이재 스테이션 및 상차",
+                  "AMR 정밀 도킹 → 준비 신호 교환 → 컨베이어 동기화·상차 → 완료 확인"
+                ],
+                [
+                  "10",
+                  "AMR 운반",
+                  "RCS 경로·교통 제어 → HU를 셔틀 입고 구역까지 운반"
+                ],
+                [
+                  "11",
+                  "셔틀 입고 스테이션 및 인계",
+                  "AMR 정렬·정차 → HU·수용 상태 확인 → 입고 버퍼로 인계"
+                ],
+                [
+                  "12",
+                  "리프트·층별 컨베이어·셔틀 적치",
+                  "리프트 → 층별 컨베이어 → 셔틀 → 지정 랙에 적치"
+                ],
+                [
+                  "13",
+                  "적치 완료 확인 및 시스템 반영",
+                  "도착 확인 → WMS 재고 위치·입고 실적 갱신 → ERP 전달"
+                ]
+              ],
+              "rowHeights": [
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36
+              ]
+            }
+          },
+          {
+            "type": "table",
+            "table": {
+              "title": "입고 자동화 인계 지점",
+              "hasHeader": true,
+              "hasFirstColumnHeader": false,
+              "columnWidths": [
+                25,
+                50,
+                25
+              ],
+              "rows": [
+                [
+                  "지점",
+                  "주요 처리",
+                  "완료 조건"
+                ],
+                [
+                  "분기 스테이션",
+                  "바코드·목적지 확인 → 디버터·소터로 진행 경로 선택",
+                  "목적 레인 선택 및 진입 허가"
+                ],
+                [
+                  "입고 버퍼",
+                  "설비 속도 차이 흡수 → AMR 호출·도착 순서대로 HU 대기",
+                  "AMR과 다음 구간이 모두 준비됨"
+                ],
+                [
+                  "AMR 이재 스테이션",
+                  "AMR 도킹·위치 보정 → 안전 인터록·핸드셰이크 → 동기 구동·센서 확인",
+                  "고정 컨베이어 비움 및 AMR 적재 확인"
+                ],
+                [
+                  "셔틀 입고 스테이션",
+                  "HU 식별 → 셔틀 입고 버퍼·리프트로 전달",
+                  "HU 인계 완료 및 셔틀 작업 접수"
+                ]
+              ],
+              "rowHeights": [
+                36,
+                36,
+                36,
+                36,
+                36
+              ]
+            }
+          },
+          {
+            "type": "table",
+            "table": {
+              "title": "시스템별 역할",
+              "hasHeader": true,
+              "hasFirstColumnHeader": false,
+              "columnWidths": [
+                28,
+                72
+              ],
+              "rows": [
+                [
+                  "시스템",
+                  "주요 역할"
+                ],
+                [
+                  "ERP",
+                  "발주, 공급업체 거래, 회계상 입고와 전사 재고 실적 관리"
+                ],
+                [
+                  "WMS",
+                  "입고 등록, 재고 관리, 보관 로케이션 결정과 적치 작업 생성"
+                ],
+                [
+                  "WES / WCS",
+                  "분기 경로, 버퍼 점유, 설비 인터록과 핸드셰이크를 포함한 컨베이어·리프트·셔틀 작업 순서 제어"
+                ],
+                [
+                  "AMR 관제 / RCS",
+                  "AMR 선택, 작업 배차, 이동 경로·교통·충전 관리와 이재 스테이션 정차 지시"
+                ],
+                [
+                  "PLC",
+                  "스캐너, 센서, 스토퍼, 디버터, 모터와 컨베이어 구동부의 실시간 제어 및 이재 완료 신호 처리"
+                ]
+              ],
+              "rowHeights": [
+                36,
+                36,
+                36,
+                36,
+                36,
+                36
+              ]
+            }
+          },
+          {
+            "type": "table",
+            "table": {
+              "title": "핵심 용어 보정",
+              "hasHeader": true,
+              "hasFirstColumnHeader": false,
+              "columnWidths": [
+                28,
+                72
+              ],
+              "rows": [
+                [
+                  "기존 표현",
+                  "권장 용어와 설명"
+                ],
+                [
+                  "입고 요청",
+                  "트럭 도착 전 입고 예정(Inbound Order) 생성 → 위치 결정 후 적치 지시(Warehouse Task) 생성"
+                ],
+                [
+                  "송장 비교",
+                  "ASN·발주서·납품서와 실제 수량·품질 상태 비교"
+                ],
+                [
+                  "랙의 셀",
+                  "보관 로케이션·저장 위치·Storage Bin으로 표현"
+                ],
+                [
+                  "컨베이어에서 AMR로 바로 상차",
+                  "AMR 이재 스테이션 도킹 → 위치 보정·핸드셰이크·센서 확인 → 물품 인계"
+                ],
+                [
+                  "AMR이 셔틀에 직접 인계",
+                  "셔틀 입고 스테이션·버퍼 → 리프트·층별 컨베이어·셔틀로 전달"
+                ],
+                [
+                  "분기점",
+                  "목적지별 경로를 선택하는 분기 스테이션(Divert·Sortation Point)"
+                ],
+                [
+                  "대기 위치",
+                  "설비 속도·순서 조정을 위한 버퍼 스테이션·축적 컨베이어"
+                ],
+                [
+                  "AMR 및 셔틀 배정",
+                  "WMS 작업 생성 → WES·WCS·RCS가 장비·이동 순서 배정"
+                ],
+                [
+                  "ERP로 알려주면서 종료",
+                  "입고 등록·최종 적치 완료 시 ERP 연동 여부는 인터페이스 정책에 따라 결정"
+                ]
+              ],
+              "rowHeights": [
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36
+              ]
+            }
+          },
+          {
+            "type": "text",
+            "text": "적용 시 참고\n• AMR 인계: 고정 이재 스테이션 정렬 → 안전 인터록 → 핸드셰이크 → 물품 인계\n• 운영 설정: 버퍼 수량·재시도 횟수·센서 이상 예외 경로\n\n참고 문서\n1. Microsoft Learn - Warehouse handling of inbound loads for purchase and inbound shipment orders\nhttps://learn.microsoft.com/en-us/dynamics365/supply-chain/warehousing/inbound-load-handling\n2. SAP Help Portal - Communication Point\nhttps://help.sap.com/saphelp_SCM700_ehp02/helpdata/EN/4c/bb4864fc3f1d6ee10000000a42189c/content.htm?no_cache=true\n3. Interroll - LCP AMR Top Module\nhttps://www.interroll.com/products/lcp/lcp-amr-top-module\n4. Dematic - Multishuttle 2\nhttps://www.dematic.com/content/dam/dematic/downloads/brochures/NA_BR-1055-EN_Multishuttle-Gen-2.pdf",
+            "html": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "terms-outbound-process-v3",
+      "menuId": "custom-1786691916656",
+      "readingIndex": 1,
+      "rowIndex": 1,
+      "cardIndex": 0,
+      "card": {
+        "title": "자동화 물류창고 출고 프로세스",
+        "description": "출고 오더 → 반출·운반 → 분류·포장 → 상차 흐름",
+        "body": "",
+        "bodyHtml": "",
+        "bodyType": "text",
+        "table": null,
+        "body2Type": "text",
+        "table2": null,
+        "body2": "",
+        "body2Html": "",
+        "imageId": "",
+        "image": "",
+        "editLocked": false,
+        "lockSource": "",
+        "lockMessage": "",
+        "contentBlocks": [
+          {
+            "type": "table",
+            "table": {
+              "title": "보정된 출고 순서",
+              "hasHeader": true,
+              "hasFirstColumnHeader": false,
+              "columnWidths": [
+                10,
+                30,
+                60
+              ],
+              "rows": [
+                [
+                  "단계",
+                  "표준 용어",
+                  "처리 내용"
+                ],
+                [
+                  "0",
+                  "출고 오더 수신 / Outbound Order",
+                  "판매·이전 주문 또는 출고 요청 수신 → 고객·납기·품목·수량·우선순위 확인"
+                ],
+                [
+                  "1",
+                  "재고 할당·예약 / Allocation & Reservation",
+                  "가용 재고 확인 → 로트·유통기한·상태·FEFO·FIFO·고객 조건 적용 → 수량 예약"
+                ],
+                [
+                  "2",
+                  "창고 출고 릴리스·웨이브 계획",
+                  "출고 주문 릴리스 → 필요 시 납기·운송편·구역·우선순위별 웨이브 구성"
+                ],
+                [
+                  "3",
+                  "피킹 작업 생성·할당",
+                  "출발 위치·수량·목적지·순서 결정 → 피킹 작업 생성"
+                ],
+                [
+                  "4",
+                  "자동화 반출 작업 배정",
+                  "피킹 작업 → 셔틀·리프트·컨베이어·AMR 구간별 작업으로 분할"
+                ],
+                [
+                  "5",
+                  "셔틀 반출 및 피킹 확인",
+                  "셔틀 반출 → 층별 컨베이어·리프트 이동 → 위치·품목·로트·수량 확인"
+                ],
+                [
+                  "6",
+                  "셔틀 출고 스테이션 및 출고 버퍼",
+                  "HU 식별 → AMR 도착 순서에 맞춰 출고 버퍼 대기"
+                ],
+                [
+                  "7",
+                  "AMR 이재 및 운반",
+                  "AMR 도킹·상차 → RCS 경로·교통 제어 → 출고 이재 지점 운반"
+                ],
+                [
+                  "8",
+                  "출고 컨베이어 이재 및 분기",
+                  "AMR 하차 → 스캐너·센서 확인 → 주문·배송처·운송편별 출고 라인 분기"
+                ],
+                [
+                  "9",
+                  "출고 분류·주문 통합",
+                  "구역별 피킹 상품 수집 → 주문·배송처·운송편별 출하 단위 통합"
+                ],
+                [
+                  "10",
+                  "포장·라벨·출하 검수",
+                  "품목·수량 재확인 → 포장·중량·부피 측정 → 라벨·문서 발행"
+                ],
+                [
+                  "11",
+                  "출하 대기·도크 배정",
+                  "배송 노선·차량별 HU 정렬 → 상차 도크·순서 배정"
+                ],
+                [
+                  "12",
+                  "상차·출고 확정 / Goods Issue",
+                  "HU·차량 스캔 → 상차 확인 → 재고·출고 실적 확정 → ERP 전달"
+                ]
+              ],
+              "rowHeights": [
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36
+              ]
+            }
+          },
+          {
+            "type": "table",
+            "table": {
+              "title": "출고 자동화 인계 지점",
+              "hasHeader": true,
+              "hasFirstColumnHeader": false,
+              "columnWidths": [
+                25,
+                50,
+                25
+              ],
+              "rows": [
+                [
+                  "지점",
+                  "주요 처리",
+                  "완료 조건"
+                ],
+                [
+                  "셔틀 출고 스테이션",
+                  "HU 식별 → 출고 버퍼로 전달",
+                  "셔틀 반출 완료 및 HU 식별 성공"
+                ],
+                [
+                  "출고 버퍼",
+                  "AMR 도착·출고 우선순서대로 HU 대기 → 다음 구간 혼잡 흡수",
+                  "AMR 호출 및 이재 지점 진입 허가"
+                ],
+                [
+                  "AMR 이재 스테이션",
+                  "AMR 도킹·위치 보정 → 안전 인터록·핸드셰이크 → 동기 구동·상차",
+                  "출고 버퍼 비움 및 AMR 적재 확인"
+                ],
+                [
+                  "출고 컨베이어 이재 스테이션",
+                  "AMR 하차 → 점유 센서·바코드로 인계 확인",
+                  "AMR 비움 및 고정 컨베이어 점유 확인"
+                ],
+                [
+                  "분기·분류 스테이션",
+                  "주문·배송처·운송편·포장 라인 기준으로 진행 경로 선택",
+                  "목적 레인 선택 및 HU 통과 확인"
+                ]
+              ],
+              "rowHeights": [
+                36,
+                36,
+                36,
+                36,
+                36,
+                36
+              ]
+            }
+          },
+          {
+            "type": "table",
+            "table": {
+              "title": "시스템별 역할",
+              "hasHeader": true,
+              "hasFirstColumnHeader": false,
+              "columnWidths": [
+                28,
+                72
+              ],
+              "rows": [
+                [
+                  "시스템",
+                  "출고 업무의 주요 역할"
+                ],
+                [
+                  "ERP",
+                  "판매 주문·이전 주문 생성, 출고 요청 전달, 회계상 Goods Issue와 매출·청구 처리"
+                ],
+                [
+                  "WMS",
+                  "가용 재고 할당, 웨이브·피킹 작업 생성과 피킹·포장·스테이징·출고 재고 관리"
+                ],
+                [
+                  "WES / WCS",
+                  "셔틀 반출, 버퍼 순서, 설비 인터록, 이재 핸드셰이크와 컨베이어 분기·처리량 제어"
+                ],
+                [
+                  "AMR 관제 / RCS",
+                  "AMR 선택, 작업 배차, 이동 경로·교통·충전 관리와 이재 스테이션 정차 지시"
+                ],
+                [
+                  "TMS",
+                  "운송편·노선·차량 계획, 도크 일정, 운송사와 배송 문서 관리"
+                ],
+                [
+                  "PLC",
+                  "스캐너, 센서, 스토퍼, 디버터, 모터와 컨베이어 구동부의 실시간 제어 및 인계 완료 신호 처리"
+                ]
+              ],
+              "rowHeights": [
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36
+              ]
+            }
+          },
+          {
+            "type": "table",
+            "table": {
+              "title": "핵심 용어 보정",
+              "hasHeader": true,
+              "hasFirstColumnHeader": false,
+              "columnWidths": [
+                28,
+                72
+              ],
+              "rows": [
+                [
+                  "기존 표현",
+                  "권장 용어와 설명"
+                ],
+                [
+                  "출고 요청",
+                  "ERP → WMS로 전달되며 피킹 전에 생성되는 출고 오더(Outbound Order)"
+                ],
+                [
+                  "재고 차감",
+                  "재고 할당·예약 → 피킹 확인 → Goods Issue를 별도 상태로 관리"
+                ],
+                [
+                  "랙의 셀에서 꺼냄",
+                  "보관 로케이션·Storage Bin에서 피킹으로 표현"
+                ],
+                [
+                  "셔틀에서 AMR로 바로 인계",
+                  "셔틀 출고 스테이션·버퍼에서 HU 식별·대기 → AMR 이재 스테이션 상차"
+                ],
+                [
+                  "AMR이 출고 라인에 내려놓음",
+                  "출고 이재 스테이션 도킹 → 핸드셰이크·동기 구동·센서 확인 → HU 인계"
+                ],
+                [
+                  "분기점",
+                  "주문·배송처·운송편·포장 라인별 경로를 선택하는 분기·분류 스테이션"
+                ],
+                [
+                  "웨이브",
+                  "여러 주문을 묶어 피킹 작업을 만드는 운영 단위; 즉시 피킹 시 생략 가능"
+                ],
+                [
+                  "AMR·셔틀 배정",
+                  "WMS 작업 생성 → WES·WCS·RCS가 자동화 장비·이동 순서 배정"
+                ],
+                [
+                  "출고 완료",
+                  "피킹 → 이재 → 포장 → 상차 → 출하 → Goods Issue 상태 구분"
+                ]
+              ],
+              "rowHeights": [
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36,
+                36
+              ]
+            }
+          },
+          {
+            "type": "text",
+            "text": "적용 시 참고\n• 셔틀 인계: 출고 스테이션 → 버퍼 → AMR 이재 스테이션\n• AMR 이재: 도킹 → 인터록 → 핸드셰이크 → 점유 센서 확인\n• 웨이브·분류·포장: 운영 방식에 따라 통합·생략 가능\n\n참고 문서\n1. Microsoft Learn - Release to warehouse\nhttps://learn.microsoft.com/en-us/dynamics365/supply-chain/warehousing/release-to-warehouse-process\n2. Microsoft Learn - Wave creation and processing\nhttps://learn.microsoft.com/en-us/dynamics365/supply-chain/warehousing/wave-processing\n3. Microsoft Learn - Pack containers for shipment\nhttps://learn.microsoft.com/en-us/dynamics365/supply-chain/warehousing/packing-containers\n4. Interroll - LCP AMR Top Module\nhttps://www.interroll.com/products/lcp/lcp-amr-top-module\n5. Dematic - Multishuttle 2\nhttps://www.dematic.com/content/dam/dematic/downloads/brochures/NA_BR-1055-EN_Multishuttle-Gen-2.pdf",
+            "html": ""
+          }
+        ]
+      }
     }
   ]
 }
