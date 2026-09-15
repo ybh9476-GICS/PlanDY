@@ -3,6 +3,7 @@
     const mountedControllers = new WeakMap();
     let threeModulePromise;
     const worldUiResolutionScale = 2;
+    const billboardRenderOrder = 10000;
 
     function loadThree() {
         if (!threeModulePromise) threeModulePromise = import(threeModuleUrl);
@@ -17,7 +18,8 @@
         racks: { sheetName: '랙배치', range: 'A4:I', headers: ['랙코드', '구역코드', '랙타입코드', '방향', '베이 수(가로 칸 수)', '평면도 랙 전체 길이(m)', '평면도 랙 깊이(m)'] },
         locations: { sheetName: '로케이션 마스터', range: 'A4:F', headers: ['로케이션코드', '랙코드', '베이번호', '단번호', '깊이번호', '최대수량'] },
         items: { sheetName: '품목 마스터', range: 'A4:C', headers: ['품목코드', '품목명', '표시색상'] },
-        inventory: { sheetName: '재고 현황', range: 'A4:D', headers: ['로케이션코드', '품목코드', '재고수량', '재고상태'] }
+        inventory: { sheetName: '재고 현황', range: 'A4:D', headers: ['로케이션코드', '품목코드', '재고수량', '재고상태'] },
+        workOrders: { sheetName: '작업지시', range: 'A1:Q', headers: ['작업 코드', '작업 구분', '품목코드', '수량(개)'] }
     });
 
     function parseCsv(csvText) {
@@ -133,7 +135,10 @@
         const floorPlanByRack = new Map();
         const floorPlanCells = [];
         const passageCells = [];
+        const shuttlePassageCells = [];
+        const conveyorCells = [];
         const dockCells = [];
+        const bufferCells = [];
         const stationCells = [];
         const unmappedFloorRackCodes = new Set();
         records.floorPlan.forEach((row) => {
@@ -147,10 +152,24 @@
                 floorPlanCells.push({ x, y, value: cellValue });
                 const normalizedValue = cellValue.toUpperCase();
                 if (normalizedValue === 'T') passageCells.push({ x, y });
-                if (normalizedValue === 'S') stationCells.push({ x, y });
+                if (normalizedValue === 'ST') shuttlePassageCells.push({ x, y });
+                if (normalizedValue === 'CV') conveyorCells.push({ x, y });
+                const stationCodeMatch = /^S(\d+)$/.exec(normalizedValue);
+                if (normalizedValue === 'S' || stationCodeMatch) stationCells.push({
+                    x,
+                    y,
+                    code: stationCodeMatch ? `S${stationCodeMatch[1].padStart(2, '0')}` : ''
+                });
                 const dockCodeMatch = /^D(\d+)$/.exec(normalizedValue);
                 if (dockCodeMatch) dockCells.push({ x, y, code: `D${dockCodeMatch[1]}` });
-                if (normalizedValue === 'F' || normalizedValue === 'T' || normalizedValue === 'S' || dockCodeMatch) return;
+                const bufferCodeMatch = /^B(\d+)$/.exec(normalizedValue);
+                if (bufferCodeMatch) bufferCells.push({
+                    x,
+                    y,
+                    code: `B${bufferCodeMatch[1].padStart(2, '0')}`
+                });
+                if (normalizedValue === 'F' || normalizedValue === 'T' || normalizedValue === 'ST' || normalizedValue === 'CV'
+                    || normalizedValue === 'S' || stationCodeMatch || dockCodeMatch || bufferCodeMatch) return;
                 const rackCode = rackCodesFromMaster.has(cellValue) ? cellValue : '';
                 if (!rackCode) {
                     unmappedFloorRackCodes.add(cellValue);
@@ -269,6 +288,26 @@
                 name: row['품목명'],
                 color: row['표시색상'] || '#ef4444'
             }));
+        const itemByCodeForSchedule = new Map(items.map((item) => [item.code, item]));
+        const truckSchedules = records.workOrders
+            .filter((row) => /^(입고|출고)$/.test(String(row['작업 구분'] || '').trim()))
+            .map((row) => {
+                const workType = String(row['작업 구분'] || '').trim();
+                const itemCode = String(row['품목코드'] || '').trim();
+                const rawDockCode = String(row['도크 코드'] || '').trim().toUpperCase();
+                const dockCodeMatch = /^D(\d+)$/.exec(rawDockCode);
+                return {
+                    scheduleCode: String(row['작업 코드'] || '').trim(),
+                    workType,
+                    dockCode: dockCodeMatch ? `D${dockCodeMatch[1].padStart(2, '0')}` : '',
+                    vehicleNumber: String(row['차량 번호'] || '').trim(),
+                    senderCompanyName: String(row['보낸 회사명'] || '').trim(),
+                    receiverCompanyName: String(row['받을 회사명'] || '').trim(),
+                    itemCode,
+                    itemName: itemByCodeForSchedule.get(itemCode)?.name || itemCode,
+                    quantity: Math.max(0, toNumber(row['수량(개)']))
+                };
+            });
         const locations = records.locations
             .filter((row) => row['로케이션코드'])
             .map((row) => ({
@@ -339,15 +378,30 @@
                     x: (cell.x - 1) * floorPlanCellSize,
                     y: (cell.y - 1) * floorPlanCellSize
                 })),
+                shuttlePassageCells: shuttlePassageCells.map((cell) => ({
+                    x: (cell.x - 1) * floorPlanCellSize,
+                    y: (cell.y - 1) * floorPlanCellSize
+                })),
+                conveyorCells: conveyorCells.map((cell) => ({
+                    x: (cell.x - 1) * floorPlanCellSize,
+                    y: (cell.y - 1) * floorPlanCellSize
+                })),
                 dockCells: dockCells.map((cell) => ({
+                    x: (cell.x - 1) * floorPlanCellSize,
+                    y: (cell.y - 1) * floorPlanCellSize,
+                    code: cell.code
+                })),
+                bufferCells: bufferCells.map((cell) => ({
                     x: (cell.x - 1) * floorPlanCellSize,
                     y: (cell.y - 1) * floorPlanCellSize,
                     code: cell.code
                 })),
                 stationCells: stationCells.map((cell) => ({
                     x: (cell.x - 1) * floorPlanCellSize,
-                    y: (cell.y - 1) * floorPlanCellSize
+                    y: (cell.y - 1) * floorPlanCellSize,
+                    code: cell.code
                 })),
+                truckSchedules,
                 source: 'googleSheets',
                 documentId: options.documentId || '',
                 floorPlanRange: options.floorPlanAxis?.range || '',
@@ -421,8 +475,11 @@
             seen.add(code);
             return {
                 code,
+                modelName: String(row['모델명'] || '').trim(),
                 name: String(row['설비명'] || '').trim() || code,
-                enabled: String(row['사용 여부'] || '').trim().toUpperCase() === 'Y'
+                type: String(row['타입'] || '').trim().toUpperCase(),
+                enabled: String(row['사용 여부'] || '').trim().toUpperCase() === 'Y',
+                configuredSpeed: Math.max(0, toNumber(row['설정 이동 속도(m/s)']))
             };
         });
     }
@@ -430,6 +487,7 @@
     function parseEquipmentStatus(csv) {
         const records = csvToRecords(csv, ['설비 코드', '통신 연결', '설비 상태'], '설비 상태 정보');
         const seen = new Set();
+        const optionalNumber = (value) => String(value ?? '').trim() === '' ? null : toNumber(value);
         return records.filter(row => String(row['설비 코드'] || '').trim()).map(row => {
             const equipmentCode = String(row['설비 코드']).trim();
             if (seen.has(equipmentCode)) throw new Error(`설비 상태 정보의 설비 코드가 중복되었습니다: ${equipmentCode}`);
@@ -437,7 +495,19 @@
             return {
                 equipmentCode,
                 communicationStatus: String(row['통신 연결'] || '').trim().toUpperCase(),
-                equipmentStatus: String(row['설비 상태'] || '').trim()
+                equipmentStatus: String(row['설비 상태'] || '').trim(),
+                positionX: optionalNumber(row['위치 X(m)']),
+                positionY: optionalNumber(row['위치 Y(m)']),
+                direction: optionalNumber(row['방향(도)']),
+                currentSpeed: optionalNumber(row['현재 이동 속도(m/s)']),
+                battery: optionalNumber(row['배터리(%)']),
+                taskCode: String(row['현재 작업 코드'] || '').trim(),
+                workType: String(row['작업 구분'] || '').trim(),
+                pickupLocation: String(row['상차 지점'] || '').trim(),
+                pickupArrivalTime: String(row['상차 지점 실제 도착 시간'] || '').trim(),
+                dropoffLocation: String(row['하차 지점'] || '').trim(),
+                dropoffArrivalTime: String(row['하차 지점 실제 도착 시간'] || '').trim(),
+                taskStatus: String(row['작업 상태'] || '').trim()
             };
         });
     }
@@ -448,7 +518,7 @@
         const equipmentPromise = loadGoogleSheetTable(documentId, config?.sheets?.equipment || '설비 마스터', 'A1:F1000', signal)
             .then(csv => ({ equipment: parseEquipmentMaster(csv) }))
             .catch(error => ({ equipment: [], equipmentLoadWarning: `설비명 연결 실패 — 설비 코드로 표시합니다. ${error.message}` }));
-        const equipmentStatusPromise = loadGoogleSheetTable(documentId, config?.sheets?.equipmentStatus || '설비 상태 정보', 'A1:O1000', signal)
+        const equipmentStatusPromise = loadGoogleSheetTable(documentId, config?.sheets?.equipmentStatus || '설비 상태 정보', 'A2:O1000', signal)
             .then(csv => ({ equipmentStatuses: parseEquipmentStatus(csv) }))
             .catch(error => ({ equipmentStatuses: [], equipmentStatusLoadWarning: `설비 상태 연결 실패 — 통신·상태를 미설정으로 표시합니다. ${error.message}` }));
         const floorPlanDefinition = googleSheetDefinitions.floorPlan;
@@ -864,14 +934,14 @@
         const context = canvas.getContext('2d');
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
-        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, toneMapped: false });
         const sprite = new THREE.Sprite(material);
         const visuals = {
-            normal: { fill: 'rgba(5, 15, 30, 0.92)', stroke: '#3b82f6', text: '#ffffff', scale: 1 },
-            hover: { fill: 'rgba(15, 52, 96, 0.96)', stroke: '#78ABFF', text: '#ffffff', scale: 1.06 },
+            normal: { fill: '#050f1e', stroke: '#3b82f6', text: '#ffffff', scale: 1 },
+            hover: { fill: '#0f3460', stroke: '#78ABFF', text: '#ffffff', scale: 1.06 },
             selected: { fill: '#2563EB', stroke: '#BFDBFE', text: '#ffffff', scale: 1.1 }
         };
-        const baseOpacity = 0.8;
+        const baseOpacity = 1;
         // Scale the entire sprite (including text), keeping the canvas resolution sharp.
         const applyScale = (scale) => sprite.scale.set(3.2 * sizeScale * scale, 0.9 * sizeScale * scale, 1);
         let displayedScale = 1;
@@ -898,17 +968,162 @@
             drawLabel(state);
             const startScale = displayedScale;
             const targetScale = visual.scale;
-            material.opacity = baseOpacity * 0.82;
+            material.opacity = baseOpacity;
             return (progress) => {
                 displayedScale = startScale + (targetScale - startScale) * progress;
                 applyScale(displayedScale);
-                material.opacity = baseOpacity * (0.82 + 0.18 * progress);
+                material.opacity = baseOpacity;
             };
         };
         drawLabel('normal');
         applyScale(displayedScale);
         material.opacity = baseOpacity;
-        sprite.renderOrder = 1000;
+        sprite.renderOrder = billboardRenderOrder;
+        return sprite;
+    }
+
+    function createTruckInfoBillboardSprite(THREE, info = {}) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 520 * worldUiResolutionScale;
+        canvas.height = 210 * worldUiResolutionScale;
+        const context = canvas.getContext('2d');
+        context.scale(worldUiResolutionScale, worldUiResolutionScale);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, toneMapped: false });
+        const sprite = new THREE.Sprite(material);
+        const workType = String(info.workType || '').trim() || '입고';
+        const companyLabel = workType === '출고' ? '공급처' : '납품처';
+        const vehicleNumber = String(info.vehicleNumber || '').trim() || '부산12가3456';
+        const companyName = String((workType === '출고' ? info.receiverCompanyName : info.senderCompanyName) || '').trim() || '미설정';
+        const itemName = String(info.itemName || info.itemCode || '').trim();
+        const itemQuantity = Number(info.quantity);
+        const itemSummary = itemName
+            ? `${itemName} · ${Number.isFinite(itemQuantity) ? itemQuantity.toLocaleString('ko-KR') : 0}개`
+            : '미설정';
+        const operationColor = workType === '출고' ? '#fb923c' : '#22d3ee';
+        const invoiceButtonLabel = '송장보기';
+
+        context.clearRect(0, 0, 520, 210);
+        context.fillStyle = 'rgba(5, 15, 30, 0.96)';
+        context.beginPath();
+        context.roundRect(8, 8, 504, 194, 20);
+        context.fill();
+        context.strokeStyle = '#38bdf8';
+        context.lineWidth = 5;
+        context.stroke();
+
+        // Match the rendered text size of the transport-equipment billboard.
+        context.fillStyle = operationColor;
+        context.font = '700 32px sans-serif';
+        context.textAlign = 'left';
+        context.textBaseline = 'middle';
+        context.fillText(workType, 28, 44);
+        context.fillStyle = '#ffffff';
+        context.font = '600 32px sans-serif';
+        context.fillText(vehicleNumber, 104, 44, 260);
+
+        context.strokeStyle = '#38bdf8';
+        context.lineWidth = 3;
+        context.beginPath();
+        context.roundRect(384, 18, 112, 52, 12);
+        context.stroke();
+        context.fillStyle = '#ffffff';
+        context.font = '600 25px sans-serif';
+        context.textAlign = 'center';
+        context.fillText(invoiceButtonLabel, 440, 44, 96);
+
+        context.strokeStyle = 'rgba(125, 211, 252, 0.35)';
+        context.lineWidth = 2;
+        context.beginPath();
+        context.moveTo(24, 78);
+        context.lineTo(496, 78);
+        context.stroke();
+
+        const rows = [[companyLabel, companyName], [`${workType} 예정`, itemSummary]];
+        rows.forEach(([label, value], index) => {
+            const y = 116 + index * 50;
+            context.fillStyle = '#94a3b8';
+            context.font = '600 25px sans-serif';
+            context.textAlign = 'left';
+            context.fillText(label, 28, y);
+            context.fillStyle = '#ffffff';
+            context.font = '600 32px sans-serif';
+            context.fillText(value, 136, y, 360);
+        });
+        texture.needsUpdate = true;
+        sprite.scale.set(3.96, 1.6, 1);
+        sprite.renderOrder = billboardRenderOrder;
+        sprite.userData = {
+            kind: 'truck-info-billboard',
+            fields: ['vehicleNumber', 'companyName', 'scheduledItemQuantity'],
+            workType,
+            vehicleNumber,
+            companyLabel,
+            companyName,
+            itemSummary,
+            invoiceButtonLabel,
+            spacing: 'compact',
+            fontReference: 'transport-equipment-billboard'
+        };
+        return sprite;
+    }
+
+    function createLevelBadgeSprite(THREE, level) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 128 * worldUiResolutionScale;
+        canvas.height = 128 * worldUiResolutionScale;
+        const context = canvas.getContext('2d');
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, toneMapped: false });
+        const sprite = new THREE.Sprite(material);
+        const visuals = {
+            normal: { fill: '#071a2e', stroke: '#F5B942', text: '#ffffff', scale: 1 },
+            hover: { fill: '#0f3460', stroke: '#FFE082', text: '#ffffff', scale: 1.08 },
+            selected: { fill: '#2563EB', stroke: '#ffffff', text: '#ffffff', scale: 1.12 }
+        };
+        const baseOpacity = 1;
+        const applyScale = scale => sprite.scale.set(0.72 * scale, 0.72 * scale, 1);
+        let displayedScale = 1;
+
+        const drawBadge = (state = 'normal') => {
+            const visual = visuals[state] || visuals.normal;
+            const center = canvas.width / 2;
+            const radius = 45 * worldUiResolutionScale;
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.beginPath();
+            context.arc(center, center, radius, 0, Math.PI * 2);
+            context.fillStyle = visual.fill;
+            context.fill();
+            context.strokeStyle = visual.stroke;
+            context.lineWidth = 5 * worldUiResolutionScale;
+            context.stroke();
+            context.fillStyle = visual.text;
+            context.font = `700 ${32 * worldUiResolutionScale}px sans-serif`;
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(`L${level}`, center, center + worldUiResolutionScale, 82 * worldUiResolutionScale);
+            texture.needsUpdate = true;
+        };
+        sprite.setInteractionState = (state = 'normal') => {
+            const visual = visuals[state] || visuals.normal;
+            drawBadge(state);
+            const startScale = displayedScale;
+            const targetScale = visual.scale;
+            material.opacity = baseOpacity;
+            return (progress) => {
+                displayedScale = startScale + (targetScale - startScale) * progress;
+                applyScale(displayedScale);
+                material.opacity = baseOpacity;
+            };
+        };
+        drawBadge('normal');
+        applyScale(displayedScale);
+        material.opacity = baseOpacity;
+        sprite.renderOrder = billboardRenderOrder;
+        sprite.userData = sprite.userData || {};
+        sprite.userData.badgeShape = 'circle';
         return sprite;
     }
 
@@ -918,7 +1133,12 @@
         const communication = String(amr.communicationStatus || '').trim().toUpperCase();
         const communicationText = communication === 'ONLINE' ? '온라인 (ONLINE)'
             : communication === 'OFFLINE' ? '오프라인 (OFFLINE)' : '미설정';
-        return `<h5>${escapeHtml(name)}</h5><dl class="warehouse-3d-amr-details"><dt>설비 코드</dt><dd>${escapeHtml(code)}</dd><dt>설비명</dt><dd>${escapeHtml(name)}</dd><dt>통신 연결 상태</dt><dd>${escapeHtml(communicationText)}</dd><dt>설비 상태</dt><dd>${escapeHtml(amr.equipmentStatus || '미설정')}</dd></dl>`;
+        const equipmentType = amr.equipmentType || amr.kindLabel || '미설정';
+        const configuredSpeed = Number.isFinite(amr.configuredSpeed) && amr.configuredSpeed > 0
+            ? `${amr.configuredSpeed.toFixed(2)} m/s` : '미설정';
+        const currentSpeed = Number.isFinite(amr.currentSpeed) ? `${amr.currentSpeed.toFixed(2)} m/s` : '미설정';
+        const battery = Number.isFinite(amr.battery) ? `${Math.round(amr.battery)}%` : '미설정';
+        return `<h5>${escapeHtml(name)}</h5><dl class="warehouse-3d-amr-details"><dt>설비 코드</dt><dd>${escapeHtml(code)}</dd><dt>설비명</dt><dd>${escapeHtml(name)}</dd><dt>타입</dt><dd>${escapeHtml(equipmentType)}</dd><dt>통신 연결 상태</dt><dd>${escapeHtml(communicationText)}</dd><dt>설비 상태</dt><dd>${escapeHtml(amr.equipmentStatus || '미설정')}</dd><dt>설정 속도</dt><dd>${escapeHtml(configuredSpeed)}</dd><dt>현재 속도</dt><dd>${escapeHtml(currentSpeed)}</dd><dt>배터리</dt><dd>${escapeHtml(battery)}</dd></dl>`;
     }
 
     function getAmrEquipmentStatusColor(status) {
@@ -931,26 +1151,26 @@
         return '#475569';
     }
 
-    function createAmrLabelSprite(THREE, { name, communicationStatus, equipmentStatus }) {
+    function createAmrLabelSprite(THREE, { name, communicationStatus, equipmentStatus, parentScale = 1 }) {
         const canvas = document.createElement('canvas');
         canvas.width = 320 * worldUiResolutionScale;
         canvas.height = 180 * worldUiResolutionScale;
         const context = canvas.getContext('2d');
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
-        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, toneMapped: false });
         const sprite = new THREE.Sprite(material);
         const statusText = String(equipmentStatus || '').trim() || '미설정';
         const isOnline = String(communicationStatus || '').trim().toUpperCase() === 'ONLINE';
         const communicationColor = isOnline ? '#00FF00' : '#9ca3af';
         const equipmentStatusColor = getAmrEquipmentStatusColor(statusText);
         const visuals = {
-            normal: { fill: 'rgba(5, 15, 30, 0.92)', scale: 1 },
-            hover: { fill: 'rgba(15, 52, 96, 0.96)', scale: 1.06 },
+            normal: { fill: '#050f1e', scale: 1 },
+            hover: { fill: '#0f3460', scale: 1.06 },
             selected: { fill: '#2563EB', scale: 1.1 }
         };
-        const baseOpacity = 0.8;
-        const applyScale = scale => sprite.scale.set(1.84 * scale, 1.035 * scale, 1);
+        const baseOpacity = 1;
+        const applyScale = scale => sprite.scale.set(1.84 * scale / parentScale, 1.035 * scale / parentScale, 1);
         let displayedScale = 1;
         const drawLabel = (state = 'normal') => {
             const visual = visuals[state] || visuals.normal;
@@ -998,17 +1218,17 @@
             drawLabel(state);
             const startScale = displayedScale;
             const targetScale = visual.scale;
-            material.opacity = baseOpacity * 0.82;
+            material.opacity = baseOpacity;
             return progress => {
                 displayedScale = startScale + (targetScale - startScale) * progress;
                 applyScale(displayedScale);
-                material.opacity = baseOpacity * (0.82 + 0.18 * progress);
+                material.opacity = baseOpacity;
             };
         };
         drawLabel('normal');
         applyScale(displayedScale);
         material.opacity = baseOpacity;
-        sprite.renderOrder = 1000;
+        sprite.renderOrder = billboardRenderOrder;
         sprite.userData = { communicationStatus: isOnline ? 'ONLINE' : 'OFFLINE', equipmentStatus: statusText, communicationColor, equipmentStatusColor };
         return sprite;
     }
@@ -1065,7 +1285,7 @@
             ceilingHidden: toNumber(cameraPosition?.y) > height + 0.25
         };
     }
-    function calculateLoadingDockLayout(
+    function calculateLoadingDockLayouts(
         racks,
         rackTypes,
         floorWidth,
@@ -1076,7 +1296,7 @@
     ) {
         const width = Math.max(0, toNumber(floorWidth));
         const depth = Math.max(0, toNumber(floorDepth));
-        if (!width || !depth) return null;
+        if (!width || !depth) return [];
 
         const buildLayout = (bounds, candidateSides, source, sourceCode, cellCount = 0) => {
             const distances = {
@@ -1114,20 +1334,21 @@
             }))
             .filter((cell) => Number.isFinite(cell.x) && Number.isFinite(cell.y));
         if (markedDockCells.length) {
-            const primaryDockCode = [...new Set(markedDockCells.map((cell) => cell.code))].sort()[0];
-            const primaryDockCells = markedDockCells.filter((cell) => cell.code === primaryDockCode);
-            const bounds = {
-                minX: Math.min(...primaryDockCells.map((cell) => cell.x)),
-                maxX: Math.max(...primaryDockCells.map((cell) => cell.x)) + size,
-                minZ: Math.min(...primaryDockCells.map((cell) => cell.y)),
-                maxZ: Math.max(...primaryDockCells.map((cell) => cell.y)) + size
-            };
-            return buildLayout(bounds, ['front', 'back', 'left', 'right'], 'floorPlanDock', primaryDockCode, primaryDockCells.length);
+            return [...new Set(markedDockCells.map((cell) => cell.code))].sort().map((dockCode) => {
+                const cellsForDock = markedDockCells.filter((cell) => cell.code === dockCode);
+                const bounds = {
+                    minX: Math.min(...cellsForDock.map((cell) => cell.x)),
+                    maxX: Math.max(...cellsForDock.map((cell) => cell.x)) + size,
+                    minZ: Math.min(...cellsForDock.map((cell) => cell.y)),
+                    maxZ: Math.max(...cellsForDock.map((cell) => cell.y)) + size
+                };
+                return buildLayout(bounds, ['front', 'back', 'left', 'right'], 'floorPlanDock', dockCode, cellsForDock.length);
+            });
         }
 
         const rack = (Array.isArray(racks) ? racks : []).find((item) => String(item?.code || '').trim() === rackCode);
         const type = (Array.isArray(rackTypes) ? rackTypes : []).find((item) => item?.code === rack?.rackTypeCode);
-        if (!rack || !type) return null;
+        if (!rack || !type) return [];
         const rackLength = Math.max(0, toNumber(type.bayWidth) * Math.max(1, Math.round(toNumber(rack.bayCount, 1))));
         const rackWidth = Math.max(0, toNumber(type.depth) * Math.max(1, Math.round(toNumber(rack.rackRowCount, 1))));
         const startX = toNumber(rack.startX);
@@ -1136,7 +1357,11 @@
             ? { minX: startX, maxX: startX + rackWidth, minZ: startZ, maxZ: startZ + rackLength }
             : { minX: startX, maxX: startX + rackLength, minZ: startZ, maxZ: startZ + rackWidth };
         const candidateSides = rack.direction === 'vertical' ? ['right', 'left'] : ['front', 'back'];
-        return buildLayout(bounds, candidateSides, 'rack', rackCode);
+        return [buildLayout(bounds, candidateSides, 'rack', rackCode)];
+    }
+
+    function calculateLoadingDockLayout(...args) {
+        return calculateLoadingDockLayouts(...args)[0] || null;
     }
 
     function calculateLoadingYardLayout(loadingDockLayout, floorWidth, floorDepth, yardDepth = 11000, shoulder = 2000) {
@@ -1212,6 +1437,300 @@
             }
         });
         return segments;
+    }
+
+    function groupConnectedFloorCells(cells, cellSize = 500) {
+        const size = Math.max(1, toNumber(cellSize, 500));
+        const byKey = new Map();
+        (Array.isArray(cells) ? cells : []).forEach((cell) => {
+            const x = Math.round(toNumber(cell?.x) / size) * size;
+            const y = Math.round(toNumber(cell?.y) / size) * size;
+            byKey.set(`${x}:${y}`, { x, y });
+        });
+        const visited = new Set();
+        const groups = [];
+        byKey.forEach((cell, key) => {
+            if (visited.has(key)) return;
+            const queue = [cell];
+            const group = [];
+            visited.add(key);
+            for (let index = 0; index < queue.length; index += 1) {
+                const current = queue[index];
+                group.push(current);
+                [[size, 0], [-size, 0], [0, size], [0, -size]].forEach(([dx, dy]) => {
+                    const neighborKey = `${current.x + dx}:${current.y + dy}`;
+                    const neighbor = byKey.get(neighborKey);
+                    if (!neighbor || visited.has(neighborKey)) return;
+                    visited.add(neighborKey);
+                    queue.push(neighbor);
+                });
+            }
+            const minX = Math.min(...group.map((item) => item.x));
+            const maxX = Math.max(...group.map((item) => item.x)) + size;
+            const minY = Math.min(...group.map((item) => item.y));
+            const maxY = Math.max(...group.map((item) => item.y)) + size;
+            groups.push({
+                cells: group,
+                minX,
+                maxX,
+                minY,
+                maxY,
+                centerX: (minX + maxX) / 2,
+                centerY: (minY + maxY) / 2
+            });
+        });
+        return groups.sort((left, right) => left.minY - right.minY || left.minX - right.minX);
+    }
+
+    function calculateAmrPassageClearanceMm(passageCells, cellSize = 500, requestedClearance = 1950) {
+        const size = Math.max(1, toNumber(cellSize, 500));
+        const requested = Math.max(1, toNumber(requestedClearance, 1950));
+        const corridorWidths = groupConnectedFloorCells(passageCells, size)
+            .map((group) => Math.min(group.maxX - group.minX, group.maxY - group.minY))
+            .filter((width) => width >= size);
+        if (!corridorWidths.length) return requested;
+        const narrowestWidth = Math.min(...corridorWidths);
+        return Math.min(requested, Math.max(size * 0.8, narrowestWidth - 100));
+    }
+
+    function buildAmrCorridorAssignments(graph, stations, equipmentCount) {
+        const nodesByKey = graph?.nodesByKey;
+        if (!(nodesByKey instanceof Map)) return [];
+        const stationEntries = (Array.isArray(stations) ? stations : []).slice();
+        const components = (Array.isArray(graph?.components) ? graph.components : [])
+            .filter((component) => component.length >= 2)
+            .map((component) => component.map((key) => nodesByKey.get(key)).filter(Boolean))
+            .filter((nodes) => nodes.length >= 2)
+            .sort((left, right) => (
+                Math.min(...left.map((node) => node.y)) - Math.min(...right.map((node) => node.y))
+                || Math.min(...left.map((node) => node.x)) - Math.min(...right.map((node) => node.x))
+            ));
+        const count = Math.max(0, Math.floor(toNumber(equipmentCount)));
+        if (!components.length || !count) return [];
+        return Array.from({ length: count }, (_, index) => {
+            const componentNodes = components[index % components.length];
+            const minX = Math.min(...componentNodes.map((node) => node.x));
+            const maxX = Math.max(...componentNodes.map((node) => node.x));
+            const minY = Math.min(...componentNodes.map((node) => node.y));
+            const maxY = Math.max(...componentNodes.map((node) => node.y));
+            const horizontal = (maxX - minX) >= (maxY - minY);
+            const orderedNodes = componentNodes.slice().sort((left, right) => (
+                horizontal ? left.x - right.x || left.y - right.y : left.y - right.y || left.x - right.x
+            ));
+            const corridorCenterX = (minX + maxX) / 2;
+            const corridorCenterY = (minY + maxY) / 2;
+            const station = stationEntries.reduce((nearest, candidate) => {
+                const candidateDistance = Math.hypot(
+                    toNumber(candidate?.passageX) - corridorCenterX,
+                    toNumber(candidate?.passageY) - corridorCenterY
+                );
+                if (!nearest || candidateDistance < nearest.distance) return { station: candidate, distance: candidateDistance };
+                return nearest;
+            }, null)?.station;
+            const endpoints = [orderedNodes[0], orderedNodes[orderedNodes.length - 1]];
+            const stationX = toNumber(station?.passageX, corridorCenterX);
+            const stationY = toNumber(station?.passageY, corridorCenterY);
+            const firstDistance = Math.hypot(endpoints[0].x - stationX, endpoints[0].y - stationY);
+            const lastDistance = Math.hypot(endpoints[1].x - stationX, endpoints[1].y - stationY);
+            const nearNode = firstDistance <= lastDistance ? endpoints[0] : endpoints[1];
+            const farNode = nearNode === endpoints[0] ? endpoints[1] : endpoints[0];
+            return {
+                code: station?.code || `T${String(index + 1).padStart(2, '0')}`,
+                componentKeys: componentNodes.map((node) => node.key),
+                nearKey: nearNode.key,
+                farKey: farNode.key
+            };
+        });
+    }
+
+    function buildShuttleRailLayout(passageCells, stationCells, cellSize = 500) {
+        const size = Math.max(1, toNumber(cellSize, 500));
+        const passageByKey = new Map();
+        (Array.isArray(passageCells) ? passageCells : []).forEach((cell) => {
+            const x = Math.round(toNumber(cell?.x) / size) * size;
+            const y = Math.round(toNumber(cell?.y) / size) * size;
+            passageByKey.set(`${x}:${y}`, { x, y, centerX: x + size / 2, centerY: y + size / 2 });
+        });
+        const segments = [];
+        passageByKey.forEach((cell) => {
+            [[size, 0], [0, size]].forEach(([dx, dy]) => {
+                const neighbor = passageByKey.get(`${cell.x + dx}:${cell.y + dy}`);
+                if (!neighbor) return;
+                segments.push({
+                    x1: cell.centerX,
+                    y1: cell.centerY,
+                    x2: neighbor.centerX,
+                    y2: neighbor.centerY
+                });
+            });
+        });
+        const explicitStationCells = new Map();
+        const unnumberedStationCells = [];
+        (Array.isArray(stationCells) ? stationCells : []).forEach((cell) => {
+            const codeMatch = /^S(\d+)$/.exec(String(cell?.code || '').toUpperCase());
+            const code = codeMatch ? `S${codeMatch[1].padStart(2, '0')}` : '';
+            if (!code) {
+                unnumberedStationCells.push(cell);
+                return;
+            }
+            if (!explicitStationCells.has(code)) explicitStationCells.set(code, []);
+            explicitStationCells.get(code).push(cell);
+        });
+        const createStationGroup = (cells, code = '') => {
+            const normalizedCells = cells.map((cell) => ({
+                x: Math.round(toNumber(cell?.x) / size) * size,
+                y: Math.round(toNumber(cell?.y) / size) * size
+            }));
+            const minX = Math.min(...normalizedCells.map((cell) => cell.x));
+            const maxX = Math.max(...normalizedCells.map((cell) => cell.x)) + size;
+            const minY = Math.min(...normalizedCells.map((cell) => cell.y));
+            const maxY = Math.max(...normalizedCells.map((cell) => cell.y)) + size;
+            return {
+                cells: normalizedCells,
+                code,
+                minX,
+                maxX,
+                minY,
+                maxY,
+                centerX: (minX + maxX) / 2,
+                centerY: (minY + maxY) / 2
+            };
+        };
+        const stationGroups = [
+            ...groupConnectedFloorCells(unnumberedStationCells, size).map((group) => ({ ...group, code: '' })),
+            ...[...explicitStationCells.entries()].map(([code, cells]) => createStationGroup(cells, code))
+        ].sort((left, right) => left.minY - right.minY || left.minX - right.minX);
+        const usedStationCodes = new Set(stationGroups.map((group) => group.code).filter(Boolean));
+        let nextStationNumber = 1;
+        stationGroups.forEach((group) => {
+            if (group.code) return;
+            while (usedStationCodes.has(`S${String(nextStationNumber).padStart(2, '0')}`)) nextStationNumber += 1;
+            group.code = `S${String(nextStationNumber).padStart(2, '0')}`;
+            usedStationCodes.add(group.code);
+            nextStationNumber += 1;
+        });
+        const stations = stationGroups
+            .sort((left, right) => Number(left.code.slice(1)) - Number(right.code.slice(1)))
+            .map((group) => {
+                let nearestPassage = null;
+                let nearestDistance = Infinity;
+                passageByKey.forEach((cell) => {
+                    const distance = Math.hypot(cell.centerX - group.centerX, cell.centerY - group.centerY);
+                    if (distance >= nearestDistance) return;
+                    nearestDistance = distance;
+                    nearestPassage = cell;
+                });
+                if (nearestPassage) segments.push({
+                    x1: nearestPassage.centerX,
+                    y1: nearestPassage.centerY,
+                    x2: group.centerX,
+                    y2: group.centerY,
+                    stationConnector: true
+                });
+                return {
+                    ...group,
+                    passageX: nearestPassage?.centerX ?? group.centerX,
+                    passageY: nearestPassage?.centerY ?? group.centerY,
+                    passageDistance: nearestDistance
+                };
+            });
+        return { segments, stations };
+    }
+
+    function calculateShuttleFootprintMm(stations, cellSize = 500) {
+        const size = Math.max(1, toNumber(cellSize, 500));
+        const stationShortSides = (Array.isArray(stations) ? stations : [])
+            .map((station) => Math.min(
+                Math.max(0, toNumber(station?.maxX) - toNumber(station?.minX)),
+                Math.max(0, toNumber(station?.maxY) - toNumber(station?.minY))
+            ))
+            .filter((side) => side >= size);
+        return stationShortSides.length ? Math.min(...stationShortSides) : size;
+    }
+
+    function calculateShuttleLoadDimensions(rackSlots, floorPlanCellSize = 500) {
+        const rackSlot = (Array.isArray(rackSlots) ? rackSlots : []).find((slot) => (
+            Array.isArray(slot?.boxSize)
+            && slot.boxSize.length >= 3
+            && slot.boxSize.every((value) => toNumber(value) > 0)
+        ));
+        if (rackSlot) {
+            return {
+                width: toNumber(rackSlot.boxSize[0]),
+                height: toNumber(rackSlot.boxSize[1]),
+                depth: toNumber(rackSlot.boxSize[2]),
+                source: 'rack-slot'
+            };
+        }
+        const cellSizeMeters = Math.max(0.001, toNumber(floorPlanCellSize, 500) / 1000);
+        return {
+            width: cellSizeMeters,
+            height: cellSizeMeters,
+            depth: cellSizeMeters,
+            source: 'floorPlan-cell-fallback'
+        };
+    }
+
+    function calculateLiftFrameDimensions(width, depth, postThickness = 0.09) {
+        const thickness = Math.max(0.01, toNumber(postThickness, 0.09));
+        const outerWidth = Math.max(thickness * 2 + 0.02, toNumber(width, 1));
+        const outerDepth = Math.max(thickness * 2 + 0.02, toNumber(depth, 1));
+        return {
+            postThickness: thickness,
+            halfPostX: outerWidth / 2 - thickness / 2,
+            halfPostZ: outerDepth / 2 - thickness / 2,
+            innerWidth: outerWidth - thickness * 2,
+            innerDepth: outerDepth - thickness * 2
+        };
+    }
+
+    function buildOrthogonalConnectorPath(start, end) {
+        const from = { x: toNumber(start?.x), z: toNumber(start?.z) };
+        const to = { x: toNumber(end?.x), z: toNumber(end?.z) };
+        if (Math.abs(to.x - from.x) < 0.001 || Math.abs(to.z - from.z) < 0.001) return [from, to];
+        return [from, { x: to.x, z: from.z }, to];
+    }
+
+    function calculateShuttleLevelElevations(racks, rackTypes) {
+        const typeByCode = new Map((Array.isArray(rackTypes) ? rackTypes : []).map((type) => [type?.code, type]));
+        const elevations = new Set();
+        (Array.isArray(racks) ? racks : []).forEach((rack) => {
+            const type = typeByCode.get(rack?.rackTypeCode);
+            if (!type) return;
+            const levelCount = Math.max(1, Math.round(toNumber(type.levels, 1)));
+            const height = Math.max(0, toNumber(type.height));
+            const levelHeight = Math.max(1, toNumber(type.levelHeight, height / levelCount));
+            for (let level = 0; level < levelCount; level += 1) {
+                elevations.add(Math.round(level * levelHeight));
+            }
+        });
+        return [...elevations].sort((left, right) => left - right);
+    }
+
+    function buildShuttleFrameLayout(passageCells, levelElevations, cellSize = 500) {
+        const size = Math.max(1, toNumber(cellSize, 500));
+        const cellsByKey = new Map();
+        (Array.isArray(passageCells) ? passageCells : []).forEach((cell) => {
+            const x = Math.round(toNumber(cell?.x) / size) * size;
+            const y = Math.round(toNumber(cell?.y) / size) * size;
+            cellsByKey.set(`${x}:${y}`, { x, y });
+        });
+        const levels = [...new Set((Array.isArray(levelElevations) ? levelElevations : [])
+            .map((level) => Math.max(0, Math.round(toNumber(level)))))]
+            .sort((left, right) => left - right);
+        const cells = [...cellsByKey.values()];
+        const boundarySegments = buildPassageBoundarySegments(cells, size, Math.min(70, size * 0.14), 0);
+        return {
+            levels,
+            tiles: levels.flatMap((levelY) => cells.map((cell) => ({
+                x: cell.x + size / 2,
+                y: cell.y + size / 2,
+                levelY,
+                width: size,
+                depth: size
+            }))),
+            boundaries: levels.flatMap((levelY) => boundarySegments.map((segment) => ({ ...segment, levelY })))
+        };
     }
 
     function buildPassageNavigationGraph(passageCells, cellSize = 500, vehicleDiameter = 1600) {
@@ -1462,7 +1981,7 @@
         const floorWidth = mm(data.meta?.floorWidth || 52000);
         const floorDepth = mm(data.meta?.floorDepth || 58000);
         const warehouseFloorElevation = 1.2;
-        const loadingDockLayout = calculateLoadingDockLayout(
+        const loadingDockLayoutEntries = calculateLoadingDockLayouts(
             data.racks, data.rackTypes,
             data.meta?.floorWidth || 52000,
             data.meta?.floorDepth || 58000,
@@ -1470,6 +1989,7 @@
             data.meta?.dockCells,
             data.meta?.floorPlanCellSize || 500
         );
+        const loadingDockLayout = loadingDockLayoutEntries[0] || null;
         const openWallSide = loadingDockLayout?.side || '';
         const loadingYardLayout = calculateLoadingYardLayout(
             loadingDockLayout,
@@ -1805,6 +2325,15 @@
         const dockCells = Array.isArray(data.meta?.dockCells) ? data.meta.dockCells : [];
         shell.viewport.dataset.warehouseDockCellCount = String(dockCells.length);
         shell.viewport.dataset.warehouseDockCodes = [...new Set(dockCells.map((cell) => cell.code).filter(Boolean))].sort().join(',');
+        const bufferCells = Array.isArray(data.meta?.bufferCells) ? data.meta.bufferCells : [];
+        shell.viewport.dataset.warehouseBufferCellCount = String(bufferCells.length);
+        shell.viewport.dataset.warehouseBufferCodes = [...new Set(bufferCells.map((cell) => cell.code).filter(Boolean))].sort().join(',');
+        shell.viewport.dataset.warehouseBufferSource = 'floorPlan-B';
+        shell.viewport.dataset.warehouseBufferColor = '#ffffff';
+        const conveyorCells = Array.isArray(data.meta?.conveyorCells) ? data.meta.conveyorCells : [];
+        shell.viewport.dataset.warehouseConveyorCellCount = String(conveyorCells.length);
+        shell.viewport.dataset.warehouseConveyorSource = 'floorPlan-CV';
+        shell.viewport.dataset.warehouseConveyorColor = '#facc15';
         const stationCells = Array.isArray(data.meta?.stationCells) ? data.meta.stationCells : [];
         shell.viewport.dataset.warehouseStationCellCount = String(stationCells.length);
         shell.viewport.dataset.warehouseDockDisplay = 'line';
@@ -1833,27 +2362,44 @@
         shell.viewport.dataset.warehouseLoadingYardDepth = loadingYardLayout ? String(mm(loadingYardLayout.approachDepth)) : '0';
 
         const truckResources = [];
+        const truckSchedules = Array.isArray(data.meta?.truckSchedules) ? data.meta.truckSchedules : [];
+        const claimedTruckSchedules = new Set();
+        const schedulesByDock = new Map();
+        loadingDockLayoutEntries.forEach((layout) => {
+            const exactIndex = truckSchedules.findIndex((schedule, index) =>
+                !claimedTruckSchedules.has(index) && schedule?.dockCode === layout.rackCode
+            );
+            const fallbackIndex = truckSchedules.findIndex((_, index) => !claimedTruckSchedules.has(index));
+            const scheduleIndex = exactIndex >= 0 ? exactIndex : fallbackIndex;
+            if (scheduleIndex < 0) return;
+            claimedTruckSchedules.add(scheduleIndex);
+            schedulesByDock.set(layout.rackCode, truckSchedules[scheduleIndex]);
+        });
         const createStaticTruck = (layout) => {
             if (!layout) return null;
             const truck = new THREE.Group();
-            truck.name = 'WAREHOUSE-STATIC-5T-TRUCK';
+            const truckInfo = schedulesByDock.get(layout.rackCode) || {};
+            truck.name = `WAREHOUSE-STATIC-5T-TRUCK-${layout.rackCode}`;
             truck.userData = {
                 kind: 'static-5t-truck',
+                dockCode: layout.rackCode,
                 rackCode: layout.rackCode,
                 loadingSide: layout.side,
+                modelStyle: 'reference-low-poly-cab-over',
                 cargoDimensions: { length: 6.2, width: 2.2, height: 2.3 },
-                cargoFloorHeight: warehouseFloorElevation
+                cargoFloorHeight: warehouseFloorElevation,
+                scheduleCode: truckInfo.scheduleCode || ''
             };
             const materials = {
-                cargo: new THREE.MeshPhysicalMaterial({ color: '#d9dde0', roughness: 0.58, metalness: 0.08, clearcoat: 0.16 }),
-                cargoTrim: new THREE.MeshStandardMaterial({ color: '#7d858b', roughness: 0.52, metalness: 0.38 }),
-                cab: new THREE.MeshPhysicalMaterial({ color: '#b8bec2', roughness: 0.52, metalness: 0.1, clearcoat: 0.2 }),
-                glass: new THREE.MeshPhysicalMaterial({ color: '#555b61', roughness: 0.18, metalness: 0.12, transparent: true, opacity: 0.9, depthWrite: false }),
-                dark: new THREE.MeshStandardMaterial({ color: '#252a2e', roughness: 0.62, metalness: 0.34 }),
-                rubber: new THREE.MeshStandardMaterial({ color: '#090b0d', roughness: 0.88, metalness: 0.02 }),
-                hub: new THREE.MeshStandardMaterial({ color: '#626a70', roughness: 0.38, metalness: 0.68 }),
-                light: new THREE.MeshStandardMaterial({ color: '#dce2e5', emissive: '#9ca8ae', emissiveIntensity: 0.16 }),
-                tail: new THREE.MeshStandardMaterial({ color: '#7f4a4a', emissive: '#3d1f1f', emissiveIntensity: 0.12 }),
+                cargo: new THREE.MeshPhysicalMaterial({ color: '#d8cec7', roughness: 0.62, metalness: 0.04, clearcoat: 0.2 }),
+                cargoTrim: new THREE.MeshStandardMaterial({ color: '#bca9a2', roughness: 0.56, metalness: 0.16 }),
+                cab: new THREE.MeshPhysicalMaterial({ color: '#d4c7c3', roughness: 0.55, metalness: 0.05, clearcoat: 0.24 }),
+                glass: new THREE.MeshPhysicalMaterial({ color: '#245d6b', roughness: 0.16, metalness: 0.12, transparent: true, opacity: 0.94, depthWrite: false }),
+                dark: new THREE.MeshStandardMaterial({ color: '#39343e', roughness: 0.68, metalness: 0.22 }),
+                rubber: new THREE.MeshStandardMaterial({ color: '#151219', roughness: 0.9, metalness: 0.01 }),
+                hub: new THREE.MeshStandardMaterial({ color: '#b9adae', roughness: 0.48, metalness: 0.32 }),
+                light: new THREE.MeshStandardMaterial({ color: '#eee8d9', emissive: '#bcb69f', emissiveIntensity: 0.18 }),
+                tail: new THREE.MeshStandardMaterial({ color: '#9d5662', emissive: '#4d2730', emissiveIntensity: 0.14 }),
                 shadow: new THREE.MeshBasicMaterial({ color: '#020617', transparent: true, opacity: 0.34, depthWrite: false })
             };
             truckResources.push(...Object.values(materials));
@@ -1871,21 +2417,22 @@
             const box = (name, size, position, material = materials.dark) =>
                 addPart(name, new THREE.BoxGeometry(...size), material, position);
             const createCabGeometry = () => {
-                const halfWidth = 1.04;
+                const halfWidth = 1.06;
                 const profile = [
-                    [0.76, 6.25],
-                    [2.78, 6.25],
-                    [2.78, 7.45],
-                    [1.96, 8.1],
-                    [0.76, 8.1]
+                    [0.58, 6.15],
+                    [3.08, 6.15],
+                    [3.08, 7.24],
+                    [2.82, 7.62],
+                    [2.58, 8.12],
+                    [0.58, 8.12]
                 ];
                 const vertices = [];
                 [-halfWidth, halfWidth].forEach((x) => {
                     profile.forEach(([y, z]) => vertices.push(x, y, z));
                 });
                 const indices = [
-                    0, 2, 1, 0, 3, 2, 0, 4, 3,
-                    5, 6, 7, 5, 7, 8, 5, 8, 9
+                    0, 2, 1, 0, 3, 2, 0, 4, 3, 0, 5, 4,
+                    6, 7, 8, 6, 8, 9, 6, 9, 10, 6, 10, 11
                 ];
                 for (let index = 0; index < profile.length; index += 1) {
                     const next = (index + 1) % profile.length;
@@ -1901,35 +2448,46 @@
             const cargoWidth = 2.2;
             const cargoHeight = 2.3;
             box('truck-cargo-box', [cargoWidth, cargoHeight, cargoLength], [0, warehouseFloorElevation + cargoHeight / 2, cargoLength / 2], materials.cargo);
-            box('truck-cargo-lower-trim', [cargoWidth + 0.05, 0.07, cargoLength - 0.12], [0, warehouseFloorElevation + 0.06, cargoLength / 2], materials.cargoTrim);
+            box('truck-cargo-top-trim', [cargoWidth + 0.05, 0.055, cargoLength + 0.04], [0, warehouseFloorElevation + cargoHeight + 0.015, cargoLength / 2], materials.cargoTrim);
+            box('truck-cargo-lower-trim', [cargoWidth + 0.05, 0.065, cargoLength + 0.04], [0, warehouseFloorElevation + 0.035, cargoLength / 2], materials.cargoTrim);
+            [-1, 1].forEach((side) => {
+                [0.02, cargoLength - 0.02].forEach((z) => {
+                    box('truck-cargo-corner-trim', [0.055, cargoHeight + 0.02, 0.055], [side * (cargoWidth / 2 + 0.015), warehouseFloorElevation + cargoHeight / 2, z], materials.cargoTrim);
+                });
+            });
             box('truck-rear-door-left', [cargoWidth / 2 - 0.05, cargoHeight - 0.16, 0.055], [-cargoWidth / 4, warehouseFloorElevation + cargoHeight / 2, -0.03], materials.cargo);
             box('truck-rear-door-right', [cargoWidth / 2 - 0.05, cargoHeight - 0.16, 0.055], [cargoWidth / 4, warehouseFloorElevation + cargoHeight / 2, -0.03], materials.cargo);
             box('truck-rear-door-seam', [0.035, cargoHeight - 0.1, 0.07], [0, warehouseFloorElevation + cargoHeight / 2, -0.065], materials.cargoTrim);
-            box('truck-chassis', [2.05, 0.18, 7.35], [0, 0.82, 3.85], materials.dark);
-            box('truck-rear-bumper', [2.2, 0.18, 0.18], [0, 0.54, -0.12], materials.cargoTrim);
+            box('truck-chassis', [2.06, 0.2, 7.48], [0, 0.78, 3.82], materials.dark);
+            box('truck-side-skirt', [2.18, 0.42, 2.15], [0, 0.7, 3.82], materials.dark);
+            box('truck-rear-bumper', [2.22, 0.18, 0.18], [0, 0.5, -0.12], materials.cargoTrim);
             addPart('truck-cab-shell', createCabGeometry(), materials.cab, [0, 0, 0]);
-            box('truck-windshield', [1.72, 0.9, 0.045], [0, 2.34, 7.79], materials.glass).rotation.x = -0.69;
+            box('truck-cab-roof', [2.18, 0.08, 1.25], [0, 3.12, 6.82], materials.cargoTrim);
+            box('truck-windshield-surround', [1.98, 0.95, 0.055], [0, 2.14, 8.075], materials.dark).rotation.x = -0.24;
+            box('truck-windshield', [1.82, 0.82, 0.06], [0, 2.15, 8.108], materials.glass).rotation.x = -0.24;
             [-1, 1].forEach((side) => {
                 const sideWindowShape = new THREE.Shape();
-                sideWindowShape.moveTo(side * -0.82, -0.34);
-                sideWindowShape.lineTo(side * -0.15, -0.33);
-                sideWindowShape.lineTo(side * 0.34, -0.27);
-                sideWindowShape.lineTo(side * 0.29, 0.39);
-                sideWindowShape.lineTo(side * -0.36, 0.43);
+                sideWindowShape.moveTo(-0.58, -0.38);
+                sideWindowShape.lineTo(0.42, -0.34);
+                sideWindowShape.lineTo(0.3, 0.39);
+                sideWindowShape.lineTo(-0.35, 0.43);
                 sideWindowShape.closePath();
                 addPart(
                     'truck-side-window',
                     new THREE.ShapeGeometry(sideWindowShape),
                     materials.glass,
-                    [side * 1.045, 2.24, 7.18],
+                    [side * 1.068, 2.18, 7.25],
                     [0, side > 0 ? Math.PI / 2 : -Math.PI / 2, 0]
                 );
+                box('truck-mirror-arm', [0.18, 0.035, 0.035], [side * 1.13, 2.28, 7.88], materials.dark);
+                box('truck-side-mirror', [0.11, 0.34, 0.14], [side * 1.23, 2.2, 7.9], materials.dark);
+                box('truck-door-handle', [0.035, 0.055, 0.22], [side * 1.073, 1.45, 6.82], materials.dark);
             });
-            box('truck-front-panel', [1.72, 0.48, 0.045], [0, 1.24, 8.12], materials.cab);
-            box('truck-front-bumper', [2.18, 0.2, 0.18], [0, 0.69, 8.12], materials.cargoTrim);
-            box('truck-license-plate', [0.48, 0.2, 0.04], [0, 0.96, 8.155], materials.cargoTrim);
+            box('truck-front-grille', [1.7, 0.46, 0.06], [0, 1.12, 8.155], materials.dark);
+            box('truck-front-bumper', [2.2, 0.22, 0.2], [0, 0.55, 8.12], materials.cargoTrim);
+            box('truck-license-plate', [0.42, 0.14, 0.04], [0, 0.92, 8.19], materials.light);
             [-0.72, 0.72].forEach((x) => {
-                box('truck-headlight', [0.3, 0.18, 0.05], [x, 1.39, 8.148], materials.light);
+                box('truck-headlight', [0.28, 0.16, 0.055], [x, 1.38, 8.165], materials.light);
                 box('truck-tail-light', [0.24, 0.2, 0.05], [x, 0.86, -0.13], materials.tail);
             });
             const addWheel = (x, z) => {
@@ -1938,24 +2496,64 @@
                 wheel.userData.axle = z;
                 hub.userData.axle = z;
             };
-            [-1.02, 1.02].forEach((x) => {
-                addWheel(x, 1.12);
-                addWheel(x, 7.12);
-            });
+            const truckAxlePositions = [1.08, 2.2, 7.15];
+            [-1.02, 1.02].forEach((x) => truckAxlePositions.forEach((z) => addWheel(x, z)));
             const shadow = addPart('truck-shadow', new THREE.PlaneGeometry(2.5, 8.45), materials.shadow, [0, 0.012, 4], [-Math.PI / 2, 0, 0]);
             shadow.castShadow = false;
+            const infoBillboard = createTruckInfoBillboardSprite(THREE, truckInfo);
+            infoBillboard.name = `WAREHOUSE-TRUCK-INFO-BILLBOARD-${layout.rackCode}`;
+            infoBillboard.position.set(0, warehouseFloorElevation + 3.55, cargoLength / 2);
+            infoBillboard.userData.dockCode = layout.rackCode;
+            truck.add(infoBillboard);
+            truck.userData.infoBillboard = infoBillboard;
             truck.position.set(mm(layout.anchorX), 0, mm(layout.anchorZ));
             truck.rotation.y = layout.yaw;
             scene.add(truck);
             return truck;
         };
-        const staticTruck = createStaticTruck(loadingDockLayout);
-        shell.viewport.dataset.warehouseTruck = staticTruck ? 'static-5t' : 'none';
-        shell.viewport.dataset.warehouseTruckRack = staticTruck ? loadingDockLayout.rackCode : '';
-        shell.viewport.dataset.warehouseTruckCargoSize = staticTruck ? '6.2x2.2x2.3' : '';
+        const staticTrucks = loadingDockLayoutEntries.map(createStaticTruck).filter(Boolean);
+        shell.viewport.dataset.warehouseTruck = staticTrucks.length ? 'static-5t-fleet' : 'none';
+        shell.viewport.dataset.warehouseTruckCount = String(staticTrucks.length);
+        shell.viewport.dataset.warehouseTruckDockCodes = staticTrucks.map((truck) => truck.userData.dockCode).join(',');
+        shell.viewport.dataset.warehouseTruckRack = staticTrucks.map((truck) => truck.userData.rackCode).join(',');
+        shell.viewport.dataset.warehouseTruckCargoSize = staticTrucks.length ? '6.2x2.2x2.3' : '';
+        shell.viewport.dataset.warehouseTruckModel = staticTrucks.length ? 'reference-low-poly-cab-over' : 'none';
+        shell.viewport.dataset.warehouseTruckAxleCount = staticTrucks.length ? '3' : '0';
+        shell.viewport.dataset.warehouseTruckInfoBillboardCount = String(staticTrucks.filter((truck) => truck.userData.infoBillboard).length);
+        shell.viewport.dataset.warehouseTruckInfoFields = 'vehicle-number,company-name,scheduled-item-quantity';
+        shell.viewport.dataset.warehouseTruckInfoLayout = 'operation-vehicle-invoice-company-schedule';
+        shell.viewport.dataset.warehouseTruckInfoSpacing = 'compact';
+        shell.viewport.dataset.warehouseTruckInfoCompanyLabels = '납품처,공급처';
+        shell.viewport.dataset.warehouseTruckInfoInvoiceButton = '송장보기';
+        shell.viewport.dataset.warehouseTruckInfoFontReference = 'transport-equipment-billboard';
+        shell.viewport.dataset.warehouseTruckScheduleCodes = staticTrucks.map((truck) => truck.userData.scheduleCode || '').join(',');
+
+        const loadingDockBillboardHeight = warehouseFloorElevation + 2.6;
+        const loadingDockBillboards = loadingDockLayoutEntries.map((layout) => {
+            if (!layout?.bounds || !layout.rackCode) return null;
+            const label = createLabelSprite(THREE, layout.rackCode);
+            label.name = `WAREHOUSE-LOADING-DOCK-BILLBOARD-${layout.rackCode}`;
+            label.position.set(
+                mm((layout.bounds.minX + layout.bounds.maxX) / 2),
+                loadingDockBillboardHeight,
+                mm((layout.bounds.minZ + layout.bounds.maxZ) / 2)
+            );
+            label.userData = {
+                kind: 'loading-dock-label',
+                dockCode: layout.rackCode,
+                billboardStyle: 'rack-label'
+            };
+            scene.add(label);
+            return label;
+        }).filter(Boolean);
+        shell.viewport.dataset.warehouseDockBillboardCount = String(loadingDockBillboards.length);
+        shell.viewport.dataset.warehouseDockBillboardCodes = loadingDockBillboards.map((label) => label.userData.dockCode).join(',');
+        shell.viewport.dataset.warehouseDockBillboardStyle = 'rack-label';
+        shell.viewport.dataset.warehouseDockBillboardHeight = String(loadingDockBillboardHeight);
 
         const passageCellSize = mm(data.meta?.floorPlanCellSize || 500);
         const passageCells = Array.isArray(data.meta?.passageCells) ? data.meta.passageCells : [];
+        const shuttlePassageCells = Array.isArray(data.meta?.shuttlePassageCells) ? data.meta.shuttlePassageCells : [];
         const passageBoundaryWidthMm = 100;
         const passageBoundaryInsetMm = 100;
         const passageBoundarySegments = buildPassageBoundarySegments(
@@ -1984,6 +2582,35 @@
             passageBoundaries.renderOrder = 3;
             scene.add(passageBoundaries);
         }
+        const conveyorBoundarySegments = buildPassageBoundarySegments(
+            conveyorCells,
+            data.meta?.floorPlanCellSize || 500,
+            passageBoundaryWidthMm,
+            passageBoundaryInsetMm
+        );
+        let conveyorBoundaryGeometry = null;
+        let conveyorBoundaryMaterial = null;
+        if (conveyorBoundarySegments.length) {
+            conveyorBoundaryGeometry = new THREE.BoxGeometry(1, 0.012, 1);
+            conveyorBoundaryMaterial = new THREE.MeshBasicMaterial({ color: '#facc15' });
+            const conveyorBoundaries = new THREE.InstancedMesh(
+                conveyorBoundaryGeometry,
+                conveyorBoundaryMaterial,
+                conveyorBoundarySegments.length
+            );
+            conveyorBoundaries.name = 'WAREHOUSE-CONVEYOR-TRACK-LINES';
+            conveyorBoundaries.userData = { kind: 'conveyor-track-lines', source: 'floorPlan', code: 'CV' };
+            const conveyorBoundaryMatrix = new THREE.Matrix4();
+            conveyorBoundarySegments.forEach((segment, index) => {
+                conveyorBoundaryMatrix.makeScale(mm(segment.width), 1, mm(segment.depth));
+                conveyorBoundaryMatrix.setPosition(mm(segment.x), warehouseFloorElevation + 0.007, mm(segment.y));
+                conveyorBoundaries.setMatrixAt(index, conveyorBoundaryMatrix);
+            });
+            conveyorBoundaries.instanceMatrix.needsUpdate = true;
+            conveyorBoundaries.renderOrder = 4;
+            scene.add(conveyorBoundaries);
+        }
+        shell.viewport.dataset.warehouseConveyorLineCount = String(conveyorBoundarySegments.length);
         const dockBoundarySegments = buildPassageBoundarySegments(
             dockCells,
             data.meta?.floorPlanCellSize || 500,
@@ -2013,7 +2640,108 @@
             scene.add(dockBoundaries);
         }
         shell.viewport.dataset.warehouseDockLineCount = String(dockBoundarySegments.length);
-        const forkliftClearanceDiameterMm = 1950;
+        const bufferBoundarySegments = buildPassageBoundarySegments(
+            bufferCells,
+            data.meta?.floorPlanCellSize || 500,
+            passageBoundaryWidthMm,
+            passageBoundaryInsetMm
+        );
+        let bufferBoundaryGeometry = null;
+        let bufferBoundaryMaterial = null;
+        if (bufferBoundarySegments.length) {
+            bufferBoundaryGeometry = new THREE.BoxGeometry(1, 0.012, 1);
+            bufferBoundaryMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+            const bufferBoundaries = new THREE.InstancedMesh(
+                bufferBoundaryGeometry,
+                bufferBoundaryMaterial,
+                bufferBoundarySegments.length
+            );
+            bufferBoundaries.name = 'WAREHOUSE-HANDOFF-BUFFER-LINES';
+            bufferBoundaries.userData = { kind: 'handoff-buffer-lines', source: 'floorPlan', code: 'B' };
+            const bufferBoundaryMatrix = new THREE.Matrix4();
+            bufferBoundarySegments.forEach((segment, index) => {
+                bufferBoundaryMatrix.makeScale(mm(segment.width), 1, mm(segment.depth));
+                bufferBoundaryMatrix.setPosition(mm(segment.x), warehouseFloorElevation + 0.009, mm(segment.y));
+                bufferBoundaries.setMatrixAt(index, bufferBoundaryMatrix);
+            });
+            bufferBoundaries.instanceMatrix.needsUpdate = true;
+            bufferBoundaries.renderOrder = 5;
+            scene.add(bufferBoundaries);
+        }
+        const bufferCodes = [...new Set(bufferCells.map((cell) => cell.code).filter(Boolean))].sort();
+        const bufferBillboardHeight = warehouseFloorElevation + 1.4;
+        const bufferBillboards = bufferCodes.map((bufferCode) => {
+            const cells = bufferCells.filter((cell) => cell.code === bufferCode);
+            if (!cells.length) return null;
+            const centerX = cells.reduce((sum, cell) => sum + cell.x, 0) / cells.length + (data.meta?.floorPlanCellSize || 500) / 2;
+            const centerZ = cells.reduce((sum, cell) => sum + cell.y, 0) / cells.length + (data.meta?.floorPlanCellSize || 500) / 2;
+            const label = createLabelSprite(THREE, bufferCode);
+            label.name = `WAREHOUSE-HANDOFF-BUFFER-BILLBOARD-${bufferCode}`;
+            label.position.set(mm(centerX), bufferBillboardHeight, mm(centerZ));
+            label.userData = { kind: 'handoff-buffer-label', bufferCode, billboardStyle: 'rack-label' };
+            scene.add(label);
+            return label;
+        }).filter(Boolean);
+        shell.viewport.dataset.warehouseBufferLineCount = String(bufferBoundarySegments.length);
+        shell.viewport.dataset.warehouseBufferBillboardCount = String(bufferBillboards.length);
+        shell.viewport.dataset.warehouseBufferBillboardCodes = bufferCodes.join(',');
+        const shuttleRailLayout = buildShuttleRailLayout(
+            shuttlePassageCells,
+            stationCells,
+            data.meta?.floorPlanCellSize || 500
+        );
+        const shuttleFootprintMm = calculateShuttleFootprintMm(
+            shuttleRailLayout.stations,
+            data.meta?.floorPlanCellSize || 500
+        );
+        const shuttleFootprintMeters = mm(shuttleFootprintMm);
+        const shuttlePathToleranceMm = Math.min(100, shuttleFootprintMm * 0.1);
+        const shuttlePathClearanceMm = Math.max(
+            data.meta?.floorPlanCellSize || 500,
+            shuttleFootprintMm - shuttlePathToleranceMm
+        );
+        const shuttleResources = [];
+        const shuttleStationEntries = [];
+        const shuttleDeckMaterial = new THREE.MeshStandardMaterial({
+            color: '#435466', roughness: 0.62, metalness: 0.42,
+            transparent: true, opacity: 0.78
+        });
+        const shuttleFrameMaterial = new THREE.MeshStandardMaterial({ color: '#f5b942', roughness: 0.5, metalness: 0.34 });
+        const shuttleFrameHeight = 0.085;
+        const shuttleFrameCenterOffset = 0.075;
+        const shuttleTravelBaseOffset = 0.055;
+        const shuttleDeckGeometry = new THREE.BoxGeometry(1, 1, 1);
+        const shuttleFrameGeometry = new THREE.BoxGeometry(1, 1, 1);
+        const stationFrameMaterial = new THREE.MeshPhysicalMaterial({ color: '#435466', roughness: 0.3, metalness: 0.76 });
+        shuttleRailLayout.stations.forEach((station) => {
+            const group = new THREE.Group();
+            group.name = `WAREHOUSE-INOUT-STATION-${station.code}`;
+            group.userData = { kind: 'inout-station', code: station.code, source: 'floorPlan-S' };
+            const width = Math.max(passageCellSize, mm(station.maxX - station.minX));
+            const depth = Math.max(passageCellSize, mm(station.maxY - station.minY));
+            const frameThickness = 0.065;
+            [[0, -depth / 2], [0, depth / 2]].forEach(([x, z]) => {
+                const beamGeometry = new THREE.BoxGeometry(width + 0.08, frameThickness, frameThickness);
+                shuttleResources.push(beamGeometry);
+                const beam = new THREE.Mesh(beamGeometry, stationFrameMaterial);
+                beam.position.set(x, 0.22, z);
+                group.add(beam);
+            });
+            group.position.set(mm(station.centerX), warehouseFloorElevation, mm(station.centerY));
+            scene.add(group);
+            shuttleStationEntries.push({ ...station, group, width, depth });
+        });
+        shuttleResources.push(
+            shuttleDeckGeometry, shuttleFrameGeometry, shuttleDeckMaterial, shuttleFrameMaterial,
+            stationFrameMaterial
+        );
+        shell.viewport.dataset.shuttleRailSegmentCount = String(shuttleRailLayout.segments.length);
+        shell.viewport.dataset.shuttlePassageCellCount = String(shuttlePassageCells.length);
+        shell.viewport.dataset.shuttleStationCount = String(shuttleStationEntries.length);
+        shell.viewport.dataset.shuttleStationCodes = shuttleStationEntries.map((entry) => entry.code).join(',');
+        shell.viewport.dataset.shuttleStationBillboardCount = '0';
+        shell.viewport.dataset.shuttleStationRollerCount = '0';
+        shell.viewport.dataset.shuttleStationDeckCount = '0';
         const configuredAmrEquipment = (data.equipment || []).filter((item) =>
             item.enabled && /^AMR-/i.test(String(item.code || ''))
         );
@@ -2025,12 +2753,23 @@
             : [];
         const amrEquipment = configuredAmrEquipment.length ? configuredAmrEquipment : fallbackAmrEquipment;
         const amrCount = amrEquipment.length;
+        const forkliftClearanceDiameterMm = calculateAmrPassageClearanceMm(
+            passageCells,
+            data.meta?.floorPlanCellSize || 500,
+            1950
+        );
         const passageNavigation = buildPassageNavigationGraph(
             passageCells,
             data.meta?.floorPlanCellSize || 500,
             forkliftClearanceDiameterMm
         );
-        const amrComponent = passageNavigation.components[0] || [];
+        const amrCorridorAssignments = buildAmrCorridorAssignments(
+            passageNavigation,
+            shuttleStationEntries,
+            amrCount
+        );
+        const amrComponent = amrCorridorAssignments[0]?.componentKeys || [];
+        const amrNavigableKeys = new Set(amrCorridorAssignments.flatMap((assignment) => assignment.componentKeys));
         const amrFleet = [];
         const amrLabelTargets = [];
         const equipmentByCode = new Map((data.equipment || []).map(item => [item.code, item]));
@@ -2045,6 +2784,7 @@
         });
         const travelForkHeight = 0.08;
         const forkThickness = 0.055;
+        const amrVisualScale = 0.9;
         // Metres, measured from the navigation pivot. Keep docking and geometry in sync.
         const stackerDimensions = Object.freeze({
             mastZ: -0.24,
@@ -2142,7 +2882,7 @@
             addPart('stacker-lidar', new THREE.CylinderGeometry(0.075, 0.075, 0.07, 16), redMaterial, [0, 2.72, -0.53]);
             const mastGroup = new THREE.Group();
             mastGroup.name = 'forklift-mast';
-            mastGroup.position.z = stackerDimensions.mastZ;
+            mastGroup.position.z = stackerDimensions.mastZ / amrVisualScale;
             [-0.31, 0.31].forEach(x => box('stacker-outer-mast', [0.075, 2.45, 0.1], [x, 1.3, 0], darkMaterial, mastGroup));
             box('stacker-mast-crossbar', [0.69, 0.08, 0.1], [0, 2.5, 0], darkMaterial, mastGroup);
             const mastMiddle = new THREE.Group();
@@ -2153,7 +2893,7 @@
             mastGroup.add(mastUpper);
             const carriage = new THREE.Group();
             carriage.name = 'forklift-carriage';
-            carriage.position.y = travelForkHeight;
+            carriage.position.y = travelForkHeight / amrVisualScale;
             const reachRails = [-0.24, 0.24].map(x => {
                 const rail = box('stacker-reach-guide', [0.075, 0.025, 1], [x, -0.025, 0.06], steelMaterial, carriage);
                 rail.scale.z = 0.12;
@@ -2161,6 +2901,7 @@
             });
             const forkAssembly = new THREE.Group();
             forkAssembly.name = 'forklift-forks';
+            forkAssembly.scale.setScalar(1 / amrVisualScale);
             box('stacker-carriage-back', [0.62, 0.13, 0.07], [0, 0.35, 0.065], darkMaterial, forkAssembly);
             [-0.24, 0.24].forEach((x) => {
                 box('stacker-fork-heel', [0.095, 0.39, 0.06], [x, 0.19, 0.08], forkMaterial, forkAssembly);
@@ -2173,6 +2914,7 @@
             carriage.add(forkAssembly);
             mastGroup.add(carriage);
             group.add(mastGroup);
+            group.scale.setScalar(amrVisualScale);
             amrResources.push(
                 shadowGeometry, shadowMaterial, bodyMaterial, darkMaterial, steelMaterial, forkMaterial,
                 wheelMaterial, yellowMaterial, greenMaterial, redMaterial, screenMaterial
@@ -2180,12 +2922,13 @@
             return { group, carriage, forkAssembly, loadAnchor, mastMiddle, mastUpper, reachRails };
         };
         const chooseAmrDestination = (amr) => {
-            if (amrComponent.length < 2) return amr.currentKey;
+            const componentKeys = amr.corridorKeys || amrComponent;
+            if (componentKeys.length < 2) return amr.currentKey;
             const current = passageNavigation.nodesByKey.get(amr.currentKey);
             let selectedKey = amr.currentKey;
             let selectedDistance = -1;
             for (let attempt = 0; attempt < 16; attempt += 1) {
-                const candidateKey = amrComponent[Math.floor(Math.random() * amrComponent.length)];
+                const candidateKey = componentKeys[Math.floor(Math.random() * componentKeys.length)];
                 const candidate = passageNavigation.nodesByKey.get(candidateKey);
                 const candidateDistance = Math.abs(candidate.gridX - current.gridX) + Math.abs(candidate.gridY - current.gridY);
                 if (candidateDistance > selectedDistance) {
@@ -2202,10 +2945,11 @@
             amr.waypointIndex = Math.min(1, amr.route.length - 1);
             amr.waitUntil = path.length > 1 ? timestamp : timestamp + 800;
         };
-        if (amrComponent.length) {
+        if (amrCorridorAssignments.length) {
             for (let index = 0; index < amrCount; index += 1) {
                 const configuredEquipment = amrEquipment[index];
-                const startKey = amrComponent[Math.floor(index * amrComponent.length / amrCount) % amrComponent.length];
+                const corridor = amrCorridorAssignments[index];
+                const startKey = corridor.farKey;
                 const startNode = passageNavigation.nodesByKey.get(startKey);
                 const model = createForkliftModel(index);
                 model.group.position.set(mm(startNode.x), warehouseFloorElevation, mm(startNode.y));
@@ -2214,6 +2958,15 @@
                     ...model,
                     index,
                     equipmentCode: configuredEquipment.code,
+                    equipmentName: configuredEquipment.name,
+                    equipmentType: configuredEquipment.type || 'FORKLIFT',
+                    modelName: configuredEquipment.modelName,
+                    configuredSpeed: configuredEquipment.configuredSpeed,
+                    kindLabel: 'AMR',
+                    corridorCode: corridor.code,
+                    corridorKeys: corridor.componentKeys,
+                    corridorNearKey: corridor.nearKey,
+                    corridorFarKey: corridor.farKey,
                     currentKey: startKey,
                     route: [startNode],
                     waypointIndex: 0,
@@ -2230,15 +2983,17 @@
                 };
                 amr.equipmentName = configuredEquipment.name || equipmentByCode.get(amr.equipmentCode)?.name || amr.equipmentCode;
                 const equipmentStatus = equipmentStatusByCode.get(amr.equipmentCode) || {};
-                amr.communicationStatus = equipmentStatus.communicationStatus || 'OFFLINE';
-                amr.equipmentStatus = equipmentStatus.equipmentStatus || '미설정';
+                Object.assign(amr, equipmentStatus);
+                amr.communicationStatus = amr.communicationStatus || 'OFFLINE';
+                amr.equipmentStatus = amr.equipmentStatus || '미설정';
                 amr.label = createAmrLabelSprite(THREE, {
                     name: amr.equipmentName,
                     communicationStatus: amr.communicationStatus,
-                    equipmentStatus: amr.equipmentStatus
+                    equipmentStatus: amr.equipmentStatus,
+                    parentScale: amrVisualScale
                 });
                 amr.label.name = amr.equipmentName;
-                amr.label.position.set(0, 3.26, 0);
+                amr.label.position.set(0, 3.26 / amrVisualScale, 0);
                 amr.label.userData = { ...amr.label.userData, kind: 'amr-label', amr };
                 amr.group.userData.equipmentCode = amr.equipmentCode;
                 amr.group.add(amr.label);
@@ -2248,7 +3003,14 @@
             }
         }
         shell.viewport.dataset.amrCount = String(amrFleet.length);
+        shell.viewport.dataset.amrVisualScale = String(amrVisualScale);
+        shell.viewport.dataset.amrForkScalePolicy = 'pallet-compatible';
         shell.viewport.dataset.amrPathfinding = amrFleet.length ? 'astar' : 'unavailable';
+        shell.viewport.dataset.amrClearance = String(forkliftClearanceDiameterMm);
+        shell.viewport.dataset.amrCorridorCount = String(amrCorridorAssignments.length);
+        shell.viewport.dataset.amrCorridorAssignments = amrFleet
+            .map((amr) => `${amr.equipmentCode}:${amr.corridorCode}`)
+            .join(',');
         renderer.domElement.setAttribute('aria-label', `기준정보 기반 3D 창고, 무인 지게차 ${amrFleet.length}대 운행 중`);
         const grid = new THREE.Group();
         const gridPositions = [];
@@ -2296,14 +3058,45 @@
         const rackEntries = [];
         const clickTargets = [];
         const labelTargets = [];
+        const levelLabelTargets = [];
         const slotMeshEntries = [];
         const zoneVisualizationEntries = [];
+        const shuttleFrameVisualObjects = [];
         const geometryCache = new Map();
         const outlineGeometryCache = new Map();
         const outlineTubeGeometryCache = new Map();
         const materialCache = new Map();
         const dimmedMaterialCache = new Map();
         const originalMaterialsByObject = new WeakMap();
+        const unitLoadPalletHeight = 0.14;
+        const unitLoadPalletColor = '#6b5a45';
+        let activeRackLevelFocus = null;
+        const getUnitLoadComposition = (width, height, depth, palletWidth = width - 0.02, palletDepth = depth - 0.02) => {
+            const palletHeight = Math.min(unitLoadPalletHeight, Math.max(0.04, height - 0.08));
+            const deckHeight = palletHeight * 0.4;
+            const runnerHeight = palletHeight - deckHeight;
+            return {
+                cargoHeight: Math.max(0.08, height - palletHeight),
+                palletHeight,
+                deckHeight,
+                runnerHeight,
+                palletWidth: Math.max(0.08, Math.min(width, palletWidth)),
+                palletDepth: Math.max(0.08, Math.min(depth, palletDepth))
+            };
+        };
+        const getFourWayPalletSupportLayout = (composition) => {
+            const supportWidth = Math.max(0.035, composition.palletWidth * 0.18);
+            const supportDepth = Math.max(0.035, composition.palletDepth * 0.18);
+            const xOffsets = [-composition.palletWidth * 0.36, 0, composition.palletWidth * 0.36];
+            const zOffsets = [-composition.palletDepth * 0.36, 0, composition.palletDepth * 0.36];
+            return {
+                supportWidth,
+                supportDepth,
+                positions: xOffsets.flatMap((x) => zOffsets.map((z) => ({ x, z })))
+            };
+        };
+        let rackPalletCount = 0;
+        let rackPalletSupportCount = 0;
         const getGeometry = (width, height, depth) => {
             const key = `${width}:${height}:${depth}`;
             if (!geometryCache.has(key)) geometryCache.set(key, new THREE.BoxGeometry(width, height, depth));
@@ -2404,15 +3197,25 @@
             }
             return dimmedMaterialCache.get(material);
         };
-        const setRackEntryDimmed = (entry, dimmed) => {
-            if (!entry || entry.dimmed === dimmed) return;
+        const setObjectDimmed = (object, dimmed) => {
+            const originalMaterial = originalMaterialsByObject.get(object);
+            if (!originalMaterial) return;
+            object.material = dimmed
+                ? (Array.isArray(originalMaterial) ? originalMaterial.map(getDimmedMaterial) : getDimmedMaterial(originalMaterial))
+                : originalMaterial;
+        };
+        const setRackEntryDimmed = (entry, mode = 'none') => {
+            if (!entry || entry.dimMode === mode) return;
             entry.visualObjects.forEach((object) => {
-                const originalMaterial = originalMaterialsByObject.get(object);
-                object.material = dimmed
-                    ? (Array.isArray(originalMaterial) ? originalMaterial.map(getDimmedMaterial) : getDimmedMaterial(originalMaterial))
-                    : originalMaterial;
+                const dimmed = mode === 'all'
+                    || (mode === 'frames' && entry.rackStructureObjects.includes(object));
+                setObjectDimmed(object, dimmed);
             });
-            entry.dimmed = dimmed;
+            entry.dimMode = mode;
+            entry.dimmed = mode !== 'none';
+        };
+        const setShuttleFrameDimmed = (dimmed) => {
+            shuttleFrameVisualObjects.forEach((object) => setObjectDimmed(object, dimmed));
         };
         const rackHoverMaterial = new THREE.MeshBasicMaterial({ color: '#78ABFF', transparent: true, opacity: 0.92, depthTest: false, depthWrite: false });
         const rackSelectedMaterial = new THREE.MeshBasicMaterial({ color: '#3B82F6', transparent: true, opacity: 1, depthTest: false, depthWrite: false });
@@ -2464,7 +3267,8 @@
             const rackWidth = depth * rackRowCount;
             const group = new THREE.Group();
             group.name = rack.code;
-            const rackFrameColor = '#8b95a5';
+            const rackHorizontalFrameColor = '#f5b942';
+            const rackVerticalFrameColor = '#2979FF';
             const rackFrameMaterial = {
                 roughness: 0.2,
                 metalness: 0.78,
@@ -2473,41 +3277,53 @@
                 castShadow: false
             };
             const rackData = { kind: 'rack', rack, type, zone: zoneByCode.get(rack.zoneCode) };
+            const rackStructureObjects = [];
             const postSize = Math.min(0.1, Math.max(0.055, bayWidth * 0.045));
             const depthFramePositions = getRackDepthFramePositions(rackRowCount, depthCount, depth);
             for (let bay = 0; bay <= rack.bayCount; bay += 1) {
                 const x = bay * bayWidth;
-                depthFramePositions.forEach((z) =>
-                    addBox(group, [postSize, height, postSize], [x, height / 2, z], rackFrameColor, rackData, rackFrameMaterial)
-                );
+                depthFramePositions.forEach((z) => {
+                    rackStructureObjects.push(
+                        addBox(group, [postSize, height, postSize], [x, height / 2, z], rackVerticalFrameColor, rackData, rackFrameMaterial)
+                    );
+                });
             }
             for (let level = 0; level <= type.levels; level += 1) {
                 const y = Math.min(height, level * levelHeight);
-                depthFramePositions.forEach((z) =>
-                    addBox(group, [length, 0.08, 0.09], [length / 2, y, z], rackFrameColor, rackData, rackFrameMaterial)
-                );
+                depthFramePositions.forEach((z) => {
+                    rackStructureObjects.push(
+                        addBox(group, [length, 0.08, 0.09], [length / 2, y, z], rackHorizontalFrameColor, rackData, rackFrameMaterial)
+                    );
+                });
                 for (let rackRow = 0; rackRow < rackRowCount; rackRow += 1) {
                     const rowStart = rackRow * depth;
-                    if (level < type.levels) addBox(
-                        group,
-                        [length, 0.035, depth],
-                        [length / 2, y + 0.03, rowStart + depth / 2],
-                        '#334155',
-                        rackData,
-                        {
-                            castShadow: false,
-                            roughness: 0.38,
-                            metalness: 0.62,
-                            clearcoat: 0.35,
-                            clearcoatRoughness: 0.22
-                        }
-                    );
+                    if (level < type.levels) rackStructureObjects.push(addBox(
+                            group,
+                            [length, 0.035, depth],
+                            [length / 2, y + 0.03, rowStart + depth / 2],
+                            '#334155',
+                            rackData,
+                            {
+                                castShadow: false,
+                                roughness: 0.38,
+                                metalness: 0.62,
+                                clearcoat: 0.35,
+                                clearcoatRoughness: 0.22
+                            }
+                        ));
                 }
             }
             const stocks = inventoryByRack.get(rack.code) || [];
             const boxWidth = Math.max(0.08, bayWidth * 0.92);
             const boxHeight = Math.max(0.08, levelHeight * 0.82);
             const boxDepth = Math.max(0.08, slotDepth * 0.9);
+            const unitLoad = getUnitLoadComposition(
+                boxWidth,
+                boxHeight,
+                boxDepth,
+                bayWidth - 0.1,
+                slotDepth - 0.1
+            );
             const slots = [];
             for (let bay = 1; bay <= rack.bayCount; bay += 1) {
                 for (let level = 1; level <= type.levels; level += 1) {
@@ -2534,13 +3350,22 @@
                             stock,
                             item,
                             occupied,
+                            taskVisible: true,
                             group,
                             boxSize: [boxWidth, boxHeight, boxDepth],
+                            cargoBoxSize: [boxWidth, unitLoad.cargoHeight, boxDepth],
+                            palletSize: [unitLoad.palletWidth, unitLoad.palletHeight, unitLoad.palletDepth],
                             position: [
                                 (bay - 0.5) * bayWidth,
                                 (level - 1) * levelHeight + boxHeight / 2 + 0.06,
                                 (rackRow - 1) * depth + (depthIndex - 0.5) * slotDepth
-                            ]
+                            ],
+                            cargoPosition: [
+                                (bay - 0.5) * bayWidth,
+                                (level - 1) * levelHeight + 0.06 + unitLoad.palletHeight + unitLoad.cargoHeight / 2,
+                                (rackRow - 1) * depth + (depthIndex - 0.5) * slotDepth
+                            ],
+                            palletBaseY: (level - 1) * levelHeight + 0.06
                         });
                     }
                     }
@@ -2566,10 +3391,14 @@
                         clearcoat: 1,
                         clearcoatRoughness: 0.04
                     });
-                const mesh = new THREE.InstancedMesh(getChamferedBoxGeometry(boxWidth, boxHeight, boxDepth), material, slotList.length);
+                const boxGeometry = empty
+                    ? getChamferedBoxGeometry(boxWidth, boxHeight, boxDepth)
+                    : getChamferedBoxGeometry(boxWidth, unitLoad.cargoHeight, boxDepth);
+                const mesh = new THREE.InstancedMesh(boxGeometry, material, slotList.length);
                 const matrix = new THREE.Matrix4();
                 slotList.forEach((slot, index) => {
-                    matrix.makeTranslation(slot.position[0], slot.position[1], slot.position[2]);
+                    const boxPosition = empty ? slot.position : slot.cargoPosition;
+                    matrix.makeTranslation(boxPosition[0], boxPosition[1], boxPosition[2]);
                     mesh.setMatrixAt(index, matrix);
                     mesh.setColorAt(index, new THREE.Color(slotColorPalette[getSlotVisualKey(slot, 'utilization')]));
                     slot.instanceMesh = mesh;
@@ -2585,8 +3414,58 @@
                 clickTargets.push(mesh);
                 slotMeshEntries.push({ mesh, slots: slotList });
             };
+            const createRackPalletInstances = (occupiedSlots) => {
+                if (!occupiedSlots.length) return;
+                const palletMaterial = getMaterial(unitLoadPalletColor, {
+                    roughness: 0.72,
+                    metalness: 0.06,
+                    clearcoat: 0.12,
+                    clearcoatRoughness: 0.7
+                });
+                const deckMesh = new THREE.InstancedMesh(
+                    getGeometry(unitLoad.palletWidth, unitLoad.deckHeight, unitLoad.palletDepth),
+                    palletMaterial,
+                    occupiedSlots.length
+                );
+                const supportLayout = getFourWayPalletSupportLayout(unitLoad);
+                const supportMesh = new THREE.InstancedMesh(
+                    getGeometry(supportLayout.supportWidth, unitLoad.runnerHeight, supportLayout.supportDepth),
+                    palletMaterial,
+                    occupiedSlots.length * supportLayout.positions.length
+                );
+                const matrix = new THREE.Matrix4();
+                occupiedSlots.forEach((slot, index) => {
+                    const deckY = slot.palletBaseY + unitLoad.runnerHeight + unitLoad.deckHeight / 2;
+                    matrix.makeTranslation(slot.position[0], deckY, slot.position[2]);
+                    deckMesh.setMatrixAt(index, matrix);
+                    slot.palletInstances = [{ mesh: deckMesh, index, matrix: matrix.clone() }];
+                    supportLayout.positions.forEach((supportPosition, supportIndex) => {
+                        const instanceIndex = index * supportLayout.positions.length + supportIndex;
+                        matrix.makeTranslation(
+                            slot.position[0] + supportPosition.x,
+                            slot.palletBaseY + unitLoad.runnerHeight / 2,
+                            slot.position[2] + supportPosition.z
+                        );
+                        supportMesh.setMatrixAt(instanceIndex, matrix);
+                        slot.palletInstances.push({ mesh: supportMesh, index: instanceIndex, matrix: matrix.clone() });
+                    });
+                });
+                deckMesh.instanceMatrix.needsUpdate = true;
+                supportMesh.instanceMatrix.needsUpdate = true;
+                deckMesh.castShadow = true;
+                deckMesh.receiveShadow = true;
+                supportMesh.castShadow = true;
+                supportMesh.receiveShadow = true;
+                deckMesh.name = 'rack-pallet-decks';
+                supportMesh.name = 'rack-pallet-four-way-supports';
+                group.add(deckMesh, supportMesh);
+                rackPalletCount += occupiedSlots.length;
+                rackPalletSupportCount += occupiedSlots.length * supportLayout.positions.length;
+            };
             createSlotInstances(slots.filter((slot) => !slot.occupied), true);
-            createSlotInstances(slots.filter((slot) => slot.occupied), false);
+            const occupiedSlots = slots.filter((slot) => slot.occupied);
+            createSlotInstances(occupiedSlots, false);
+            createRackPalletInstances(occupiedSlots);
             const pick = addBox(group, [length, height, rackWidth], [length / 2, height / 2, rackWidth / 2], '#ffffff', rackData, { transparent: true, opacity: 0.001, castShadow: false });
             pick.material.depthWrite = false;
             clickTargets.push(pick);
@@ -2597,9 +3476,26 @@
             clickTargets.push(label);
             labelTargets.push(label);
             const labelLayer = new THREE.Group();
-            labelLayer.renderOrder = 1000;
+            labelLayer.renderOrder = billboardRenderOrder;
             labelLayer.add(label);
             group.add(labelLayer);
+            const levelLabelGroup = new THREE.Group();
+            levelLabelGroup.name = `${rack.code}-LEVEL-BILLBOARDS`;
+            levelLabelGroup.renderOrder = billboardRenderOrder;
+            levelLabelGroup.visible = false;
+            const levelLabels = [];
+            for (let rackLevel = 1; rackLevel <= type.levels; rackLevel += 1) {
+                const levelLabel = createLevelBadgeSprite(THREE, rackLevel);
+                levelLabel.name = `${rack.code}-LV${rackLevel}`;
+                levelLabel.position.set(length + 0.72, (rackLevel - 0.5) * levelHeight, rackWidth / 2);
+                levelLabel.userData = { kind: 'rack-level-label', rackData, level: rackLevel, label: levelLabel };
+                levelLabelGroup.add(levelLabel);
+                levelLabels.push(levelLabel);
+                levelLabelTargets.push(levelLabel);
+            }
+            rackData.levelLabelGroup = levelLabelGroup;
+            rackData.levelLabels = levelLabels;
+            group.add(levelLabelGroup);
             const outlineSize = [length + 0.18, height + 0.18, rackWidth + 0.18];
             const outlinePosition = [length / 2, height / 2, rackWidth / 2];
             const rackHoverOutline = createRackOutline(outlineSize, outlinePosition, rackHoverMaterial);
@@ -2625,10 +3521,87 @@
                 visualObjects.push(object);
             });
             rackEntries.push({
-                rack, type, group, stocks, slots, rackData, visualObjects, dimmed: false,
+                rack, type, group, stocks, slots, rackData, visualObjects, rackStructureObjects, dimmed: false, dimMode: 'none',
                 searchText: `${rack.code} ${rack.zoneCode} ${zoneByCode.get(rack.zoneCode)?.name || ''} ${stocks.map((stock) => `${stock.itemCode} ${itemByCode.get(stock.itemCode)?.name || ''}`).join(' ')}`.toLowerCase()
             });
         });
+        shell.viewport.dataset.rackPalletCount = String(rackPalletCount);
+        shell.viewport.dataset.rackPalletHeight = String(unitLoadPalletHeight);
+        shell.viewport.dataset.rackPalletSupportCount = String(rackPalletSupportCount);
+        shell.viewport.dataset.rackLevelBillboardCount = String(levelLabelTargets.length);
+        shell.viewport.dataset.rackLevelBillboardShape = 'circle';
+        shell.viewport.dataset.rackLevelBillboardLabelFormat = 'L-number';
+        shell.viewport.dataset.billboardRenderOrder = String(billboardRenderOrder);
+        shell.viewport.dataset.billboardOcclusionMode = 'foreground-opaque';
+
+        const shuttleLevelElevations = calculateShuttleLevelElevations(data.racks, data.rackTypes);
+        const shuttleFrameLayout = buildShuttleFrameLayout(
+            shuttlePassageCells,
+            shuttleLevelElevations,
+            data.meta?.floorPlanCellSize || 500
+        );
+        const shuttleFrameGroup = new THREE.Group();
+        shuttleFrameGroup.name = 'WAREHOUSE-4WAY-SHUTTLE-FRAMES';
+        shuttleFrameGroup.userData = { kind: 'shuttle-frames', source: 'floorPlan-ST', coverage: 'full-cell-area' };
+        if (shuttleFrameLayout.tiles.length) {
+            const decks = new THREE.InstancedMesh(shuttleDeckGeometry, shuttleDeckMaterial, shuttleFrameLayout.tiles.length);
+            decks.name = 'WAREHOUSE-4WAY-SHUTTLE-DECKS';
+            decks.userData = { kind: 'shuttle-frame-decks', source: 'floorPlan-ST' };
+            const matrix = new THREE.Matrix4();
+            const position = new THREE.Vector3();
+            const rotation = new THREE.Quaternion();
+            const scale = new THREE.Vector3();
+            const tileGap = Math.min(0.04, passageCellSize * 0.08);
+            shuttleFrameLayout.tiles.forEach((tile, index) => {
+                position.set(mm(tile.x), warehouseFloorElevation + mm(tile.levelY) + 0.04, mm(tile.y));
+                scale.set(
+                    Math.max(0.04, mm(tile.width) - tileGap),
+                    0.055,
+                    Math.max(0.04, mm(tile.depth) - tileGap)
+                );
+                matrix.compose(position, rotation, scale);
+                decks.setMatrixAt(index, matrix);
+            });
+            decks.instanceMatrix.needsUpdate = true;
+            decks.receiveShadow = true;
+            shuttleFrameGroup.add(decks);
+        }
+        if (shuttleFrameLayout.boundaries.length) {
+            const frameEdges = new THREE.InstancedMesh(
+                shuttleFrameGeometry,
+                shuttleFrameMaterial,
+                shuttleFrameLayout.boundaries.length
+            );
+            frameEdges.name = 'WAREHOUSE-4WAY-SHUTTLE-FRAME-EDGES';
+            frameEdges.userData = { kind: 'shuttle-frame-edges', source: 'floorPlan-ST' };
+            const matrix = new THREE.Matrix4();
+            const position = new THREE.Vector3();
+            const rotation = new THREE.Quaternion();
+            const scale = new THREE.Vector3();
+            shuttleFrameLayout.boundaries.forEach((segment, index) => {
+                position.set(mm(segment.x), warehouseFloorElevation + mm(segment.levelY) + shuttleFrameCenterOffset, mm(segment.y));
+                scale.set(mm(segment.width), shuttleFrameHeight, mm(segment.depth));
+                matrix.compose(position, rotation, scale);
+                frameEdges.setMatrixAt(index, matrix);
+            });
+            frameEdges.instanceMatrix.needsUpdate = true;
+            frameEdges.castShadow = true;
+            frameEdges.receiveShadow = true;
+            shuttleFrameGroup.add(frameEdges);
+        }
+        shuttleFrameGroup.traverse((object) => {
+            if (!object.material) return;
+            originalMaterialsByObject.set(object, object.material);
+            shuttleFrameVisualObjects.push(object);
+        });
+        const stationFrameConnectors = [];
+        scene.add(shuttleFrameGroup);
+        shell.viewport.dataset.shuttleFrameCoverage = 'full-ST-area';
+        shell.viewport.dataset.shuttleFrameLevelCount = String(shuttleFrameLayout.levels.length);
+        shell.viewport.dataset.shuttleFrameTileCount = String(shuttleFrameLayout.tiles.length);
+        shell.viewport.dataset.shuttleFrameBoundaryCount = String(shuttleFrameLayout.boundaries.length);
+        shell.viewport.dataset.shuttleFrameStationConnectorCount = String(stationFrameConnectors.length);
+        shell.viewport.dataset.shuttleLiftFloorAlignment = 'moving-platform-inside-posts';
 
         const zoneColors = ['#38bdf8', '#a78bfa', '#f59e0b', '#22c55e', '#fb7185'];
         const zoneColorByCode = new Map(data.zones.map((zone, index) => [zone.code, zoneColors[index % zoneColors.length]]));
@@ -2652,6 +3625,369 @@
             scene.add(mesh);
             zoneVisualizationEntries.push({ zoneCode: bounds.zoneCode, mesh, geometry, material });
         });
+
+        const shuttleNavigation = buildPassageNavigationGraph(
+            shuttlePassageCells,
+            data.meta?.floorPlanCellSize || 500,
+            shuttlePathClearanceMm
+        );
+        const shuttleComponent = shuttleNavigation.components[0] || [];
+        const shuttleLiftEntries = [];
+        const shuttleFleet = [];
+        const configuredShuttleEquipment = (data.equipment || []).filter((item) => {
+            const code = String(item.code || '').trim();
+            const type = String(item.type || '').trim().toUpperCase();
+            return item.enabled && (type === '4WAY' || /^4SHUTTLE-/i.test(code));
+        });
+        const liftHeight = Math.max(2.8, ...rackEntries.map((entry) => mm(entry.type.height))) + 0.55;
+        if (rackEntries.length && shuttleComponent.length && shuttleLevelElevations.length) {
+            const usedLiftKeys = new Set();
+            shuttleStationEntries.slice(0, 3).forEach((station) => {
+                const node = findNearestPassageNode(
+                    shuttleNavigation,
+                    station.passageX,
+                    station.passageY,
+                    (data.meta?.floorPlanCellSize || 500) * 2
+                );
+                if (!node || usedLiftKeys.has(node.key)) return;
+                usedLiftKeys.add(node.key);
+                shuttleLiftEntries.push({
+                    code: `L${String(shuttleLiftEntries.length + 1).padStart(2, '0')}`,
+                    station,
+                    stationCode: station.code,
+                    node,
+                    x: mm(station.centerX),
+                    z: mm(station.centerY),
+                    width: station.width,
+                    depth: station.depth,
+                    height: liftHeight,
+                    levelStops: shuttleLevelElevations.map(mm)
+                });
+            });
+        }
+        const liftSteelMaterial = new THREE.MeshPhysicalMaterial({ color: '#2979FF', roughness: 0.28, metalness: 0.82 });
+        const liftAccentMaterial = new THREE.MeshStandardMaterial({ color: '#f5b942', roughness: 0.42, metalness: 0.34 });
+        const liftPostThickness = 0.09;
+        const liftPostGeometry = new THREE.BoxGeometry(liftPostThickness, 1, liftPostThickness);
+        const rackTopFrameElevation = Math.max(0, ...rackEntries.map((entry) => mm(entry.type.height)));
+        shuttleLiftEntries.forEach((lift) => {
+            const group = new THREE.Group();
+            group.name = `WAREHOUSE-SHUTTLE-LIFT-${lift.code}`;
+            group.userData = {
+                kind: 'shuttle-lift',
+                code: lift.code,
+                stationCode: lift.stationCode,
+                platformCount: 1,
+                placement: 'station-centered',
+                footprint: [lift.width, lift.depth],
+                frameAlignment: 'post-inner-faces',
+                floorAlignment: 'axis-aligned-inside-posts',
+                levelStops: lift.levelStops.slice()
+            };
+            const frameDimensions = calculateLiftFrameDimensions(lift.width, lift.depth, liftPostThickness);
+            const { halfPostX, halfPostZ, innerWidth, innerDepth } = frameDimensions;
+            const liftBeamXGeometry = new THREE.BoxGeometry(innerWidth, shuttleFrameHeight, shuttleFrameHeight);
+            const liftBeamZGeometry = new THREE.BoxGeometry(shuttleFrameHeight, shuttleFrameHeight, innerDepth);
+            shuttleResources.push(liftBeamXGeometry, liftBeamZGeometry);
+            [[-halfPostX, -halfPostZ], [halfPostX, -halfPostZ], [-halfPostX, halfPostZ], [halfPostX, halfPostZ]].forEach(([x, z]) => {
+                const post = new THREE.Mesh(liftPostGeometry, liftSteelMaterial);
+                post.scale.y = lift.height;
+                post.position.set(x, lift.height / 2, z);
+                post.castShadow = true;
+                group.add(post);
+                originalMaterialsByObject.set(post, post.material);
+                shuttleFrameVisualObjects.push(post);
+            });
+            const horizontalFrameElevations = [
+                ...lift.levelStops.map((levelY) => levelY + shuttleFrameCenterOffset),
+                rackTopFrameElevation
+            ].filter((levelY, index, values) => values.findIndex((candidate) => Math.abs(candidate - levelY) < 0.001) === index)
+                .sort((left, right) => left - right);
+            group.userData.horizontalFrameElevations = horizontalFrameElevations.slice();
+            horizontalFrameElevations.forEach((y) => {
+                [[0, -halfPostZ], [0, halfPostZ]].forEach(([x, z]) => {
+                    const beam = new THREE.Mesh(liftBeamXGeometry, liftAccentMaterial);
+                    beam.position.set(x, y, z);
+                    group.add(beam);
+                    originalMaterialsByObject.set(beam, beam.material);
+                    shuttleFrameVisualObjects.push(beam);
+                });
+                [[-halfPostX, 0], [halfPostX, 0]].forEach(([x, z]) => {
+                    const beam = new THREE.Mesh(liftBeamZGeometry, liftAccentMaterial);
+                    beam.position.set(x, y, z);
+                    group.add(beam);
+                    originalMaterialsByObject.set(beam, beam.material);
+                    shuttleFrameVisualObjects.push(beam);
+                });
+            });
+            const platform = new THREE.Group();
+            platform.name = 'shuttle-lift-platform-anchor';
+            platform.position.y = 0.08;
+            platform.rotation.set(0, 0, 0);
+            platform.userData = { alignment: 'axis-aligned-inside-posts', visibleSurface: false };
+            group.add(platform);
+            group.position.set(lift.x, warehouseFloorElevation, lift.z);
+            scene.add(group);
+            lift.group = group;
+            lift.platform = platform;
+        });
+        const shuttleBodyClearance = Math.min(0.1, shuttleFootprintMeters * 0.1);
+        const shuttleBodySize = Math.max(0.25, shuttleFootprintMeters - shuttleBodyClearance);
+        const shuttleBodyCenterY = shuttleFrameCenterOffset - shuttleTravelBaseOffset;
+        const shuttleWheelRadius = Math.max(0.055, shuttleFootprintMeters * (0.11 / 1.5));
+        const shuttleWheelWidth = Math.max(0.08, shuttleFootprintMeters * (0.14 / 1.5));
+        const shuttleWheelOffset = shuttleFootprintMeters * (0.62 / 1.5);
+        const shuttleBodyGeometry = new THREE.BoxGeometry(shuttleBodySize, shuttleFrameHeight, shuttleBodySize);
+        const shuttleWheelGeometry = new THREE.CylinderGeometry(shuttleWheelRadius, shuttleWheelRadius, shuttleWheelWidth, 12);
+        const shuttleBodyMaterial = new THREE.MeshPhysicalMaterial({ color: '#0b76b7', roughness: 0.32, metalness: 0.46, clearcoat: 0.68 });
+        const shuttleWheelMaterial = new THREE.MeshStandardMaterial({ color: '#111827', roughness: 0.76, metalness: 0.12 });
+        const shuttleLoadMaterials = ['#f5c84b', '#71d48c', '#f06b6b'].map((color) =>
+            new THREE.MeshPhysicalMaterial({ color, roughness: 0.3, metalness: 0.08, clearcoat: 0.55 })
+        );
+        const createShuttleModel = (index, configuredEquipment, loadDimensions) => {
+            const group = new THREE.Group();
+            const equipmentCode = configuredEquipment?.code || `4SHUTTLE-${String(index + 1).padStart(3, '0')}`;
+            group.name = `FOUR-WAY-SHUTTLE-${equipmentCode}`;
+            group.userData = {
+                kind: 'four-way-shuttle',
+                code: equipmentCode,
+                equipmentCode,
+                footprint: [shuttleFootprintMeters, shuttleFootprintMeters]
+            };
+            const body = new THREE.Mesh(shuttleBodyGeometry, shuttleBodyMaterial);
+            body.position.y = shuttleBodyCenterY;
+            body.castShadow = true;
+            group.add(body);
+            [[-shuttleWheelOffset, -shuttleWheelOffset], [shuttleWheelOffset, -shuttleWheelOffset],
+                [-shuttleWheelOffset, shuttleWheelOffset], [shuttleWheelOffset, shuttleWheelOffset]].forEach(([x, z]) => {
+                const wheel = new THREE.Mesh(shuttleWheelGeometry, shuttleWheelMaterial);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.set(x, shuttleBodyCenterY, z);
+                group.add(wheel);
+            });
+            const composition = getUnitLoadComposition(
+                loadDimensions.width,
+                loadDimensions.height,
+                loadDimensions.depth
+            );
+            const load = new THREE.Group();
+            load.name = 'shuttle-carried-unit-load';
+            load.userData = {
+                sizingSource: loadDimensions.source,
+                dimensions: [loadDimensions.width, loadDimensions.height, loadDimensions.depth],
+                palletHeight: composition.palletHeight
+            };
+            const loadBaseY = shuttleBodyCenterY + shuttleFrameHeight / 2 + 0.01;
+            const cargo = new THREE.Mesh(
+                getChamferedBoxGeometry(loadDimensions.width, composition.cargoHeight, loadDimensions.depth),
+                shuttleLoadMaterials[index % shuttleLoadMaterials.length]
+            );
+            cargo.name = 'shuttle-carried-load-box';
+            cargo.position.y = loadBaseY + composition.palletHeight + composition.cargoHeight / 2;
+            cargo.castShadow = true;
+            const pallet = new THREE.Group();
+            pallet.name = 'shuttle-carried-pallet';
+            const palletMaterial = getMaterial(unitLoadPalletColor, {
+                roughness: 0.72,
+                metalness: 0.06,
+                clearcoat: 0.12,
+                clearcoatRoughness: 0.7
+            });
+            const palletDeck = new THREE.Mesh(
+                getGeometry(composition.palletWidth, composition.deckHeight, composition.palletDepth),
+                palletMaterial
+            );
+            palletDeck.position.y = loadBaseY + composition.runnerHeight + composition.deckHeight / 2;
+            pallet.add(palletDeck);
+            const supportLayout = getFourWayPalletSupportLayout(composition);
+            supportLayout.positions.forEach(({ x, z }) => {
+                const support = new THREE.Mesh(
+                    getGeometry(supportLayout.supportWidth, composition.runnerHeight, supportLayout.supportDepth),
+                    palletMaterial
+                );
+                support.name = 'shuttle-pallet-four-way-support';
+                support.position.set(x, loadBaseY + composition.runnerHeight / 2, z);
+                pallet.add(support);
+            });
+            pallet.traverse((part) => {
+                if (!part.isMesh) return;
+                part.castShadow = true;
+                part.receiveShadow = true;
+            });
+            load.add(cargo, pallet);
+            group.add(load);
+            return { group, load, cargo, pallet, loadDimensions, loadComposition: composition };
+        };
+        const getPathMetrics = (path) => {
+            const cumulativeDistances = [0];
+            for (let pointIndex = 1; pointIndex < path.length; pointIndex += 1) {
+                cumulativeDistances.push(cumulativeDistances[pointIndex - 1] + Math.hypot(
+                    path[pointIndex].x - path[pointIndex - 1].x,
+                    path[pointIndex].z - path[pointIndex - 1].z
+                ));
+            }
+            return { path, cumulativeDistances, length: cumulativeDistances[cumulativeDistances.length - 1] || 0.001 };
+        };
+        const fallbackShuttleEquipment = data.meta?.equipmentLoadWarning
+            ? shuttleLiftEntries.map((lift, index) => ({
+                code: `4SHUTTLE-${String(index + 1).padStart(3, '0')}`,
+                name: `SHUTTLE-${String(index + 1).padStart(3, '0')}`,
+                type: '4WAY', enabled: true, configuredSpeed: 0.5, lift
+            }))
+            : [];
+        const shuttleEquipment = configuredShuttleEquipment.length
+            ? configuredShuttleEquipment : fallbackShuttleEquipment;
+        const getNearestRackSlots = (targetNode) => {
+            if (!targetNode || !rackEntries.length) return [];
+            const targetX = mm(targetNode.x);
+            const targetZ = mm(targetNode.y);
+            let nearestEntry = null;
+            let nearestDistance = Infinity;
+            rackEntries.forEach((entry) => {
+                const center = entry.rackData.focusBounds.getCenter(new THREE.Vector3());
+                const distance = Math.hypot(center.x - targetX, center.z - targetZ);
+                if (distance < nearestDistance) {
+                    nearestEntry = entry;
+                    nearestDistance = distance;
+                }
+            });
+            return nearestEntry?.slots || [];
+        };
+        shuttleEquipment.forEach((configuredEquipment, index) => {
+            const lift = shuttleLiftEntries[index % Math.max(1, shuttleLiftEntries.length)];
+            if (!lift) return;
+            const station = lift.station;
+            if (!station) return;
+            const componentKeys = shuttleNavigation.components.find((component) => component.includes(lift.node.key)) || shuttleComponent;
+            const targetCandidates = componentKeys
+                .map((key) => shuttleNavigation.nodesByKey.get(key))
+                .filter(Boolean)
+                .sort((left, right) => (
+                    Math.hypot(right.x - lift.node.x, right.y - lift.node.y)
+                    - Math.hypot(left.x - lift.node.x, left.y - lift.node.y)
+                ));
+            const targetIndex = Math.min(
+                targetCandidates.length - 1,
+                Math.floor(index * targetCandidates.length / Math.max(1, shuttleEquipment.length))
+            );
+            const targetNode = targetCandidates[Math.max(0, targetIndex)] || lift.node;
+            const rackGraphPath = simplifyPath(findPassagePath(shuttleNavigation, lift.node.key, targetNode.key));
+            if (!rackGraphPath.length) return;
+            const stationPath = getPathMetrics([
+                { x: mm(station.centerX), z: mm(station.centerY) },
+                { x: lift.x, z: lift.z }
+            ]);
+            const rackGraphPoints = rackGraphPath.map((node) => ({ x: mm(node.x), z: mm(node.y) }));
+            const liftConnectorPath = buildOrthogonalConnectorPath(
+                { x: lift.x, z: lift.z },
+                rackGraphPoints[0]
+            );
+            const rackPath = getPathMetrics([
+                ...liftConnectorPath,
+                ...rackGraphPoints.slice(1)
+            ].filter((point, pointIndex, points) => pointIndex === 0
+                || Math.hypot(point.x - points[pointIndex - 1].x, point.z - points[pointIndex - 1].z) > 0.01));
+            const elevatedStops = lift.levelStops.filter((level) => level > 0.01);
+            const targetLevel = elevatedStops.length ? elevatedStops[index % elevatedStops.length] : 0;
+            const loadDimensions = calculateShuttleLoadDimensions(
+                getNearestRackSlots(targetNode),
+                data.meta?.floorPlanCellSize || 500
+            );
+            const model = createShuttleModel(index, configuredEquipment, loadDimensions);
+            model.group.position.set(stationPath.path[0].x, warehouseFloorElevation + shuttleTravelBaseOffset, stationPath.path[0].z);
+            scene.add(model.group);
+            const equipmentStatus = equipmentStatusByCode.get(configuredEquipment.code) || {};
+            const shuttle = {
+                ...model,
+                ...equipmentStatus,
+                index,
+                equipmentCode: configuredEquipment.code,
+                equipmentName: configuredEquipment.name || configuredEquipment.code,
+                equipmentType: configuredEquipment.type || '4WAY',
+                modelName: configuredEquipment.modelName || '',
+                configuredSpeed: configuredEquipment.configuredSpeed,
+                communicationStatus: equipmentStatus.communicationStatus || 'OFFLINE',
+                equipmentStatus: equipmentStatus.equipmentStatus || '미설정',
+                kindLabel: '4 WAY SHUTTLE',
+                station, lift, stationPath, rackPath, targetLevel,
+                state: 'station-handoff'
+            };
+            shuttle.label = createAmrLabelSprite(THREE, {
+                name: shuttle.equipmentName,
+                communicationStatus: shuttle.communicationStatus,
+                equipmentStatus: shuttle.equipmentStatus
+            });
+            shuttle.label.name = `${shuttle.equipmentName}-status-billboard`;
+            shuttle.label.position.set(
+                0,
+                shuttleBodyCenterY + shuttleFrameHeight / 2 + loadDimensions.height + 0.72,
+                0
+            );
+            shuttle.label.userData = {
+                ...shuttle.label.userData,
+                kind: 'amr-label',
+                amr: shuttle,
+                equipmentKind: 'shuttle'
+            };
+            shuttle.group.add(shuttle.label);
+            amrLabelTargets.push(shuttle.label);
+            shuttleFleet.push(shuttle);
+        });
+        shuttleResources.push(
+            liftSteelMaterial, liftAccentMaterial,
+            liftPostGeometry,
+            shuttleBodyGeometry, shuttleWheelGeometry,
+            shuttleBodyMaterial, shuttleWheelMaterial, ...shuttleLoadMaterials
+        );
+        shell.viewport.dataset.shuttleLiftCount = String(shuttleLiftEntries.length);
+        shell.viewport.dataset.shuttleLiftPlatformCount = String(shuttleLiftEntries.filter((lift) => lift.platform).length);
+        shell.viewport.dataset.shuttleLiftVisiblePlatformCount = '0';
+        shell.viewport.dataset.shuttleLiftStationCodes = shuttleLiftEntries.map((lift) => lift.stationCode).join(',');
+        shell.viewport.dataset.shuttleVehicleCount = String(shuttleFleet.length);
+        shell.viewport.dataset.shuttleEquipmentCodes = shuttleFleet.map((shuttle) => shuttle.equipmentCode).join(',');
+        shell.viewport.dataset.shuttleStatusBillboardCount = String(shuttleFleet.filter((shuttle) => shuttle.label).length);
+        shell.viewport.dataset.shuttleStatusBillboardCodes = shuttleFleet
+            .filter((shuttle) => shuttle.label)
+            .map((shuttle) => shuttle.equipmentCode)
+            .join(',');
+        shell.viewport.dataset.shuttleEquipmentSource = configuredShuttleEquipment.length ? 'equipment-master' : 'fallback';
+        shell.viewport.dataset.shuttleEquipmentStatuses = shuttleFleet
+            .map((shuttle) => `${shuttle.equipmentCode}:${shuttle.communicationStatus}:${shuttle.equipmentStatus}`)
+            .join(',');
+        shell.viewport.dataset.shuttleVehicleFootprint = `${shuttleFootprintMeters}x${shuttleFootprintMeters}`;
+        shell.viewport.dataset.shuttleBodySize = `${shuttleBodySize}x${shuttleFrameHeight}x${shuttleBodySize}`;
+        shell.viewport.dataset.shuttleLoadSize = shuttleFleet.length
+            ? `${shuttleFleet[0].loadDimensions.width}x${shuttleFleet[0].loadDimensions.height}x${shuttleFleet[0].loadDimensions.depth}`
+            : '';
+        shell.viewport.dataset.shuttleLoadSizes = shuttleFleet
+            .map((shuttle) => `${shuttle.equipmentCode}:${shuttle.loadDimensions.width}x${shuttle.loadDimensions.height}x${shuttle.loadDimensions.depth}`)
+            .join(',');
+        shell.viewport.dataset.shuttleLoadSizingSource = shuttleFleet.every((shuttle) => shuttle.loadDimensions.source === 'rack-slot')
+            ? 'rack-slot' : 'floorPlan-cell-fallback';
+        shell.viewport.dataset.shuttlePalletCount = String(shuttleFleet.filter((shuttle) => shuttle.pallet).length);
+        shell.viewport.dataset.shuttlePalletHeight = String(unitLoadPalletHeight);
+        shell.viewport.dataset.palletForkEntryDirections = '4';
+        shell.viewport.dataset.palletSupportLayout = '3x3';
+        shell.viewport.dataset.shuttlePalletSupportCount = String(shuttleFleet.length * 9);
+        shell.viewport.dataset.floorPlanCellSize = String(passageCellSize);
+        shell.viewport.dataset.shuttleFrameHeight = String(shuttleFrameHeight);
+        shell.viewport.dataset.shuttleBodyPlacement = 'inside-frame';
+        shell.viewport.dataset.shuttleTopPlate = 'false';
+        shell.viewport.dataset.shuttlePathClearance = String(shuttlePathClearanceMm);
+        shell.viewport.dataset.shuttleSizingSource = 'floorPlan-S';
+        shell.viewport.dataset.shuttleLiftPlacement = 'station-centered';
+        shell.viewport.dataset.shuttleLiftFrameAlignment = 'post-inner-faces';
+        shell.viewport.dataset.shuttleLiftHorizontalFrameAlignment = 'shuttle-level-center-and-rack-top';
+        shell.viewport.dataset.shuttleLiftHorizontalFrameHeight = String(shuttleFrameHeight);
+        shell.viewport.dataset.shuttleLiftHorizontalFrameOffset = String(shuttleFrameCenterOffset);
+        shell.viewport.dataset.shuttleLiftHorizontalFrameElevations = shuttleLiftEntries
+            .map((lift) => `${lift.code}:${lift.group?.userData?.horizontalFrameElevations?.map((value) => value.toFixed(3)).join(',') || ''}`)
+            .join(';');
+        shell.viewport.dataset.shuttleLiftFootprints = shuttleLiftEntries
+            .map((lift) => `${lift.stationCode}:${lift.width.toFixed(2)}x${lift.depth.toFixed(2)}`)
+            .join(',');
+        shell.viewport.dataset.shuttleFlow = shuttleFleet.length ? 'amr-station-shuttle-rack-bidirectional' : 'unavailable';
+        renderer.domElement.setAttribute('aria-label', `기준정보 기반 3D 창고, 무인 지게차 ${amrFleet.length}대, 4 WAY SHUTTLE ${shuttleFleet.length}대 운행 중`);
 
         const forkliftTaskTargets = [];
         const reservedTaskKeys = new Set();
@@ -2677,7 +4013,7 @@
                     desiredDock.z * 1000,
                     1250
                 );
-                if (!dockNode || !amrComponent.includes(dockNode.key)) continue;
+                if (!dockNode || !amrNavigableKeys.has(dockNode.key)) continue;
                 const dockWorld = new THREE.Vector3(mm(dockNode.x), warehouseFloorElevation, mm(dockNode.y));
                 const toSlot = slotWorld.clone().sub(dockWorld);
                 toSlot.y = 0;
@@ -2706,28 +4042,123 @@
                 if (target) forkliftTaskTargets.push(target);
             });
         });
+        const shuttleLoadDimensionsByStation = new Map();
+        shuttleFleet.forEach((shuttle) => {
+            if (!shuttleLoadDimensionsByStation.has(shuttle.station.code)) {
+                shuttleLoadDimensionsByStation.set(shuttle.station.code, shuttle.loadDimensions);
+            }
+        });
+        const stationAmrTaskTargets = shuttleStationEntries.map((station) => {
+            const dockNode = findNearestPassageNode(
+                passageNavigation,
+                station.passageX,
+                station.passageY,
+                3500
+            );
+            if (!dockNode) return null;
+            const dockWorld = new THREE.Vector3(mm(dockNode.x), warehouseFloorElevation, mm(dockNode.y));
+            const stationWorld = new THREE.Vector3(mm(station.centerX), warehouseFloorElevation, mm(station.centerY));
+            const toStation = stationWorld.clone().sub(dockWorld);
+            toStation.y = 0;
+            const distance = toStation.length();
+            if (distance < 0.05) toStation.set(0, 0, 1);
+            const forkExtension = Math.max(0, Math.min(
+                stackerDimensions.maxExtension,
+                distance - (stackerDimensions.mastZ + stackerDimensions.forkCenterZ)
+            ));
+            const handoffDimensions = shuttleLoadDimensionsByStation.get(station.code)
+                || calculateShuttleLoadDimensions([], data.meta?.floorPlanCellSize || 500);
+            const handoffComposition = getUnitLoadComposition(
+                handoffDimensions.width,
+                handoffDimensions.height,
+                handoffDimensions.depth
+            );
+            return {
+                key: `station-${station.code}`,
+                station,
+                dockNode,
+                facingYaw: Math.atan2(toStation.x, toStation.z),
+                forkHeight: travelForkHeight,
+                forkExtension,
+                slot: {
+                    locationCode: station.code,
+                    group: station.group,
+                    position: [0, 0.02 + handoffDimensions.height / 2, 0],
+                    boxSize: [handoffDimensions.width, handoffDimensions.height, handoffDimensions.depth],
+                    cargoBoxSize: [handoffDimensions.width, handoffComposition.cargoHeight, handoffDimensions.depth],
+                    palletSize: [handoffComposition.palletWidth, handoffComposition.palletHeight, handoffComposition.palletDepth],
+                    unitLoadSource: 'shuttle-handoff',
+                    occupied: false,
+                    item: null
+                }
+            };
+        }).filter(Boolean);
+        const applySlotInstanceVisibility = (slot) => {
+            const visibleForLevel = !activeRackLevelFocus
+                || (slot?.rack === activeRackLevelFocus.rackData.rack && slot?.level === activeRackLevelFocus.level);
+            const visible = slot?.taskVisible !== false && visibleForLevel;
+            if (slot?.instanceMesh && Number.isInteger(slot.instanceIndex)) {
+                slot.instanceMesh.setMatrixAt(slot.instanceIndex, visible ? slot.instanceMatrix : hiddenInstanceMatrix);
+                slot.instanceMesh.instanceMatrix.needsUpdate = true;
+            }
+            (slot?.palletInstances || []).forEach((instance) => {
+                instance.mesh.setMatrixAt(instance.index, visible ? instance.matrix : hiddenInstanceMatrix);
+                instance.mesh.instanceMatrix.needsUpdate = true;
+            });
+        };
         const setSlotInstanceVisible = (slot, visible) => {
-            if (!slot?.instanceMesh || !Number.isInteger(slot.instanceIndex)) return;
-            slot.instanceMesh.setMatrixAt(slot.instanceIndex, visible ? slot.instanceMatrix : hiddenInstanceMatrix);
-            slot.instanceMesh.instanceMatrix.needsUpdate = true;
+            if (!slot) return;
+            slot.taskVisible = Boolean(visible);
+            applySlotInstanceVisibility(slot);
         };
         const createTaskLoad = (amr, target) => {
-            const sourceSize = target.slot.boxSize;
-            const size = [
-                Math.min(1.02, Math.max(0.55, sourceSize[0])),
-                Math.min(0.86, Math.max(0.38, sourceSize[1])),
-                Math.min(0.9, Math.max(0.48, sourceSize[2]))
-            ];
+            const size = target.slot.boxSize.slice();
             const color = target.slot.item?.color || (target.slot.occupied ? '#f59e0b' : '#38bdf8');
-            const load = new THREE.Mesh(
-                getChamferedBoxGeometry(size[0], size[1], size[2]),
+            const composition = getUnitLoadComposition(size[0], size[1], size[2]);
+            const load = new THREE.Group();
+            load.name = 'forklift-carried-load';
+            load.userData = {
+                loadSize: size,
+                cargoSize: [size[0], composition.cargoHeight, size[2]],
+                palletSize: [composition.palletWidth, composition.palletHeight, composition.palletDepth],
+                sizingSource: target.slot.unitLoadSource || 'rack-slot'
+            };
+            const cargo = new THREE.Mesh(
+                getChamferedBoxGeometry(size[0], composition.cargoHeight, size[2]),
                 getMaterial(color, { roughness: 0.2, metalness: 0.12, clearcoat: 0.86, clearcoatRoughness: 0.08 })
             );
-            load.name = 'forklift-carried-load';
-            load.position.set(0, size[1] / 2 + 0.035, 0);
-            load.castShadow = true;
-            load.receiveShadow = true;
-            load.userData.loadSize = size;
+            cargo.name = 'forklift-carried-load-box';
+            cargo.position.y = composition.palletHeight + composition.cargoHeight / 2;
+            cargo.castShadow = true;
+            cargo.receiveShadow = true;
+            const pallet = new THREE.Group();
+            pallet.name = 'forklift-carried-pallet';
+            const palletMaterial = getMaterial(unitLoadPalletColor, {
+                roughness: 0.72, metalness: 0.06, clearcoat: 0.12, clearcoatRoughness: 0.7
+            });
+            const palletDeck = new THREE.Mesh(
+                getGeometry(composition.palletWidth, composition.deckHeight, composition.palletDepth),
+                palletMaterial
+            );
+            palletDeck.position.y = composition.runnerHeight + composition.deckHeight / 2;
+            pallet.add(palletDeck);
+            const supportLayout = getFourWayPalletSupportLayout(composition);
+            supportLayout.positions.forEach(({ x, z }) => {
+                const support = new THREE.Mesh(
+                    getGeometry(supportLayout.supportWidth, composition.runnerHeight, supportLayout.supportDepth),
+                    palletMaterial
+                );
+                support.name = 'forklift-pallet-four-way-support';
+                support.position.set(x, composition.runnerHeight / 2, z);
+                pallet.add(support);
+            });
+            pallet.traverse((part) => {
+                if (!part.isMesh) return;
+                part.castShadow = true;
+                part.receiveShadow = true;
+            });
+            load.add(cargo, pallet);
+            load.position.set(0, 0.035, 0);
             amr.loadAnchor.add(load);
             amr.carriedLoad = load;
             return load;
@@ -2755,12 +4186,24 @@
         const assignForkliftTask = (amr, timestamp = performance.now()) => {
             clearTaskVisuals(amr);
             const preferredMode = (amr.index + amr.completedTasks) % 2 ? 'putaway' : 'picking';
-            const available = forkliftTaskTargets.filter((target) => (
+            const assignedStationTargets = stationAmrTaskTargets.filter((target) => (
+                target.station.code === amr.corridorCode
+                && amr.corridorKeys.includes(target.dockNode.key)
+            ));
+            const assignedRackTargets = forkliftTaskTargets.filter((target) => amr.corridorKeys.includes(target.dockNode.key));
+            const assignedTargets = assignedStationTargets.length ? assignedStationTargets : assignedRackTargets;
+            const taskTargets = assignedTargets.length
+                ? assignedTargets.map((target, index) => ({
+                    ...target,
+                    slot: { ...target.slot, occupied: (amr.completedTasks + index) % 2 === 0 }
+                }))
+                : forkliftTaskTargets;
+            const available = taskTargets.filter((target) => (
                 !reservedTaskKeys.has(target.key)
                 && !reservedDockKeys.has(target.dockNode.key)
                 && (preferredMode === 'picking' ? target.slot.occupied : !target.slot.occupied)
             ));
-            const fallback = available.length ? available : forkliftTaskTargets.filter((target) => (
+            const fallback = available.length ? available : taskTargets.filter((target) => (
                 !reservedTaskKeys.has(target.key) && !reservedDockKeys.has(target.dockNode.key)
             ));
             if (!fallback.length) {
@@ -2784,6 +4227,21 @@
                 planAmrRoute(amr, timestamp);
                 setForkliftState(amr, 'driving', timestamp);
                 return;
+            }
+            if (selected.dockNode.key === amr.currentKey && amr.corridorFarKey !== amr.currentKey) {
+                const patrolPath = simplifyPath(findPassagePath(
+                    passageNavigation,
+                    amr.currentKey,
+                    amr.corridorFarKey
+                ));
+                if (patrolPath.length > 1) {
+                    amr.task = null;
+                    amr.route = patrolPath;
+                    amr.waypointIndex = 1;
+                    amr.waitUntil = timestamp;
+                    setForkliftState(amr, 'driving', timestamp);
+                    return;
+                }
             }
             const mode = selected.slot.occupied ? 'picking' : 'putaway';
             reservedTaskKeys.add(selected.key);
@@ -2880,7 +4338,7 @@
         const setForkHeight = (amr, height) => {
             // A first-level cell may sit below travel height; keep only a physical floor clearance here.
             amr.forkHeight = Math.max(forkThickness / 2 + 0.01, height);
-            amr.carriage.position.y = amr.forkHeight;
+            amr.carriage.position.y = amr.forkHeight / amrVisualScale;
             const extensionHeight = Math.max(0, amr.forkHeight - 1.35);
             amr.mastMiddle.position.y = Math.min(2.2, extensionHeight * 0.48);
             amr.mastUpper.position.y = Math.min(3.8, extensionHeight * 0.82);
@@ -2888,7 +4346,7 @@
         };
         const setForkExtension = (amr, extension) => {
             amr.forkExtension = Math.max(0, extension);
-            amr.forkAssembly.position.z = amr.forkExtension;
+            amr.forkAssembly.position.z = amr.forkExtension / amrVisualScale;
             amr.reachRails.forEach(rail => {
                 rail.scale.z = amr.forkExtension + 0.12;
                 rail.position.z = 0.06 + amr.forkExtension / 2;
@@ -2908,19 +4366,25 @@
                     amr.carriedLoad.removeFromParent();
                     amr.carriedLoad = null;
                 }
-                const placedLoad = new THREE.Mesh(
-                    getChamferedBoxGeometry(loadSize[0], loadSize[1], loadSize[2]),
-                    getMaterial('#38bdf8', { roughness: 0.2, metalness: 0.12, clearcoat: 0.86, clearcoatRoughness: 0.08 })
-                );
+                const placedLoad = createTaskLoad(amr, target);
                 placedLoad.name = 'forklift-placed-load';
-                placedLoad.position.set(...target.slot.position);
-                placedLoad.castShadow = true;
-                placedLoad.receiveShadow = true;
+                placedLoad.removeFromParent();
+                amr.carriedLoad = null;
+                placedLoad.position.set(
+                    target.slot.position[0],
+                    target.slot.position[1] - loadSize[1] / 2,
+                    target.slot.position[2]
+                );
                 target.slot.group.add(placedLoad);
                 amr.placedLoad = placedLoad;
             }
             amr.task.handled = true;
         };
+        shell.viewport.dataset.amrHandoffLoadSizes = stationAmrTaskTargets
+            .map((target) => `${target.station.code}:${target.slot.boxSize.join('x')}`)
+            .join(',');
+        shell.viewport.dataset.amrCarriedLoadIncludesPallet = 'true';
+        shell.viewport.dataset.amrCargoScalePolicy = 'preserve-shuttle-unit-load';
         const updateDrivingForklift = (amr, timestamp, deltaSeconds) => {
             setForkHeight(amr, moveToward(amr.forkHeight, travelForkHeight, deltaSeconds * 1.2));
             setForkExtension(amr, moveToward(amr.forkExtension, 0, deltaSeconds * 0.9));
@@ -2952,6 +4416,103 @@
                 amr.currentKey = waypoint.key;
                 amr.waypointIndex += 1;
             }
+        };
+        const placeShuttleAtDistance = (shuttle, pathMetrics, distanceAlongPath) => {
+            const distance = Math.max(0, Math.min(pathMetrics.length, distanceAlongPath));
+            let segmentIndex = 1;
+            while (segmentIndex < pathMetrics.cumulativeDistances.length
+                && pathMetrics.cumulativeDistances[segmentIndex] < distance) segmentIndex += 1;
+            segmentIndex = Math.min(segmentIndex, pathMetrics.path.length - 1);
+            const start = pathMetrics.path[Math.max(0, segmentIndex - 1)];
+            const end = pathMetrics.path[segmentIndex] || start;
+            const segmentStart = pathMetrics.cumulativeDistances[Math.max(0, segmentIndex - 1)] || 0;
+            const segmentLength = Math.max(
+                0.0001,
+                (pathMetrics.cumulativeDistances[segmentIndex] || segmentStart) - segmentStart
+            );
+            const progress = Math.max(0, Math.min(1, (distance - segmentStart) / segmentLength));
+            shuttle.group.position.x = start.x + (end.x - start.x) * progress;
+            shuttle.group.position.z = start.z + (end.z - start.z) * progress;
+            const dx = end.x - start.x;
+            const dz = end.z - start.z;
+            if (Math.hypot(dx, dz) > 0.001) shuttle.group.rotation.y = Math.atan2(dx, dz);
+        };
+        const updateShuttleFleet = (timestamp) => {
+            if (!shuttleFleet.length) return false;
+            const cycleDuration = 24000;
+            shuttleFleet.forEach((shuttle) => {
+                const cycle = ((timestamp + shuttle.index * 4300) % cycleDuration) / cycleDuration;
+                const floorY = warehouseFloorElevation + shuttleTravelBaseOffset;
+                const rackLevelY = floorY + shuttle.targetLevel;
+                shuttle.group.position.y = floorY;
+                if (cycle < 0.1) {
+                    shuttle.lift.platform.position.y = 0.08;
+                    placeShuttleAtDistance(shuttle, shuttle.stationPath, 0);
+                    shuttle.load.visible = true;
+                    shuttle.state = 'station-handoff';
+                } else if (cycle < 0.2) {
+                    shuttle.lift.platform.position.y = 0.08;
+                    placeShuttleAtDistance(
+                        shuttle,
+                        shuttle.stationPath,
+                        shuttle.stationPath.length * ((cycle - 0.1) / 0.1)
+                    );
+                    shuttle.load.visible = true;
+                    shuttle.state = 'lift-approach';
+                } else if (cycle < 0.34) {
+                    placeShuttleAtDistance(shuttle, shuttle.stationPath, shuttle.stationPath.length);
+                    const liftProgress = (cycle - 0.2) / 0.14;
+                    shuttle.group.position.y = floorY + shuttle.targetLevel * liftProgress;
+                    shuttle.lift.platform.position.y = 0.08 + shuttle.targetLevel * liftProgress;
+                    shuttle.load.visible = true;
+                    shuttle.state = 'lifting';
+                } else if (cycle < 0.62) {
+                    shuttle.lift.platform.position.y = 0.08 + shuttle.targetLevel;
+                    placeShuttleAtDistance(
+                        shuttle,
+                        shuttle.rackPath,
+                        shuttle.rackPath.length * ((cycle - 0.34) / 0.28)
+                    );
+                    shuttle.group.position.y = rackLevelY;
+                    shuttle.load.visible = true;
+                    shuttle.state = 'putaway-transfer';
+                } else if (cycle < 0.68) {
+                    shuttle.lift.platform.position.y = 0.08 + shuttle.targetLevel;
+                    placeShuttleAtDistance(shuttle, shuttle.rackPath, shuttle.rackPath.length);
+                    shuttle.group.position.y = rackLevelY;
+                    shuttle.load.visible = false;
+                    shuttle.state = 'rack-handoff';
+                } else if (cycle < 0.84) {
+                    shuttle.lift.platform.position.y = 0.08 + shuttle.targetLevel;
+                    placeShuttleAtDistance(
+                        shuttle,
+                        shuttle.rackPath,
+                        shuttle.rackPath.length * (1 - (cycle - 0.68) / 0.16)
+                    );
+                    shuttle.group.position.y = rackLevelY;
+                    shuttle.load.visible = true;
+                    shuttle.state = 'picking-transfer';
+                } else if (cycle < 0.94) {
+                    placeShuttleAtDistance(shuttle, shuttle.stationPath, shuttle.stationPath.length);
+                    const liftProgress = 1 - (cycle - 0.84) / 0.1;
+                    shuttle.group.position.y = floorY + shuttle.targetLevel * liftProgress;
+                    shuttle.lift.platform.position.y = 0.08 + shuttle.targetLevel * liftProgress;
+                    shuttle.load.visible = true;
+                    shuttle.state = 'lowering';
+                } else {
+                    shuttle.lift.platform.position.y = 0.08;
+                    placeShuttleAtDistance(
+                        shuttle,
+                        shuttle.stationPath,
+                        shuttle.stationPath.length * (1 - (cycle - 0.94) / 0.06)
+                    );
+                    shuttle.load.visible = true;
+                    shuttle.state = 'outbound-handoff';
+                }
+                shuttle.group.userData.operationState = shuttle.state;
+            });
+            shell.viewport.dataset.shuttleStates = shuttleFleet.map((shuttle) => shuttle.state).join(',');
+            return true;
         };
         const updateAmrFleet = (timestamp) => {
             if (!amrFleet.length) return false;
@@ -3011,6 +4572,9 @@
                 }
             });
             shell.viewport.dataset.forkliftStates = amrFleet.map((amr) => amr.state).join(',');
+            shell.viewport.dataset.amrPositions = amrFleet
+                .map((amr) => `${amr.equipmentCode}:${amr.group.position.x.toFixed(3)},${amr.group.position.z.toFixed(3)}`)
+                .join(';');
             return true;
         };
         const render = (timestamp) => {
@@ -3018,12 +4582,15 @@
             const frameTime = timestamp || performance.now();
             updateWorldUiTransitions(frameTime);
             const amrIsActive = updateAmrFleet(frameTime);
+            const shuttleIsActive = updateShuttleFleet(frameTime);
             updateAmrFollow(frameTime);
             if (!destroyed && renderer.domElement.isConnected) {
                 renderer.render(scene, camera);
                 updateHoverTooltipPosition();
             }
-            if (activeWorldUiTransitions.size || (amrIsActive && shell.viewport.clientWidth && shell.viewport.clientHeight)) requestRender();
+            if (activeWorldUiTransitions.size
+                || (amrIsActive && shell.viewport.clientWidth && shell.viewport.clientHeight)
+                || (shuttleIsActive && shell.viewport.clientWidth && shell.viewport.clientHeight)) requestRender();
         };
         const requestRender = () => {
             if (!animationFrame && !destroyed) animationFrame = requestAnimationFrame(render);
@@ -3251,11 +4818,73 @@
         let hoveredRack = null;
         let selectedRack = null;
         let focusedRack = null;
+        let restoreCameraAfterRackLevelClear = null;
+        let hoveredRackLevelLabel = null;
+        const setRackLevelLabelState = (levelData, state) => {
+            const update = levelData?.label?.setInteractionState?.(state);
+            if (update) startWorldUiTransition(140, (progress) => { update(progress); return true; });
+        };
+        const syncRackLevelSceneVisibility = () => {
+            const active = activeRackLevelFocus;
+            rackEntries.forEach((entry) => {
+                const selectedEntry = active?.rackData === entry.rackData;
+                entry.group.visible = !active || selectedEntry;
+                entry.rackStructureObjects.forEach((object) => { object.visible = !active; });
+                entry.rackData.label.visible = !active;
+                entry.rackData.levelLabelGroup.visible = entry.rackData === selectedRack;
+                entry.rackData.levelLabels.forEach((levelLabel) => {
+                    levelLabel.visible = !active || (selectedEntry && levelLabel.userData.level === active.level);
+                });
+                if (entry.rackData.outlines?.hover) entry.rackData.outlines.hover.visible = false;
+                if (entry.rackData.outlines?.selected) {
+                    entry.rackData.outlines.selected.visible = !active && entry.rackData === selectedRack;
+                    if (!active && entry.rackData === selectedRack) {
+                        entry.rackData.outlines.selected.userData.material.opacity = entry.rackData.outlines.selected.userData.maxOpacity;
+                    }
+                }
+                entry.slots.forEach(applySlotInstanceVisibility);
+            });
+            shuttleFrameGroup.visible = !active;
+            shuttleLiftEntries.forEach((lift) => { if (lift.group) lift.group.visible = !active; });
+            amrFleet.forEach((amr) => { amr.group.visible = !active; });
+            shuttleFleet.forEach((shuttle) => { shuttle.group.visible = !active; });
+            shell.viewport.dataset.selectedRackLevel = active ? `${active.rackData.rack.code}:LV${active.level}` : '';
+            shell.viewport.dataset.rackLevelView = active ? 'top' : '';
+            shell.viewport.dataset.visibleRackLevelBillboards = selectedRack?.levelLabels
+                ?.filter((levelLabel) => levelLabel.visible)
+                .map((levelLabel) => `${selectedRack.rack.code}:LV${levelLabel.userData.level}`)
+                .join(',') || '';
+        };
+        const setActiveRackLevelFocus = (levelData) => {
+            const previous = activeRackLevelFocus;
+            const sameLevel = previous && levelData
+                && previous.rackData === levelData.rackData && previous.level === levelData.level;
+            if (previous) setRackLevelLabelState(previous, 'normal');
+            activeRackLevelFocus = sameLevel ? null : levelData || null;
+            if (activeRackLevelFocus) setRackLevelLabelState(activeRackLevelFocus, 'selected');
+            syncRackLevelSceneVisibility();
+            requestRender();
+            return activeRackLevelFocus;
+        };
+        const setHoveredRackLevelLabel = (levelData) => {
+            if (hoveredRackLevelLabel === levelData) return;
+            if (hoveredRackLevelLabel && hoveredRackLevelLabel !== activeRackLevelFocus) {
+                setRackLevelLabelState(hoveredRackLevelLabel, 'normal');
+            }
+            hoveredRackLevelLabel = levelData || null;
+            if (hoveredRackLevelLabel && hoveredRackLevelLabel !== activeRackLevelFocus) {
+                setRackLevelLabelState(hoveredRackLevelLabel, 'hover');
+            }
+        };
         const setFocusedRack = (rackData) => {
+            if (activeRackLevelFocus && activeRackLevelFocus.rackData !== rackData) setActiveRackLevelFocus(null);
             focusedRack = rackData || null;
             rackEntries.forEach((entry) => {
-                setRackEntryDimmed(entry, Boolean(focusedRack && entry.rack !== focusedRack.rack));
+                const mode = !focusedRack ? 'none' : entry.rack === focusedRack.rack ? 'frames' : 'all';
+                setRackEntryDimmed(entry, mode);
             });
+            setShuttleFrameDimmed(Boolean(focusedRack));
+            shell.viewport.dataset.rackFocusDimming = focusedRack ? 'rack-and-shuttle-frames' : 'none';
             requestRender();
         };
         const setRackLabelState = (rackData, state) => {
@@ -3276,6 +4905,8 @@
             requestRender();
         };
         const setSelectedRack = (rackData) => {
+            const clearedRackLevelFocus = Boolean(activeRackLevelFocus && activeRackLevelFocus.rackData !== rackData);
+            if (clearedRackLevelFocus) setActiveRackLevelFocus(null);
             const previousSelectedRack = selectedRack;
             if (previousSelectedRack?.outlines?.selected) {
                 const previousOutline = previousSelectedRack.outlines.selected;
@@ -3286,7 +4917,9 @@
             selectedRack = rackData || null;
             if (selectedRack?.outlines?.selected) fadeWorldObject(selectedRack.outlines.selected, true, { duration: 180, reset: true });
             if (selectedRack) setRackLabelState(selectedRack, 'selected');
+            syncRackLevelSceneVisibility();
             shell.syncObjectSelection?.();
+            if (clearedRackLevelFocus) restoreCameraAfterRackLevelClear?.(selectedRack);
             requestRender();
         };
         const showDefaultInspector = () => { shell.inspector.innerHTML = '<h5>선택 정보</h5><p>구역, 랙, 설비 또는 적재 상자를 선택하면 상세 정보가 표시됩니다.</p>'; };
@@ -3359,7 +4992,13 @@
         const objectGroups = {
             zone: selectableZones.map((zone) => ({ code: zone.code, name: zone.code, detail: zone.name || zone.purpose || '구역', value: zone })),
             rack: rackEntries.map(entry => ({ code: entry.rack.code, name: entry.rack.code, detail: entry.rack.zoneCode || '', value: entry })),
-            equipment: amrFleet.map(amr => ({ code: amr.equipmentCode, name: amr.equipmentName, detail: amr.equipmentStatus, value: amr }))
+            equipment: [...amrFleet, ...shuttleFleet]
+                .map(equipment => ({
+                    code: equipment.equipmentCode,
+                    name: equipment.equipmentName,
+                    detail: equipment.equipmentStatus,
+                    value: equipment
+                }))
         };
         let visibleObjectItems = [];
         let expandedBeforeSearch = null;
@@ -3490,6 +5129,65 @@
             setActiveCameraView(viewName);
             requestRender();
             renderer.domElement.focus();
+        };
+        restoreCameraAfterRackLevelClear = (rackData) => {
+            applyCameraView('quarter');
+            if (rackData) focusRackInCurrentView(rackData);
+        };
+        const showRackLevelSelection = (rackData, level) => {
+            const entry = rackEntries.find((candidate) => candidate.rackData === rackData);
+            const levelSlots = entry?.slots.filter((slot) => slot.level === level) || [];
+            const occupiedSlots = levelSlots.filter((slot) => slot.occupied);
+            const stockQuantity = occupiedSlots.reduce((total, slot) => total + Number(slot.stock?.quantity || 0), 0);
+            const statusCounts = occupiedSlots.reduce((counts, slot) => {
+                const status = String(slot.stock?.status || 'unknown').toLowerCase();
+                counts[status] = (counts[status] || 0) + 1;
+                return counts;
+            }, {});
+            const statusText = Object.entries(statusCounts)
+                .map(([status, count]) => `${escapeHtml(status)} ${count}`)
+                .join(' · ') || '적재 없음';
+            shell.inspector.innerHTML = `<h5>${escapeHtml(rackData.rack.code)} · LV${level}</h5><dl><dt>선택 단</dt><dd>${level}단</dd><dt>전체 셀</dt><dd>${levelSlots.length}개</dd><dt>적재 셀</dt><dd>${occupiedSlots.length}개</dd><dt>빈 셀</dt><dd>${levelSlots.length - occupiedSlots.length}개</dd><dt>재고 수량</dt><dd>${stockQuantity}</dd><dt>재고 상태</dt><dd>${statusText}</dd></dl>`;
+        };
+        const focusRackLevelTopView = (rackData, level) => {
+            const bounds = rackData?.focusBounds;
+            if (!bounds) return;
+            cameraFocusTransitionToken += 1;
+            amrFocusTransition = null;
+            const center = bounds.getCenter(new THREE.Vector3());
+            const size = bounds.getSize(new THREE.Vector3());
+            const rackLevelHeight = mm(rackData.type.levelHeight)
+                || mm(rackData.type.height) / Math.max(1, rackData.type.levels);
+            const viewHeight = Math.max(1.2, size.z * 1.24, (size.x / Math.max(0.1, viewportAspect)) * 1.24);
+            alignedCameraView = 'top';
+            yaw = cameraViewPresets.top.yaw;
+            pitch = getCameraViewPitch('top');
+            target.set(center.x, warehouseFloorElevation + (level - 0.5) * rackLevelHeight, center.z);
+            orthographicViewHeight = viewHeight;
+            distance = Math.max(
+                minimumCameraDistance,
+                Math.min(maximumCameraDistance, viewHeight / (2 * Math.tan(perspectiveHalfFov)))
+            );
+            updateProjectionMatrices();
+            updateCamera();
+            setActiveCameraView('top');
+            renderer.domElement.focus();
+            requestRender();
+        };
+        const selectRackLevel = (levelData) => {
+            const selectedLevel = setActiveRackLevelFocus(levelData);
+            if (selectedLevel) {
+                showRackLevelSelection(selectedLevel.rackData, selectedLevel.level);
+                focusRackLevelTopView(selectedLevel.rackData, selectedLevel.level);
+                return;
+            }
+            alignedCameraView = 'quarter';
+            yaw = cameraViewPresets.quarter.yaw;
+            pitch = getCameraViewPitch('quarter');
+            updateCamera();
+            setActiveCameraView('quarter');
+            showSelection(levelData.rackData);
+            focusRackInCurrentView(levelData.rackData);
         };
         shell.cameraViewButtons.forEach((button) => {
             button.addEventListener('click', () => applyCameraView(button.dataset.warehouseCameraView), { signal });
@@ -3693,8 +5391,12 @@
             pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
             pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
             raycaster.setFromCamera(pointer, camera);
-            const hit = raycaster.intersectObjects([...labelTargets, ...amrLabelTargets], false).find((candidate) => isRaycastTargetVisible(candidate.object));
+            const hit = raycaster.intersectObjects([...levelLabelTargets, ...labelTargets, ...amrLabelTargets], false).find((candidate) => isRaycastTargetVisible(candidate.object));
             return hit?.object.userData || null;
+        };
+        const getRackLevelLabelAtPointer = (event) => {
+            const label = getBillboardAtPointer(event);
+            return label?.kind === 'rack-level-label' ? label : null;
         };
         const getLabelRackAtPointer = (event) => {
             const label = getBillboardAtPointer(event);
@@ -3735,6 +5437,14 @@
         };
         renderer.domElement.addEventListener('pointermove', (event) => {
             if (pointerStart) return;
+            const rackLevelLabel = getRackLevelLabelAtPointer(event);
+            setHoveredRackLevelLabel(rackLevelLabel);
+            if (rackLevelLabel) {
+                setHoveredSlot(null);
+                setHoveredRack(null);
+                setHoveredAmr(null);
+                return;
+            }
             const labelAmr = getLabelAmrAtPointer(event);
             setHoveredAmr(labelAmr);
             if (labelAmr) {
@@ -3752,13 +5462,28 @@
             setHoveredSlot(slot);
             setHoveredRack(slot ? null : getRackAtPointer(event));
         }, { signal });
-        renderer.domElement.addEventListener('pointerleave', () => { setHoveredSlot(null); setHoveredRack(null); setHoveredAmr(null); }, { signal });
+        renderer.domElement.addEventListener('pointerleave', () => {
+            setHoveredRackLevelLabel(null);
+            setHoveredSlot(null);
+            setHoveredRack(null);
+            setHoveredAmr(null);
+        }, { signal });
         renderer.domElement.addEventListener('pointerup', (event) => {
             if (!pointerStart || event.pointerId !== pointerStart.pointerId) return;
             const moved = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
             const button = pointerStart.button;
             pointerStart = null;
             if (button !== 0 || moved > 5) return;
+            const rackLevelLabel = getRackLevelLabelAtPointer(event);
+            if (rackLevelLabel) {
+                setSelectedZone('', false);
+                setSelectedSlot(null);
+                setHoveredSlot(null);
+                setHoveredRack(null);
+                setSelectedAmr(null);
+                selectRackLevel(rackLevelLabel);
+                return;
+            }
             const labelAmr = getLabelAmrAtPointer(event);
             if (labelAmr) {
                 setSelectedZone('', false);
@@ -3824,8 +5549,12 @@
             selectedOutline.userData.material.dispose();
             passageBoundaryGeometry?.dispose();
             passageBoundaryMaterial?.dispose();
+            conveyorBoundaryGeometry?.dispose();
+            conveyorBoundaryMaterial?.dispose();
             dockBoundaryGeometry?.dispose();
             dockBoundaryMaterial?.dispose();
+            bufferBoundaryGeometry?.dispose();
+            bufferBoundaryMaterial?.dispose();
             enclosureResources.forEach((resource) => resource.dispose());
             floor.geometry.dispose();
             floor.material.dispose();
@@ -3833,6 +5562,7 @@
             loadingYard?.material.dispose();
             truckResources.forEach((resource) => resource.dispose());
             amrResources.forEach((resource) => resource.dispose());
+            shuttleResources.forEach((resource) => resource.dispose());
             zoneVisualizationEntries.forEach(({ geometry, material }) => { geometry.dispose(); material.dispose(); });
             scene.traverse((object) => {
                 if (object.material?.map) object.material.map.dispose();
@@ -3942,11 +5672,22 @@
         getFloorPlanAxisRange,
         convertGoogleSheetCsv,
         calculateZoneFloorBounds,
+        calculateLoadingDockLayouts,
         calculateLoadingDockLayout,
         calculateLoadingYardLayout,
         getRackDepthFramePositions,
         getWarehouseStructureOcclusion,
         buildPassageBoundarySegments,
+        groupConnectedFloorCells,
+        calculateAmrPassageClearanceMm,
+        buildAmrCorridorAssignments,
+        buildShuttleRailLayout,
+        calculateShuttleFootprintMm,
+        calculateShuttleLoadDimensions,
+        calculateLiftFrameDimensions,
+        buildOrthogonalConnectorPath,
+        calculateShuttleLevelElevations,
+        buildShuttleFrameLayout,
         buildPassageNavigationGraph,
         findPassagePath,
         findNearestPassageNode,

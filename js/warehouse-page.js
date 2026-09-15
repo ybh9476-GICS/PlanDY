@@ -26,7 +26,7 @@
             const created = !script;
             if (created) {
                 script = document.createElement('script');
-                script.src = 'js/warehouse-3d.js?v=warehouse-kpi-split-v64';
+                script.src = 'js/warehouse-3d.js?v=warehouse-kpi-split-v103';
                 script.dataset.wmsWarehouse3d = 'true';
             }
             const cleanup = () => {
