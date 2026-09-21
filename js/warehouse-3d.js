@@ -2,6 +2,17 @@
     const threeModuleUrl = 'https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.min.js';
     const mountedControllers = new WeakMap();
     let threeModulePromise;
+    let operationsModulePromise;
+    let barcodeTunnelModulePromise;
+    function loadBarcodeTunnels() {
+        if (!barcodeTunnelModulePromise) barcodeTunnelModulePromise = import('./warehouse-barcode-tunnel.js?v=1');
+        return barcodeTunnelModulePromise;
+    }
+    function loadOperations() {
+        if (!operationsModulePromise) operationsModulePromise = import('./warehouse-operations.js?v=10-shuttle-routes')
+            .then(() => import('./warehouse-operation-scene.js?v=14-transport-cartons'));
+        return operationsModulePromise;
+    }
     const worldUiResolutionScale = 2;
     const billboardRenderOrder = 10000;
 
@@ -19,7 +30,7 @@
         locations: { sheetName: '로케이션 마스터', range: 'A4:F', headers: ['로케이션코드', '랙코드', '베이번호', '단번호', '깊이번호', '최대수량'] },
         items: { sheetName: '품목 마스터', range: 'A4:C', headers: ['품목코드', '품목명', '표시색상'] },
         inventory: { sheetName: '재고 현황', range: 'A4:D', headers: ['로케이션코드', '품목코드', '재고수량', '재고상태'] },
-        workOrders: { sheetName: '작업지시', range: 'A1:Q', headers: ['작업 코드', '작업 구분', '품목코드', '수량(개)'] }
+        workOrders: { sheetName: '작업지시', range: 'A1:R', headers: ['작업 코드', '작업 구분', '품목코드', '수량(개)'] }
     });
 
     function parseCsv(csvText) {
@@ -137,6 +148,7 @@
         const passageCells = [];
         const shuttlePassageCells = [];
         const conveyorCells = [];
+        const barcodeTunnelCells = [];
         const dockCells = [];
         const bufferCells = [];
         const stationCells = [];
@@ -154,6 +166,10 @@
                 if (normalizedValue === 'T') passageCells.push({ x, y });
                 if (normalizedValue === 'ST') shuttlePassageCells.push({ x, y });
                 if (normalizedValue === 'CV') conveyorCells.push({ x, y });
+                if (normalizedValue === 'BT') {
+                    conveyorCells.push({ x, y });
+                    barcodeTunnelCells.push({ x, y });
+                }
                 const stationCodeMatch = /^S(\d+)$/.exec(normalizedValue);
                 if (normalizedValue === 'S' || stationCodeMatch) stationCells.push({
                     x,
@@ -168,7 +184,7 @@
                     y,
                     code: `B${bufferCodeMatch[1].padStart(2, '0')}`
                 });
-                if (normalizedValue === 'F' || normalizedValue === 'T' || normalizedValue === 'ST' || normalizedValue === 'CV'
+                if (normalizedValue === 'F' || normalizedValue === 'T' || normalizedValue === 'ST' || normalizedValue === 'CV' || normalizedValue === 'BT'
                     || normalizedValue === 'S' || stationCodeMatch || dockCodeMatch || bufferCodeMatch) return;
                 const rackCode = rackCodesFromMaster.has(cellValue) ? cellValue : '';
                 if (!rackCode) {
@@ -298,6 +314,7 @@
                 const dockCodeMatch = /^D(\d+)$/.exec(rawDockCode);
                 return {
                     scheduleCode: String(row['작업 코드'] || '').trim(),
+                    routeCode: String(row['경로 코드'] || '').trim(),
                     workType,
                     dockCode: dockCodeMatch ? `D${dockCodeMatch[1].padStart(2, '0')}` : '',
                     vehicleNumber: String(row['차량 번호'] || '').trim(),
@@ -386,6 +403,10 @@
                     x: (cell.x - 1) * floorPlanCellSize,
                     y: (cell.y - 1) * floorPlanCellSize
                 })),
+                barcodeTunnelCells: barcodeTunnelCells.map((cell) => ({
+                    x: (cell.x - 1) * floorPlanCellSize,
+                    y: (cell.y - 1) * floorPlanCellSize
+                })),
                 dockCells: dockCells.map((cell) => ({
                     x: (cell.x - 1) * floorPlanCellSize,
                     y: (cell.y - 1) * floorPlanCellSize,
@@ -411,7 +432,13 @@
                 unplacedRackCodes,
                 unmappedFloorRackCodes: [...unmappedFloorRackCodes]
             },
-            zones, rackTypes, racks, locations, items, inventory
+            zones, rackTypes, racks, locations, items, inventory,
+            workOrders: records.workOrders.map(row => ({
+                code: row['작업 코드'], direction: row['작업 구분'], status: row['작업 상태'],
+                equipmentCode: row['배정 설비'], itemCode: row['품목코드'], quantity: toNumber(row['수량(개)']),
+                routeCode: row['경로 코드'] || '', pickup: row['상차 지점'], dropoff: row['하차 지점'],
+                barcode: String(row['바코드'] || row['팔레트 바코드'] || '').trim()
+            }))
         };
     }
 
@@ -514,6 +541,10 @@
 
     async function loadGoogleSheetData(config, signal) {
         const documentId = config?.documentId;
+        const routesPromise = loadGoogleSheetTable(documentId, config?.sheets?.operationRoutes || '운영 경로', 'A1:I500', signal)
+            .then(csv => ({ operationRoutes: window.WmsWarehouseOperations.parseRoutes(csvToRecords(csv,
+                ['경로 코드', '작업 구분', '도크 코드', '버퍼 코드', '스테이션 코드', 'AMR 코드', '사용 여부'], '운영 경로')) }))
+            .catch(error => ({ operationRoutes: [], operationWarning: `운영 경로 연결 확인: ${error.message}` }));
         // Labels are optional: a missing equipment sheet must not hide the warehouse.
         const equipmentPromise = loadGoogleSheetTable(documentId, config?.sheets?.equipment || '설비 마스터', 'A1:F1000', signal)
             .then(csv => ({ equipment: parseEquipmentMaster(csv) }))
@@ -547,6 +578,11 @@
         data.equipmentStatuses = equipmentStatusResult.equipmentStatuses;
         data.meta.equipmentLoadWarning = equipmentResult.equipmentLoadWarning || '';
         data.meta.equipmentStatusLoadWarning = equipmentStatusResult.equipmentStatusLoadWarning || '';
+        Object.assign(data, await routesPromise);
+        data.meta.truckSchedules.forEach(schedule => {
+            const route = data.operationRoutes.find(route => route.enabled && route.code === schedule.routeCode);
+            if (route) { schedule.dockCode = route.dock; schedule.workType = route.direction; }
+        });
         return data;
     }
 
@@ -593,6 +629,29 @@
         defect: '#ef4444',
         unknown: '#475569'
     });
+
+    function getCartonStackLayout(width, height, depth) {
+        const gap = Math.min(0.012, Math.min(width, height, depth) * 0.025);
+        const cartonSize = [(width - gap) / 2, (height - gap) / 2, (depth - gap) / 2];
+        const positions = [];
+        for (let level = 0; level < 2; level++) for (let row = 0; row < 2; row++) for (let column = 0; column < 2; column++) {
+            positions.push({ x: (column - 0.5) * (cartonSize[0] + gap),
+                y: cartonSize[1] / 2 + level * (cartonSize[1] + gap),
+                z: (row - 0.5) * (cartonSize[2] + gap) });
+        }
+        return { cartonSize, positions, gap };
+    }
+
+    function setUnitLoadStoredAppearance(load, stored, color) {
+        const cargo = load.getObjectByName('forklift-carried-load-box');
+        const cartons = load.getObjectByName('transport-carton-stack');
+        if (!cargo || !cartons) return;
+        cargo.visible = Boolean(stored); cartons.visible = !stored;
+        if (stored && color && load.userData.rackCargoColor !== color) {
+            cargo.material.color.set(color); load.userData.rackCargoColor = color;
+        }
+        load.userData.cargoAppearance = stored ? 'rack-inventory-color' : 'kraft-carton-stack';
+    }
 
     function getSlotVisualKey(slot, mode = 'utilization') {
         if (!slot?.occupied) return 'empty';
@@ -985,7 +1044,7 @@
     function createTruckInfoBillboardSprite(THREE, info = {}) {
         const canvas = document.createElement('canvas');
         canvas.width = 520 * worldUiResolutionScale;
-        canvas.height = 210 * worldUiResolutionScale;
+        canvas.height = 300 * worldUiResolutionScale;
         const context = canvas.getContext('2d');
         context.scale(worldUiResolutionScale, worldUiResolutionScale);
         const texture = new THREE.CanvasTexture(canvas);
@@ -1003,56 +1062,61 @@
             : '미설정';
         const operationColor = workType === '출고' ? '#fb923c' : '#22d3ee';
         const invoiceButtonLabel = '송장보기';
+        let progressStatus = workType === '출고' ? '상차 대기' : '하차 대기';
 
-        context.clearRect(0, 0, 520, 210);
-        context.fillStyle = 'rgba(5, 15, 30, 0.96)';
-        context.beginPath();
-        context.roundRect(8, 8, 504, 194, 20);
-        context.fill();
-        context.strokeStyle = '#38bdf8';
-        context.lineWidth = 5;
-        context.stroke();
+        const draw = () => {
+            context.clearRect(0, 0, 520, 300);
+            context.fillStyle = 'rgba(5, 15, 30, 0.96)';
+            context.beginPath();
+            context.roundRect(8, 8, 504, 284, 20);
+            context.fill();
+            context.strokeStyle = '#38bdf8';
+            context.lineWidth = 5;
+            context.stroke();
 
-        // Match the rendered text size of the transport-equipment billboard.
-        context.fillStyle = operationColor;
-        context.font = '700 32px sans-serif';
-        context.textAlign = 'left';
-        context.textBaseline = 'middle';
-        context.fillText(workType, 28, 44);
-        context.fillStyle = '#ffffff';
-        context.font = '600 32px sans-serif';
-        context.fillText(vehicleNumber, 104, 44, 260);
-
-        context.strokeStyle = '#38bdf8';
-        context.lineWidth = 3;
-        context.beginPath();
-        context.roundRect(384, 18, 112, 52, 12);
-        context.stroke();
-        context.fillStyle = '#ffffff';
-        context.font = '600 25px sans-serif';
-        context.textAlign = 'center';
-        context.fillText(invoiceButtonLabel, 440, 44, 96);
-
-        context.strokeStyle = 'rgba(125, 211, 252, 0.35)';
-        context.lineWidth = 2;
-        context.beginPath();
-        context.moveTo(24, 78);
-        context.lineTo(496, 78);
-        context.stroke();
-
-        const rows = [[companyLabel, companyName], [`${workType} 예정`, itemSummary]];
-        rows.forEach(([label, value], index) => {
-            const y = 116 + index * 50;
-            context.fillStyle = '#94a3b8';
-            context.font = '600 25px sans-serif';
+            // Match the rendered text size of the transport-equipment billboard.
+            context.fillStyle = operationColor;
+            context.font = '700 32px sans-serif';
             context.textAlign = 'left';
-            context.fillText(label, 28, y);
+            context.textBaseline = 'middle';
+            context.fillText(workType, 28, 44);
             context.fillStyle = '#ffffff';
             context.font = '600 32px sans-serif';
-            context.fillText(value, 136, y, 360);
-        });
-        texture.needsUpdate = true;
-        sprite.scale.set(3.96, 1.6, 1);
+            context.fillText(vehicleNumber, 104, 44, 392);
+
+            context.strokeStyle = 'rgba(125, 211, 252, 0.35)';
+            context.lineWidth = 2;
+            context.beginPath();
+            context.moveTo(24, 78);
+            context.lineTo(496, 78);
+            context.stroke();
+
+            const rows = [[companyLabel, companyName], [`${workType} 예정`, itemSummary], ['진행상태', progressStatus]];
+            rows.forEach(([label, value], index) => {
+                const y = 116 + index * 50;
+                context.fillStyle = '#94a3b8';
+                context.font = '600 25px sans-serif';
+                context.textAlign = 'left';
+                context.fillText(label, 28, y);
+                context.fillStyle = index === 2 ? (progressStatus.endsWith('완료') ? '#4ade80' : operationColor) : '#ffffff';
+                context.font = '600 32px sans-serif';
+                context.fillText(value, 136, y, 360);
+            });
+            context.fillStyle = 'rgba(56, 189, 248, 0.12)';
+            context.strokeStyle = '#38bdf8';
+            context.lineWidth = 3;
+            context.beginPath();
+            context.roundRect(24, 242, 472, 40, 10);
+            context.fill();
+            context.stroke();
+            context.fillStyle = '#ffffff';
+            context.font = '600 25px sans-serif';
+            context.textAlign = 'center';
+            context.fillText(invoiceButtonLabel, 260, 262, 440);
+            texture.needsUpdate = true;
+        };
+        draw();
+        sprite.scale.set(3.96, 3.96 * 300 / 520, 1);
         sprite.renderOrder = billboardRenderOrder;
         sprite.userData = {
             kind: 'truck-info-billboard',
@@ -1063,10 +1127,34 @@
             companyName,
             itemSummary,
             invoiceButtonLabel,
+            progressStatus,
+            invoicePlacement: 'bottom-full-width',
             spacing: 'compact',
             fontReference: 'transport-equipment-billboard'
         };
+        sprite.setProgressStatus = status => {
+            if (progressStatus === status) return;
+            progressStatus = status;
+            sprite.userData.progressStatus = status;
+            draw();
+        };
         return sprite;
+    }
+
+    function getTruckInvoiceHtml(info, dockCode, warehouseName, order = {}, viewedAt = new Date()) {
+        const workType = info.workType === '출고' ? '출고' : '입고';
+        const field = value => escapeHtml(String(value || '미등록'));
+        const quantity = Math.max(0, Number(info.quantity) || 0).toLocaleString('ko-KR');
+        const sender = workType === '입고' ? info.senderCompanyName : warehouseName;
+        const receiver = workType === '출고' ? info.receiverCompanyName : warehouseName;
+        return `<article class="warehouse-invoice-paper">
+            <header class="warehouse-invoice-heading"><div><p>DELIVERY NOTE</p><h2>${workType} 운송 송장</h2></div><span class="warehouse-invoice-type">${workType}</span></header>
+            <dl class="warehouse-invoice-meta"><div><dt>작업 참조번호</dt><dd>${field(info.scheduleCode)}</dd></div><div><dt>조회 시간</dt><dd>${escapeHtml(formatLocalDateTime(viewedAt))}</dd></div><div><dt>차량 번호</dt><dd>${field(info.vehicleNumber || '부산12가3456')}</dd></div><div><dt>하역 도크 / 운영 경로</dt><dd>${field(dockCode)} / ${field(info.routeCode)}</dd></div><div><dt>진행 상태</dt><dd>${field(info.progressStatus)}</dd></div></dl>
+            <div class="warehouse-invoice-parties"><section><h3>발송 정보 · ${workType === '입고' ? '납품처' : '출고처'}</h3><p>${field(sender)}</p></section><section><h3>수령 정보 · ${workType === '입고' ? '입고처' : '공급처'}</h3><p>${field(receiver)}</p></section></div>
+            <h3 class="warehouse-invoice-section-title">${workType} 예정 물품</h3><div class="warehouse-invoice-table-scroll"><table><thead><tr><th scope="col">품목 코드</th><th scope="col">품명</th><th scope="col">바코드 정보</th><th scope="col">예정 수량</th><th scope="col">단위</th></tr></thead><tbody><tr><td>${field(info.itemCode)}</td><td>${field(info.itemName || info.itemCode)}</td><td>${field(order.barcode)}</td><td class="warehouse-invoice-quantity">${quantity}</td><td>개</td></tr></tbody><tfoot><tr><th colspan="3" scope="row">합계</th><td class="warehouse-invoice-quantity">${quantity}</td><td>개</td></tr></tfoot></table></div>
+            <section class="warehouse-invoice-notes"><h3>인계 사항</h3><p>품목과 수량은 차량에 연결된 작업지시를 기준으로 표시합니다.</p></section>
+            <div class="warehouse-invoice-signatures"><section><h3>인계자 확인</h3><p>성명 / 서명</p></section><section><h3>운송 담당 확인</h3><p>성명 / 서명</p></section><section><h3>인수자 확인</h3><p>성명 / 서명</p></section></div>
+        </article>`;
     }
 
     function createLevelBadgeSprite(THREE, level) {
@@ -1138,7 +1226,38 @@
             ? `${amr.configuredSpeed.toFixed(2)} m/s` : '미설정';
         const currentSpeed = Number.isFinite(amr.currentSpeed) ? `${amr.currentSpeed.toFixed(2)} m/s` : '미설정';
         const battery = Number.isFinite(amr.battery) ? `${Math.round(amr.battery)}%` : '미설정';
-        return `<h5>${escapeHtml(name)}</h5><dl class="warehouse-3d-amr-details"><dt>설비 코드</dt><dd>${escapeHtml(code)}</dd><dt>설비명</dt><dd>${escapeHtml(name)}</dd><dt>타입</dt><dd>${escapeHtml(equipmentType)}</dd><dt>통신 연결 상태</dt><dd>${escapeHtml(communicationText)}</dd><dt>설비 상태</dt><dd>${escapeHtml(amr.equipmentStatus || '미설정')}</dd><dt>설정 속도</dt><dd>${escapeHtml(configuredSpeed)}</dd><dt>현재 속도</dt><dd>${escapeHtml(currentSpeed)}</dd><dt>배터리</dt><dd>${escapeHtml(battery)}</dd></dl>`;
+        return `<h5>${escapeHtml(name)}</h5><dl class="warehouse-3d-amr-details"><dt>설비 코드</dt><dd>${escapeHtml(code)}</dd><dt>설비명</dt><dd>${escapeHtml(name)}</dd><dt>타입</dt><dd>${escapeHtml(equipmentType)}</dd><dt>통신 연결 상태</dt><dd>${escapeHtml(communicationText)}</dd><dt>설비 상태</dt><dd>${escapeHtml(amr.equipmentStatus || '미설정')}</dd><dt>설정 속도</dt><dd>${escapeHtml(configuredSpeed)}</dd><dt>현재 속도</dt><dd>${escapeHtml(currentSpeed)}</dd><dt>배터리</dt><dd>${escapeHtml(battery)}</dd></dl><button type="button" class="warehouse-3d-history-button" data-warehouse-history="transport">작업 이력 보기</button>`;
+    }
+
+    function getTransportHistoryHtml(equipment) {
+        const history = [...(equipment.transportHistory || [])].sort((a, b) =>
+            Number(a.status === '배정 대기') - Number(b.status === '배정 대기')
+            || String(b.unloadedAt || b.loadedAt || b.assignedAt).localeCompare(String(a.unloadedAt || a.loadedAt || a.assignedAt)));
+        return history.map(record => `<tr data-transport-job="${escapeHtml(record.jobCode)}"><td class="warehouse-history-item">${escapeHtml(record.itemInfo)}</td><td>${escapeHtml(record.barcode)}</td><td>${getHistoryStatusHtml(record.status)}</td><td>${getHistoryTimeHtml(record.assignedAt)}</td><td>${escapeHtml(record.from)}</td><td>${getHistoryTimeHtml(record.loadedAt)}</td><td>${escapeHtml(record.to)}</td><td>${getHistoryTimeHtml(record.unloadedAt)}</td></tr>`).join('')
+            || '<tr><td colspan="8" class="warehouse-history-empty">아직 배정된 운반 작업이 없습니다.</td></tr>';
+    }
+
+    function getHistoryTimeHtml(value) {
+        return value ? `<time datetime="${escapeHtml(value)}">${escapeHtml(formatLocalDateTime(new Date(value)))}</time>` : '—';
+    }
+
+    function formatLocalDateTime(value) {
+        const pad = part => String(part).padStart(2, '0');
+        const date = `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+        const hours = value.getHours();
+        return `${date} ${hours < 12 ? '오전' : '오후'} ${hours % 12 || 12}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+    }
+
+    function getHistoryStatusHtml(status) {
+        const color = /(보류|오류|실패)/.test(status) ? '#dc2626'
+            : /(운반|이동)/.test(status) ? '#2563eb'
+            : status === '정상 인식' ? '#15803d' : getAmrEquipmentStatusColor(status);
+        return `<span class="warehouse-history-status" style="background:${color}">${escapeHtml(status)}</span>`;
+    }
+
+    function getScanHistoryHtml(entry) {
+        return (entry.history || []).map(record => `<tr><td>${getHistoryTimeHtml(record.passedAt)}</td><td class="warehouse-history-item">${escapeHtml(record.itemInfo)}</td><td>${escapeHtml(record.barcode)}</td><td>${getHistoryStatusHtml(record.result)}</td><td>${escapeHtml(record.destination)}</td></tr>`).join('')
+            || '<tr><td colspan="5" class="warehouse-history-empty">아직 통과한 물품이 없습니다.</td></tr>';
     }
 
     function getAmrEquipmentStatusColor(status) {
@@ -1160,10 +1279,10 @@
         texture.colorSpace = THREE.SRGBColorSpace;
         const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, toneMapped: false });
         const sprite = new THREE.Sprite(material);
-        const statusText = String(equipmentStatus || '').trim() || '미설정';
+        let statusText = String(equipmentStatus || '').trim() || '미설정';
         const isOnline = String(communicationStatus || '').trim().toUpperCase() === 'ONLINE';
         const communicationColor = isOnline ? '#00FF00' : '#9ca3af';
-        const equipmentStatusColor = getAmrEquipmentStatusColor(statusText);
+        let equipmentStatusColor = getAmrEquipmentStatusColor(statusText);
         const visuals = {
             normal: { fill: '#050f1e', scale: 1 },
             hover: { fill: '#0f3460', scale: 1.06 },
@@ -1230,6 +1349,13 @@
         material.opacity = baseOpacity;
         sprite.renderOrder = billboardRenderOrder;
         sprite.userData = { communicationStatus: isOnline ? 'ONLINE' : 'OFFLINE', equipmentStatus: statusText, communicationColor, equipmentStatusColor };
+        sprite.setOperationStatus = (status) => {
+            if (statusText === status) return;
+            statusText = status; equipmentStatusColor = getAmrEquipmentStatusColor(status);
+            sprite.userData.equipmentStatus = status;
+            sprite.userData.equipmentStatusColor = equipmentStatusColor;
+            drawLabel('normal');
+        };
         return sprite;
     }
 
@@ -1364,11 +1490,11 @@
         return calculateLoadingDockLayouts(...args)[0] || null;
     }
 
-    function calculateLoadingYardLayout(loadingDockLayout, floorWidth, floorDepth, yardDepth = 11000, shoulder = 2000) {
+    function calculateLoadingYardLayout(loadingDockLayout, floorWidth, floorDepth, yardDepth = 15000, shoulder = 2000) {
         if (!loadingDockLayout) return null;
         const width = Math.max(0, toNumber(floorWidth));
         const depth = Math.max(0, toNumber(floorDepth));
-        const approachDepth = Math.max(1000, toNumber(yardDepth, 11000));
+        const approachDepth = Math.max(1000, toNumber(yardDepth, 15000));
         const sideShoulder = Math.max(0, toNumber(shoulder, 2000));
         if (!width || !depth) return null;
         const layouts = {
@@ -1398,6 +1524,42 @@
             }
         };
         return { side: loadingDockLayout.side, approachDepth, ...layouts[loadingDockLayout.side] };
+    }
+
+    function calculateTruckYardPlacement(dock, yard, footprint) {
+        if (!dock || !yard || !footprint) return null;
+        const yaw = { front: 0, back: Math.PI, left: -Math.PI / 2, right: Math.PI / 2 }[yard.side];
+        if (!Number.isFinite(yaw)) return null;
+        const corners = [footprint.minX, footprint.maxX].flatMap((x) =>
+            [footprint.minZ, footprint.maxZ].map((z) => ({
+                x: x * Math.cos(yaw) + z * Math.sin(yaw),
+                z: -x * Math.sin(yaw) + z * Math.cos(yaw)
+            }))
+        );
+        const minX = Math.min(...corners.map((point) => point.x));
+        const maxX = Math.max(...corners.map((point) => point.x));
+        const minZ = Math.min(...corners.map((point) => point.z));
+        const maxZ = Math.max(...corners.map((point) => point.z));
+        const margin = 250;
+        const bounds = {
+            minX: yard.centerX - yard.sizeX / 2,
+            maxX: yard.centerX + yard.sizeX / 2,
+            minZ: yard.centerZ - yard.sizeZ / 2,
+            maxZ: yard.centerZ + yard.sizeZ / 2
+        };
+        const lowX = bounds.minX + margin - minX;
+        const highX = bounds.maxX - margin - maxX;
+        const lowZ = bounds.minZ + margin - minZ;
+        const highZ = bounds.maxZ - margin - maxZ;
+        if (![lowX, highX, lowZ, highZ].every(Number.isFinite) || lowX > highX || lowZ > highZ) return null;
+        const centerX = dock.bounds ? (dock.bounds.minX + dock.bounds.maxX) / 2 : dock.anchorX;
+        const centerZ = dock.bounds ? (dock.bounds.minZ + dock.bounds.maxZ) / 2 : dock.anchorZ;
+        const anchorX = yard.side === 'left' ? highX : yard.side === 'right' ? lowX : Math.min(highX, Math.max(lowX, centerX));
+        const anchorZ = yard.side === 'back' ? highZ : yard.side === 'front' ? lowZ : Math.min(highZ, Math.max(lowZ, centerZ));
+        return {
+            anchorX, anchorZ, yaw, side: yard.side,
+            bounds: { minX: anchorX + minX, maxX: anchorX + maxX, minZ: anchorZ + minZ, maxZ: anchorZ + maxZ }
+        };
     }
 
     function buildPassageBoundarySegments(passageCells, cellSize = 500, boundaryWidth = 100, boundaryInset = 100) {
@@ -1437,6 +1599,209 @@
             }
         });
         return segments;
+    }
+
+    // Work in grid coordinates: local run bands preserve branch widths rather than
+    // using the bounding box of an entire connected conveyor network.
+    function buildConveyorLayout(cells, cellSize = 500) {
+        const size = Math.max(1, toNumber(cellSize, 500));
+        const occupied = new Map();
+        (Array.isArray(cells) ? cells : []).forEach((cell) => {
+            if (!Number.isFinite(Number(cell?.x)) || !Number.isFinite(Number(cell?.y))) return;
+            const x = Math.round(Number(cell.x) / size);
+            const y = Math.round(Number(cell.y) / size);
+            occupied.set(`${x}:${y}`, { x, y });
+        });
+        const makeRuns = (axis) => {
+            const rows = new Map();
+            occupied.forEach((cell) => {
+                const row = axis === 'x' ? cell.y : cell.x;
+                const value = axis === 'x' ? cell.x : cell.y;
+                if (!rows.has(row)) rows.set(row, []);
+                rows.get(row).push(value);
+            });
+            const runs = [];
+            const lookup = new Map();
+            rows.forEach((values, row) => {
+                values.sort((a, b) => a - b);
+                let start = values[0];
+                values.forEach((value, i) => {
+                    if (values[i + 1] === value + 1) return;
+                    const run = { start, end: value + 1, row };
+                    runs.push(run);
+                    for (let p = start; p <= value; p += 1) {
+                        lookup.set(axis === 'x' ? `${p}:${row}` : `${row}:${p}`, run);
+                    }
+                    start = values[i + 1];
+                });
+            });
+            const bands = new Map();
+            runs.forEach((run) => {
+                const key = `${run.start}:${run.end}`;
+                if (!bands.has(key)) bands.set(key, []);
+                bands.get(key).push(run);
+            });
+            bands.forEach((band) => {
+                band.sort((a, b) => a.row - b.row);
+                let first = 0;
+                band.forEach((run, i) => {
+                    if (band[i + 1]?.row === run.row + 1) return;
+                    for (let j = first; j <= i; j += 1) band[j].thickness = i - first + 1;
+                    first = i + 1;
+                });
+            });
+            return lookup;
+        };
+        const horizontal = makeRuns('x');
+        const vertical = makeRuns('z');
+        occupied.forEach((cell, key) => {
+            const h = horizontal.get(key);
+            const v = vertical.get(key);
+            const alongX = h.end - h.start > h.thickness;
+            const alongZ = v.end - v.start > v.thickness;
+            cell.axis = alongX && alongZ ? 'transfer'
+                : alongX ? 'x' : alongZ ? 'z'
+                    : h.end - h.start > v.end - v.start ? 'x'
+                        : v.end - v.start > h.end - h.start ? 'z' : 'transfer';
+        });
+        // Merge adjacent equal runs. Every occupied cell belongs to exactly one module.
+        const modules = [];
+        ['x', 'z', 'transfer'].forEach((axis) => {
+            const rows = new Map();
+            occupied.forEach((cell) => {
+                if (cell.axis !== axis) return;
+                const along = axis === 'x' ? cell.x : cell.y;
+                const across = axis === 'x' ? cell.y : cell.x;
+                if (!rows.has(along)) rows.set(along, []);
+                rows.get(along).push(across);
+            });
+            let previous = new Map();
+            let previousAlong = -Infinity;
+            [...rows.keys()].sort((a, b) => a - b).forEach((along) => {
+                const row = rows.get(along).sort((a, b) => a - b);
+                const current = new Map();
+                let first = 0;
+                row.forEach((across, i) => {
+                    if (row[i + 1] === across + 1) return;
+                    const min = row[first];
+                    const max = across + 1;
+                    const key = `${min}:${max}`;
+                    let module = previousAlong === along - 1 ? previous.get(key) : null;
+                    if (module) module[axis === 'x' ? 'maxX' : 'maxY'] = (along + 1) * size;
+                    else {
+                        module = axis === 'x'
+                            ? { axis, minX: along * size, maxX: (along + 1) * size, minY: min * size, maxY: max * size }
+                            : { axis, minX: min * size, maxX: max * size, minY: along * size, maxY: (along + 1) * size };
+                        modules.push(module);
+                    }
+                    current.set(key, module);
+                    first = i + 1;
+                });
+                previous = current;
+                previousAlong = along;
+            });
+        });
+        const rails = [];
+        occupied.forEach((cell) => {
+            const { x, y, axis } = cell;
+            // No rails across an open transfer port or a straight-run endpoint.
+            [[0, -1, 'x'], [0, 1, 'x'], [-1, 0, 'z'], [1, 0, 'z']].forEach(([dx, dy, railAxis]) => {
+                if (occupied.has(`${x + dx}:${y + dy}`) || (axis !== 'transfer' && axis !== railAxis)) return;
+                rails.push({ axis: railAxis, x: (x + 0.5 + dx * 0.5) * size, y: (y + 0.5 + dy * 0.5) * size, length: size, dx, dy });
+            });
+        });
+        modules.forEach((module) => {
+            module.width = module.axis === 'z' ? module.maxX - module.minX : module.maxY - module.minY;
+            module.length = module.axis === 'z' ? module.maxY - module.minY : module.maxX - module.minX;
+        });
+        return { modules, rails, cellCount: occupied.size, cellSize: size };
+    }
+
+    function createConveyorModel(THREE, layout, floorElevation) {
+        const group = new THREE.Group();
+        group.name = 'WAREHOUSE-CV-ROLLER-CONVEYORS';
+        group.position.y = floorElevation;
+        group.userData = { kind: 'conveyor', source: 'floorPlan-CV', height: 1, motion: 'static' };
+        const resources = [];
+        const box = new THREE.BoxGeometry(1, 1, 1);
+        const cylinder = new THREE.CylinderGeometry(1, 1, 1, 12);
+        const steel = new THREE.MeshStandardMaterial({ color: '#aab6c2', metalness: 0.65, roughness: 0.32 });
+        const roller = new THREE.MeshStandardMaterial({ color: '#dde4eb', metalness: 0.72, roughness: 0.24 });
+        const yellow = new THREE.MeshStandardMaterial({ color: '#facc15', metalness: 0.28, roughness: 0.42 });
+        const rubber = new THREE.MeshStandardMaterial({ color: '#263441', roughness: 0.85 });
+        resources.push(box, cylinder, steel, roller, yellow, rubber);
+        const parts = { steel: [], roller: [], yellow: [], rubber: [] };
+        const add = (kind, x, y, z, sx, sy, sz, rx = 0, rz = 0) => parts[kind].push({ x, y, z, sx, sy, sz, rx, rz });
+        const legKeys = new Set();
+        const addLeg = (x, z) => {
+            const key = `${x.toFixed(3)}:${z.toFixed(3)}`;
+            if (legKeys.has(key)) return;
+            legKeys.add(key);
+            add('steel', x, 0.445, z, 0.065, 0.83, 0.065);
+            add('rubber', x, 0.015, z, 0.12, 0.03, 0.12);
+        };
+        layout.modules.forEach((module) => {
+            const acrossZ = module.axis !== 'z';
+            const min = (acrossZ ? module.minX : module.minY) / 1000;
+            const length = module.length / 1000;
+            const width = module.width / 1000;
+            const cross = (acrossZ ? module.minY + module.maxY : module.minX + module.maxX) / 2000;
+            const inset = Math.min(0.055, width * 0.12);
+            const radius = Math.min(0.035, length / 8, width / 8);
+            const count = Math.max(1, Math.floor(length / (radius * 3.2)));
+            for (let i = 0; i < count; i += 1) {
+                const along = min + (i + 0.5) * length / count;
+                add('roller', acrossZ ? along : cross, 1 - radius, acrossZ ? cross : along,
+                    radius, Math.max(0.01, width - inset * 2), radius, acrossZ ? Math.PI / 2 : 0, acrossZ ? 0 : Math.PI / 2);
+            }
+            // Simplified pop-up transfer belts cross the rollers at corners/junctions.
+            if (module.axis === 'transfer') {
+                [-0.22, 0.22].forEach((fraction) => {
+                    add('rubber', min + length / 2, 0.99, cross + width * fraction,
+                        Math.max(0.01, length - inset * 2), 0.02, Math.min(0.055, width * 0.1));
+                });
+            }
+            const supportCount = Math.max(2, Math.ceil(length / 1.5) + 1);
+            const endInset = Math.min(0.12, length / 4);
+            for (let i = 0; i < supportCount; i += 1) {
+                const along = min + endInset + (length - endInset * 2) * i / (supportCount - 1);
+                [-1, 1].forEach((sign) => {
+                    const side = cross + sign * (width / 2 - inset);
+                    addLeg(acrossZ ? along : side, acrossZ ? side : along);
+                });
+                [0.3, 0.85].forEach((height) => {
+                    add('steel', acrossZ ? along : cross, height, acrossZ ? cross : along,
+                        acrossZ ? 0.05 : width - inset, 0.045, acrossZ ? width - inset : 0.05);
+                });
+            }
+        });
+        layout.rails.forEach((rail) => {
+            const thickness = Math.min(0.045, layout.cellSize / 10000);
+            const x = rail.x / 1000 - rail.dx * thickness / 2;
+            const z = rail.y / 1000 - rail.dy * thickness / 2;
+            const length = rail.length / 1000;
+            add('steel', x, 0.90, z, rail.axis === 'x' ? length : thickness, 0.16, rail.axis === 'z' ? length : thickness);
+            add('yellow', x, 0.99, z, rail.axis === 'x' ? length : thickness, 0.04, rail.axis === 'z' ? length : thickness);
+        });
+        const transform = new THREE.Object3D();
+        Object.entries({ steel, roller, yellow, rubber }).forEach(([kind, material]) => {
+            if (!parts[kind].length) return;
+            const mesh = new THREE.InstancedMesh(kind === 'roller' ? cylinder : box, material, parts[kind].length);
+            mesh.name = `CONVEYOR-${kind.toUpperCase()}`;
+            parts[kind].forEach((part, i) => {
+                transform.position.set(part.x, part.y, part.z);
+                transform.rotation.set(part.rx, 0, part.rz);
+                transform.scale.set(part.sx, part.sy, part.sz);
+                transform.updateMatrix();
+                mesh.setMatrixAt(i, transform.matrix);
+            });
+            mesh.instanceMatrix.needsUpdate = true;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
+            resources.push(mesh);
+        });
+        return { group, resources, rollerCount: parts.roller.length, supportCount: legKeys.size };
     }
 
     function groupConnectedFloorCells(cells, cellSize = 500) {
@@ -2017,7 +2382,7 @@
 
         const maximumRackHeight = Math.max(0, ...data.rackTypes.map((type) => mm(type.height)));
         const warehouseHeight = Math.max(8, maximumRackHeight + 3.2);
-        const sceneSpan = Math.max(floorWidth, floorDepth) + (loadingYardLayout ? 11 : 0);
+        const sceneSpan = Math.max(floorWidth, floorDepth) + mm(loadingYardLayout?.approachDepth || 0);
         scene.add(new THREE.HemisphereLight('#dbeafe', '#101923', 1.65));
         const sun = new THREE.DirectionalLight('#fff7e8', 2.65);
         sun.position.set(floorWidth * 0.28, warehouseFloorElevation + warehouseHeight + 28, floorDepth * 0.22);
@@ -2463,8 +2828,9 @@
             box('truck-rear-bumper', [2.22, 0.18, 0.18], [0, 0.5, -0.12], materials.cargoTrim);
             addPart('truck-cab-shell', createCabGeometry(), materials.cab, [0, 0, 0]);
             box('truck-cab-roof', [2.18, 0.08, 1.25], [0, 3.12, 6.82], materials.cargoTrim);
-            box('truck-windshield-surround', [1.98, 0.95, 0.055], [0, 2.14, 8.075], materials.dark).rotation.x = -0.24;
-            box('truck-windshield', [1.82, 0.82, 0.06], [0, 2.15, 8.108], materials.glass).rotation.x = -0.24;
+            // The cab front is vertical at z=8.12 below y=2.58; keep both panes parallel and outside it.
+            box('truck-windshield-surround', [1.98, 0.95, 0.04], [0, 2.08, 8.142], materials.dark);
+            box('truck-windshield', [1.82, 0.82, 0.012], [0, 2.08, 8.17], materials.glass);
             [-1, 1].forEach((side) => {
                 const sideWindowShape = new THREE.Shape();
                 sideWindowShape.moveTo(-0.58, -0.38);
@@ -2500,20 +2866,31 @@
             [-1.02, 1.02].forEach((x) => truckAxlePositions.forEach((z) => addWheel(x, z)));
             const shadow = addPart('truck-shadow', new THREE.PlaneGeometry(2.5, 8.45), materials.shadow, [0, 0.012, 4], [-Math.PI / 2, 0, 0]);
             shadow.castShadow = false;
+            // Measure physical meshes before adding the screen-facing billboard.
+            const truckBounds = new THREE.Box3().setFromObject(truck);
+            const placement = calculateTruckYardPlacement(layout, loadingYardLayout, {
+                minX: truckBounds.min.x * 1000, maxX: truckBounds.max.x * 1000,
+                minZ: truckBounds.min.z * 1000, maxZ: truckBounds.max.z * 1000
+            });
+            if (!placement) return null;
+            truck.userData.loadingSide = placement.side;
+            truck.userData.groundBounds = placement.bounds;
             const infoBillboard = createTruckInfoBillboardSprite(THREE, truckInfo);
             infoBillboard.name = `WAREHOUSE-TRUCK-INFO-BILLBOARD-${layout.rackCode}`;
             infoBillboard.position.set(0, warehouseFloorElevation + 3.55, cargoLength / 2);
             infoBillboard.userData.dockCode = layout.rackCode;
             truck.add(infoBillboard);
             truck.userData.infoBillboard = infoBillboard;
-            truck.position.set(mm(layout.anchorX), 0, mm(layout.anchorZ));
-            truck.rotation.y = layout.yaw;
+            truck.position.set(mm(placement.anchorX), 0, mm(placement.anchorZ));
+            truck.rotation.y = placement.yaw;
             scene.add(truck);
             return truck;
         };
         const staticTrucks = loadingDockLayoutEntries.map(createStaticTruck).filter(Boolean);
         shell.viewport.dataset.warehouseTruck = staticTrucks.length ? 'static-5t-fleet' : 'none';
         shell.viewport.dataset.warehouseTruckCount = String(staticTrucks.length);
+        shell.viewport.dataset.warehouseTruckLoadingSides = staticTrucks.map((truck) => truck.userData.loadingSide).join(',');
+        shell.viewport.dataset.warehouseTruckGroundBounds = JSON.stringify(staticTrucks.map((truck) => ({ dock: truck.userData.dockCode, ...truck.userData.groundBounds })));
         shell.viewport.dataset.warehouseTruckDockCodes = staticTrucks.map((truck) => truck.userData.dockCode).join(',');
         shell.viewport.dataset.warehouseTruckRack = staticTrucks.map((truck) => truck.userData.rackCode).join(',');
         shell.viewport.dataset.warehouseTruckCargoSize = staticTrucks.length ? '6.2x2.2x2.3' : '';
@@ -2521,7 +2898,7 @@
         shell.viewport.dataset.warehouseTruckAxleCount = staticTrucks.length ? '3' : '0';
         shell.viewport.dataset.warehouseTruckInfoBillboardCount = String(staticTrucks.filter((truck) => truck.userData.infoBillboard).length);
         shell.viewport.dataset.warehouseTruckInfoFields = 'vehicle-number,company-name,scheduled-item-quantity';
-        shell.viewport.dataset.warehouseTruckInfoLayout = 'operation-vehicle-invoice-company-schedule';
+        shell.viewport.dataset.warehouseTruckInfoLayout = 'operation-vehicle-company-schedule-progress-bottom-invoice';
         shell.viewport.dataset.warehouseTruckInfoSpacing = 'compact';
         shell.viewport.dataset.warehouseTruckInfoCompanyLabels = '납품처,공급처';
         shell.viewport.dataset.warehouseTruckInfoInvoiceButton = '송장보기';
@@ -2611,6 +2988,67 @@
             scene.add(conveyorBoundaries);
         }
         shell.viewport.dataset.warehouseConveyorLineCount = String(conveyorBoundarySegments.length);
+        const conveyorLayout = buildConveyorLayout(conveyorCells, data.meta?.floorPlanCellSize || 500);
+        const conveyorModel = createConveyorModel(THREE, conveyorLayout, warehouseFloorElevation);
+        scene.add(conveyorModel.group);
+        const barcodeTunnelLayout = window.WmsBarcodeTunnel.buildLayout(data.meta?.barcodeTunnelCells, conveyorCells, data.meta?.floorPlanCellSize);
+        const barcodeTunnelModel = window.WmsBarcodeTunnel.createModel(THREE, barcodeTunnelLayout, warehouseFloorElevation);
+        const barcodeTunnelTargets = [];
+        const barcodeTunnelLabelTargets = [];
+        let hoveredBarcodeTunnel = null;
+        let selectedBarcodeTunnel = null;
+        const workOrderByCode = new Map((data.workOrders || []).map(workOrder => [workOrder.code, workOrder]));
+        const scanItemByCode = new Map((data.items || []).map(item => [item.code, item]));
+        const scanRouteByCode = new Map((data.operationRoutes || []).map(route => [route.code, route]));
+        const resolveBarcodeScanMetadata = cargoId => {
+            const workOrder = workOrderByCode.get(cargoId) || data.workOrders?.find(order => order.code === cargoId);
+            const item = scanItemByCode.get(workOrder?.itemCode);
+            const route = scanRouteByCode.get(workOrder?.routeCode);
+            const quantity = Number(workOrder?.quantity || 0);
+            const itemName = item?.name || workOrder?.itemCode || '미설정 품목';
+            const itemInfo = `${workOrder?.itemCode || '미설정'} · ${itemName}${quantity > 0 ? ` · ${quantity}개` : ''}`;
+            const destination = workOrder?.direction === '출고'
+                ? route?.buffer || '버퍼 배정 대기'
+                : workOrder?.finalLocationCode || '랙 로케이션 배정 대기';
+            return {
+                result: '정상 인식', itemInfo, destination,
+                barcode: workOrder?.barcode || `HU-${cargoId || 'UNKNOWN'}`
+            };
+        };
+        barcodeTunnelModel.entries.forEach(entry => {
+            const code = entry.tunnel.name;
+            const label = createAmrLabelSprite(THREE, {
+                name: code,
+                communicationStatus: entry.communicationStatus,
+                equipmentStatus: entry.equipmentStatus
+            });
+            label.name = `${code}-status-billboard`;
+            label.position.set(0, entry.tunnel.userData.height + 1.02, 0);
+            label.userData = {
+                ...label.userData,
+                kind: 'barcode-tunnel-label',
+                barcodeTunnel: entry,
+                equipmentCode: code
+            };
+            entry.label = label;
+            entry.tunnel.add(label);
+            barcodeTunnelLabelTargets.push(label);
+            entry.tunnel.traverse(object => {
+                if (!object.isMesh) return;
+                object.userData = { ...object.userData, kind: 'barcode-tunnel', barcodeTunnel: entry };
+                barcodeTunnelTargets.push(object);
+            });
+        });
+        scene.add(barcodeTunnelModel.group);
+        shell.viewport.dataset.barcodeTunnelCount = String(barcodeTunnelLayout.length);
+        shell.viewport.dataset.barcodeTunnelLayout = JSON.stringify(barcodeTunnelLayout);
+        shell.viewport.dataset.barcodeTunnelBillboardCount = String(barcodeTunnelLabelTargets.length);
+        shell.viewport.dataset.warehouseConveyorModel = 'roller';
+        shell.viewport.dataset.warehouseConveyorHeight = '1';
+        shell.viewport.dataset.warehouseConveyorModuleCount = String(conveyorLayout.modules.length);
+        shell.viewport.dataset.warehouseConveyorTransferCount = String(conveyorLayout.modules.filter((module) => module.axis === 'transfer').length);
+        shell.viewport.dataset.warehouseConveyorRollerCount = String(conveyorModel.rollerCount);
+        shell.viewport.dataset.warehouseConveyorWidths = [...new Set(conveyorLayout.modules.filter((module) => module.axis !== 'transfer').map((module) => module.width / 1000))].join(',');
         const dockBoundarySegments = buildPassageBoundarySegments(
             dockCells,
             data.meta?.floorPlanCellSize || 500,
@@ -3741,6 +4179,59 @@
         const shuttleWheelGeometry = new THREE.CylinderGeometry(shuttleWheelRadius, shuttleWheelRadius, shuttleWheelWidth, 12);
         const shuttleBodyMaterial = new THREE.MeshPhysicalMaterial({ color: '#0b76b7', roughness: 0.32, metalness: 0.46, clearcoat: 0.68 });
         const shuttleWheelMaterial = new THREE.MeshStandardMaterial({ color: '#111827', roughness: 0.76, metalness: 0.12 });
+        const transportCargoResources = [];
+        let transportCartonMaterials;
+        function createTransportCartonStack(width, height, depth) {
+            if (!transportCartonMaterials) {
+                const makeTexture = top => {
+                    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
+                    const context = canvas.getContext('2d');
+                    context.fillStyle = '#c99b59'; context.fillRect(0, 0, 512, 512);
+                    context.strokeStyle = '#a7793b18'; context.lineWidth = 1;
+                    for (let i = 0; i < 512; i += 8) { context.beginPath(); context.moveTo(i, 0); context.lineTo(i, 512); context.moveTo(0, i); context.lineTo(512, i); context.stroke(); }
+                    if (top) {
+                        context.fillStyle = '#ddb87d'; context.fillRect(225, 0, 62, 512);
+                        context.strokeStyle = '#8f6936'; context.beginPath(); context.moveTo(256, 0); context.lineTo(256, 512); context.stroke();
+                    } else {
+                        context.fillStyle = '#f4f0e7'; context.fillRect(36, 34, 192, 114);
+                        context.fillStyle = '#28251f'; context.font = 'bold 23px sans-serif'; context.fillText('CARGO', 48, 61);
+                        // Generic packaging marks: no brand, watermark or imitation of a registered barcode.
+                        context.font = '14px sans-serif'; context.fillText('HANDLE WITH CARE', 48, 85);
+                        for (let i = 0; i < 22; i++) context.fillRect(48 + i * 7, 99, i % 3 === 0 ? 4 : 2, 28);
+                        context.strokeStyle = '#28251f'; context.lineWidth = 5;
+                        [202, 300, 398].forEach(x => context.strokeRect(x, 365, 82, 82));
+                        [225, 256].forEach(x => { context.beginPath(); context.moveTo(x, 430); context.lineTo(x, 381); context.moveTo(x - 9, 391); context.lineTo(x, 381); context.lineTo(x + 9, 391); context.stroke(); });
+                        context.beginPath(); context.moveTo(318, 381); context.lineTo(363, 381); context.quadraticCurveTo(363, 412, 341, 412); context.quadraticCurveTo(318, 412, 318, 381); context.moveTo(341, 412); context.lineTo(341, 433); context.moveTo(328, 433); context.lineTo(354, 433); context.stroke();
+                        context.beginPath(); context.arc(439, 407, 25, Math.PI, 0); context.lineTo(414, 407); context.moveTo(439, 407); context.lineTo(439, 430); context.quadraticCurveTo(439, 442, 428, 435); context.stroke();
+                    }
+                    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+                    transportCargoResources.push(texture); return texture;
+                };
+                transportCartonMaterials = {
+                    body: new THREE.MeshStandardMaterial({ color: '#c99b59', roughness: 0.9, metalness: 0 }),
+                    face: new THREE.MeshStandardMaterial({ map: makeTexture(false), roughness: 0.9, metalness: 0 }),
+                    top: new THREE.MeshStandardMaterial({ map: makeTexture(true), roughness: 0.9, metalness: 0 })
+                };
+                transportCargoResources.push(...Object.values(transportCartonMaterials));
+            }
+            const layout = getCartonStackLayout(width, height, depth), [w, h, d] = layout.cartonSize;
+            const stack = new THREE.Group(); stack.name = 'transport-carton-stack';
+            stack.userData.cartonCount = layout.positions.length;
+            const bodies = new THREE.InstancedMesh(getGeometry(w, h, d), transportCartonMaterials.body, 8);
+            const faces = new THREE.InstancedMesh(getGeometry(1, 1, 0.001), transportCartonMaterials.face, 32);
+            const tops = new THREE.InstancedMesh(getGeometry(1, 1, 0.001), transportCartonMaterials.top, 8);
+            const transform = new THREE.Object3D(); let faceIndex = 0;
+            layout.positions.forEach((p, index) => {
+                transform.position.set(p.x, p.y, p.z); transform.rotation.set(0, 0, 0); transform.scale.set(1, 1, 1); transform.updateMatrix(); bodies.setMatrixAt(index, transform.matrix);
+                [[p.x, p.z + d / 2 + 0.001, 0, w], [p.x, p.z - d / 2 - 0.001, Math.PI, w],
+                    [p.x + w / 2 + 0.001, p.z, Math.PI / 2, d], [p.x - w / 2 - 0.001, p.z, -Math.PI / 2, d]].forEach(([x, z, yaw, faceWidth]) => {
+                    transform.position.set(x, p.y, z); transform.rotation.set(0, yaw, 0); transform.scale.set(faceWidth, h, 1); transform.updateMatrix(); faces.setMatrixAt(faceIndex++, transform.matrix);
+                });
+                transform.position.set(p.x, p.y + h / 2 + 0.001, p.z); transform.rotation.set(-Math.PI / 2, 0, 0); transform.scale.set(w, d, 1); transform.updateMatrix(); tops.setMatrixAt(index, transform.matrix);
+            });
+            [bodies, faces, tops].forEach(mesh => { mesh.castShadow = true; mesh.receiveShadow = true; stack.add(mesh); });
+            return stack;
+        }
         const shuttleLoadMaterials = ['#f5c84b', '#71d48c', '#f06b6b'].map((color) =>
             new THREE.MeshPhysicalMaterial({ color, roughness: 0.3, metalness: 0.08, clearcoat: 0.55 })
         );
@@ -3783,6 +4274,9 @@
                 shuttleLoadMaterials[index % shuttleLoadMaterials.length]
             );
             cargo.name = 'shuttle-carried-load-box';
+            cargo.visible = false;
+            const cartons = createTransportCartonStack(loadDimensions.width, composition.cargoHeight, loadDimensions.depth);
+            cartons.position.y = loadBaseY + composition.palletHeight;
             cargo.position.y = loadBaseY + composition.palletHeight + composition.cargoHeight / 2;
             cargo.castShadow = true;
             const pallet = new THREE.Group();
@@ -3814,7 +4308,7 @@
                 part.castShadow = true;
                 part.receiveShadow = true;
             });
-            load.add(cargo, pallet);
+            load.add(cargo, pallet, cartons);
             group.add(load);
             return { group, load, cargo, pallet, loadDimensions, loadComposition: composition };
         };
@@ -4128,6 +4622,9 @@
                 getMaterial(color, { roughness: 0.2, metalness: 0.12, clearcoat: 0.86, clearcoatRoughness: 0.08 })
             );
             cargo.name = 'forklift-carried-load-box';
+            cargo.visible = false;
+            const cartons = createTransportCartonStack(size[0], composition.cargoHeight, size[2]);
+            cartons.position.y = composition.palletHeight;
             cargo.position.y = composition.palletHeight + composition.cargoHeight / 2;
             cargo.castShadow = true;
             cargo.receiveShadow = true;
@@ -4157,7 +4654,9 @@
                 part.castShadow = true;
                 part.receiveShadow = true;
             });
-            load.add(cargo, pallet);
+            load.add(cargo, pallet, cartons);
+            load.userData.cargoAppearance = 'kraft-carton-stack';
+            load.setStorageState = (stored, rackColor) => setUnitLoadStoredAppearance(load, stored, rackColor);
             load.position.set(0, 0.035, 0);
             amr.loadAnchor.add(load);
             amr.carriedLoad = load;
@@ -4259,7 +4758,7 @@
             amr.waitUntil = timestamp;
             setForkliftState(amr, 'driving', timestamp);
         };
-        amrFleet.forEach((amr, index) => assignForkliftTask(amr, performance.now() + index * 420));
+        if (!Array.isArray(data.operationRoutes)) amrFleet.forEach((amr, index) => assignForkliftTask(amr, performance.now() + index * 420));
 
         let yaw = Math.PI / 4;
         let pitch = Math.PI / 6;
@@ -4368,6 +4867,7 @@
                 }
                 const placedLoad = createTaskLoad(amr, target);
                 placedLoad.name = 'forklift-placed-load';
+                placedLoad.setStorageState(Boolean(target.slot.rack), slotColorPalette[getSlotVisualKey(target.slot, 'utilization')]);
                 placedLoad.removeFromParent();
                 amr.carriedLoad = null;
                 placedLoad.position.set(
@@ -4514,6 +5014,18 @@
             shell.viewport.dataset.shuttleStates = shuttleFleet.map((shuttle) => shuttle.state).join(',');
             return true;
         };
+        const operations = Array.isArray(data.operationRoutes) ? window.createWarehouseOperationScene({
+            THREE, shell, data, scene, signal, amrFleet, shuttleFleet, shuttleLiftEntries, rackEntries,
+            passageNavigation, shuttleNavigation, buildPassageNavigationGraph, createTaskLoad,
+            setSlotInstanceVisible, warehouseFloorElevation, shuttleTravelBaseOffset,
+            shuttleBodyCenterY, shuttleFrameHeight, setForkHeight, setForkExtension, stackerDimensions, travelForkHeight,
+            isLevelFocused: () => Boolean(activeRackLevelFocus),
+            slotVisualState: slot => ({
+                visible: !activeRackLevelFocus || (slot.rack === activeRackLevelFocus.rackData.rack && slot.level === activeRackLevelFocus.level),
+                opacity: rackEntries.find(entry => entry.rack === slot.rack)?.dimmed ? 0.12 : 1,
+                color: slotColorPalette[getSlotVisualKey(slot, viewMode)]
+            })
+        }) : null;
         const updateAmrFleet = (timestamp) => {
             if (!amrFleet.length) return false;
             if (!lastAmrFrameTime) {
@@ -4581,14 +5093,50 @@
             animationFrame = 0;
             const frameTime = timestamp || performance.now();
             updateWorldUiTransitions(frameTime);
-            const amrIsActive = updateAmrFleet(frameTime);
-            const shuttleIsActive = updateShuttleFleet(frameTime);
+            const amrIsActive = operations ? operations.update(frameTime) : updateAmrFleet(frameTime);
+            staticTrucks.forEach(truck => {
+                const label = truck.userData.infoBillboard;
+                const status = operations?.truckProgress(truck.userData.dockCode, label.userData.workType);
+                if (status) label.setProgressStatus(status);
+            });
+            shell.viewport.dataset.warehouseTruckProgress = JSON.stringify(staticTrucks.map(truck => ({
+                dock: truck.userData.dockCode, status: truck.userData.infoBillboard.userData.progressStatus
+            })));
+            const shuttleIsActive = operations ? false : updateShuttleFleet(frameTime);
+            const selectedTunnelScanCount = selectedBarcodeTunnel?.scans ?? -1;
+            const scannerIsActive = !activeRackLevelFocus && barcodeTunnelModel.update(frameTime,
+                scene.children.filter(object => object.name.startsWith('operation-pallet-')),
+                resolveBarcodeScanMetadata);
+            barcodeTunnelModel.entries.forEach(entry => {
+                const status = entry.equipmentStatus || '대기';
+                if (entry.label?.userData?.equipmentStatus !== status) {
+                    entry.label.setOperationStatus(status);
+                    const interaction = entry === selectedBarcodeTunnel ? 'selected'
+                        : entry === hoveredBarcodeTunnel ? 'hover' : 'normal';
+                    entry.label.setInteractionState(interaction)?.(1);
+                }
+                const statusElement = shell.zoneButtons.querySelector(
+                    `[data-warehouse-object-code="${entry.tunnel.name}"] .warehouse-3d-object-status`
+                );
+                if (statusElement && statusElement.textContent !== status) {
+                    statusElement.textContent = status;
+                    statusElement.style.setProperty('--warehouse-equipment-status-color', getAmrEquipmentStatusColor(status));
+                }
+            });
+            if (selectedBarcodeTunnel && selectedBarcodeTunnel.scans !== selectedTunnelScanCount) {
+                showBarcodeTunnelSelection(selectedBarcodeTunnel);
+            }
+            updateHistoryDialog();
+            shell.viewport.dataset.barcodeTunnelScans = barcodeTunnelModel.entries.map(e => e.scans).join(',');
+            shell.viewport.dataset.barcodeTunnelFlashing = barcodeTunnelModel.entries.map(e => Number(e.glow.visible)).join(',');
             updateAmrFollow(frameTime);
             if (!destroyed && renderer.domElement.isConnected) {
                 renderer.render(scene, camera);
+                updateTruckInvoiceButtons();
                 updateHoverTooltipPosition();
             }
             if (activeWorldUiTransitions.size
+                || scannerIsActive
                 || (amrIsActive && shell.viewport.clientWidth && shell.viewport.clientHeight)
                 || (shuttleIsActive && shell.viewport.clientWidth && shell.viewport.clientHeight)) requestRender();
         };
@@ -4615,6 +5163,42 @@
                 return true;
             });
         };
+        const setBarcodeTunnelLabelState = (entry, state) => {
+            const update = entry?.label?.setInteractionState(state);
+            if (!update) return;
+            const token = {};
+            entry.label.userData.interactionToken = token;
+            startWorldUiTransition(160, progress => {
+                if (entry.label.userData.interactionToken !== token) return false;
+                update(progress);
+                return true;
+            });
+        };
+        const setHoveredBarcodeTunnel = entry => {
+            if (hoveredBarcodeTunnel === entry) return;
+            if (hoveredBarcodeTunnel && hoveredBarcodeTunnel !== selectedBarcodeTunnel) {
+                setBarcodeTunnelLabelState(hoveredBarcodeTunnel, 'normal');
+            }
+            hoveredBarcodeTunnel = entry || null;
+            if (hoveredBarcodeTunnel && hoveredBarcodeTunnel !== selectedBarcodeTunnel) {
+                setBarcodeTunnelLabelState(hoveredBarcodeTunnel, 'hover');
+            }
+            renderer.domElement.style.cursor = hoveredBarcodeTunnel ? 'pointer' : '';
+        };
+        const setSelectedBarcodeTunnel = entry => {
+            const previous = selectedBarcodeTunnel;
+            selectedBarcodeTunnel = entry || null;
+            if (previous && previous !== selectedBarcodeTunnel) {
+                setBarcodeTunnelLabelState(previous, previous === hoveredBarcodeTunnel ? 'hover' : 'normal');
+            }
+            if (selectedBarcodeTunnel) {
+                setBarcodeTunnelLabelState(selectedBarcodeTunnel, 'selected');
+                showBarcodeTunnelSelection(selectedBarcodeTunnel);
+            }
+            shell.viewport.dataset.selectedBarcodeTunnel = selectedBarcodeTunnel?.tunnel?.name || '';
+            shell.syncObjectSelection?.();
+            requestRender();
+        };
         const setHoveredAmr = (amr) => {
             if (hoveredAmr === amr) return;
             if (hoveredAmr && hoveredAmr !== followedAmr) setAmrLabelState(hoveredAmr, 'normal');
@@ -4630,6 +5214,7 @@
             if (previous && previous !== followedAmr) setAmrLabelState(previous, previous === hoveredAmr ? 'hover' : 'normal');
             if (followedAmr) {
                 setAmrLabelState(followedAmr, 'selected');
+                resetInspectorLayout();
                 shell.inspector.innerHTML = getAmrInspectorHtml(followedAmr);
                 cameraFocusTransitionToken += 1;
                 // Keep at least 14m vertically and 10m horizontally in view.
@@ -4845,6 +5430,7 @@
                 entry.slots.forEach(applySlotInstanceVisibility);
             });
             shuttleFrameGroup.visible = !active;
+            barcodeTunnelModel.group.visible = !active;
             shuttleLiftEntries.forEach((lift) => { if (lift.group) lift.group.visible = !active; });
             amrFleet.forEach((amr) => { amr.group.visible = !active; });
             shuttleFleet.forEach((shuttle) => { shuttle.group.visible = !active; });
@@ -4922,7 +5508,135 @@
             if (clearedRackLevelFocus) restoreCameraAfterRackLevelClear?.(selectedRack);
             requestRender();
         };
-        const showDefaultInspector = () => { shell.inspector.innerHTML = '<h5>선택 정보</h5><p>구역, 랙, 설비 또는 적재 상자를 선택하면 상세 정보가 표시됩니다.</p>'; };
+        const resetInspectorLayout = () => shell.inspector.classList.remove('is-barcode-tunnel', 'is-transport-inspector');
+        const showDefaultInspector = () => {
+            resetInspectorLayout();
+            shell.inspector.innerHTML = '<h5>선택 정보</h5><p>구역, 랙, 설비, 스캔 터널 또는 적재 상자를 선택하면 상세 정보가 표시됩니다.</p>';
+        };
+        function showBarcodeTunnelSelection(entry) {
+            if (!entry) return;
+            resetInspectorLayout();
+            const code = entry.tunnel?.name || 'BT';
+            const communicationText = entry.communicationStatus === 'ONLINE' ? '온라인 (ONLINE)' : '오프라인 (OFFLINE)';
+            shell.inspector.innerHTML = `<h5>${escapeHtml(code)} · 스캔 터널</h5><dl class="warehouse-3d-amr-details"><dt>터널 번호</dt><dd>${escapeHtml(code)}</dd><dt>통신 상태</dt><dd>${escapeHtml(communicationText)}</dd><dt>설비 상태</dt><dd>${escapeHtml(entry.equipmentStatus || '대기')}</dd><dt>누적 스캔</dt><dd>${entry.scans}건</dd></dl><button type="button" class="warehouse-3d-history-button" data-warehouse-history="scan">작업 이력 보기</button>`;
+        }
+        const historyDialog = document.createElement('dialog');
+        historyDialog.className = 'warehouse-history-dialog';
+        historyDialog.setAttribute('aria-label', '설비 작업 이력');
+        historyDialog.innerHTML = '<div class="warehouse-history-dialog-content"><header><h3></h3><button type="button" class="warehouse-history-close" aria-label="작업 이력 닫기">닫기</button></header><p class="warehouse-history-caption">현재 모의 운행의 이력입니다. 화면 재진입·시트 새로고침 시 초기화됩니다.</p><div class="warehouse-history-table-scroll"><table class="warehouse-history-table"><thead></thead><tbody></tbody></table></div><footer><span class="warehouse-history-count"></span><span>운행 중 자동 갱신</span></footer></div>';
+        shell.viewport.closest('.warehouse-3d-shell').append(historyDialog);
+        let historyTarget = null;
+        let historyKind = '';
+        let historySignature = '';
+        function updateHistoryDialog() {
+            if (!historyDialog.open || !historyTarget) return;
+            const records = historyKind === 'scan' ? historyTarget.history : historyTarget.transportHistory;
+            const signature = JSON.stringify(records || []);
+            if (signature === historySignature) return;
+            historyDialog.querySelector('tbody').innerHTML = historyKind === 'scan'
+                ? getScanHistoryHtml(historyTarget) : getTransportHistoryHtml(historyTarget);
+            historyDialog.querySelector('.warehouse-history-count').textContent = `총 ${records?.length || 0}건`;
+            historySignature = signature;
+        }
+        shell.inspector.addEventListener('click', event => {
+            const button = event.target.closest('[data-warehouse-history]');
+            if (!button) return;
+            historyKind = button.dataset.warehouseHistory;
+            historyDialog.dataset.kind = historyKind;
+            historyTarget = historyKind === 'scan' ? selectedBarcodeTunnel : followedAmr;
+            if (!historyTarget) return;
+            historySignature = '';
+            const name = historyKind === 'scan' ? `${historyTarget.tunnel.name} · 스캔 터널`
+                : historyTarget.equipmentName || historyTarget.equipmentCode;
+            historyDialog.querySelector('h3').textContent = `${name} · 작업 이력`;
+            const columns = historyKind === 'scan'
+                ? ['통과 시간', '물품 정보', '바코드 정보', '인식 상태', '도착지']
+                : ['물품 정보', '바코드 정보', '작업 상태', '배정 시간', '상차 지점', '상차 시간', '하차 지점', '하차 시간'];
+            historyDialog.querySelector('thead').innerHTML = `<tr>${columns.map(column => `<th scope="col">${column}</th>`).join('')}</tr>`;
+            const scroller = historyDialog.querySelector('.warehouse-history-table-scroll');
+            scroller.scrollTop = 0; scroller.scrollLeft = 0;
+            historyDialog.showModal();
+            updateHistoryDialog();
+        }, { signal });
+        historyDialog.querySelector('.warehouse-history-close').addEventListener('click', () => historyDialog.close(), { signal });
+        historyDialog.addEventListener('keydown', event => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault(); event.stopPropagation();
+            historyDialog.close();
+        }, { signal });
+        historyDialog.addEventListener('click', event => {
+            if (event.target !== historyDialog) return;
+            const rect = historyDialog.getBoundingClientRect();
+            if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) historyDialog.close();
+        }, { signal });
+        historyDialog.addEventListener('close', () => {
+            historyTarget = null;
+            shell.inspector.querySelector('[data-warehouse-history]')?.focus();
+        }, { signal });
+        signal.addEventListener('abort', () => { historyDialog.close(); historyDialog.remove(); }, { once: true });
+        const invoiceDialog = document.createElement('dialog');
+        invoiceDialog.className = 'warehouse-invoice-dialog';
+        invoiceDialog.setAttribute('aria-label', '차량 운송 송장');
+        invoiceDialog.innerHTML = '<div class="warehouse-invoice-toolbar"><span>운송 송장</span><button type="button" class="warehouse-invoice-close" aria-label="송장 닫기">닫기</button></div><div class="warehouse-invoice-content"></div>';
+        shell.viewport.closest('.warehouse-3d-shell').append(invoiceDialog);
+        let invoiceOpener = null;
+        const invoiceButtons = staticTrucks.map(truck => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'warehouse-truck-invoice-trigger';
+            button.dataset.truckInvoiceDock = truck.userData.dockCode;
+            button.setAttribute('aria-label', `${truck.userData.dockCode} 차량 송장 보기`);
+            button.title = `${truck.userData.dockCode} 차량 송장 보기`;
+            button.hidden = true;
+            shell.viewport.append(button);
+            button.addEventListener('click', () => {
+                invoiceOpener = button;
+                const info = schedulesByDock.get(truck.userData.dockCode) || {};
+                const order = data.workOrders?.find(order => order.code === info.scheduleCode) || {};
+                invoiceDialog.dataset.dockCode = truck.userData.dockCode;
+                invoiceDialog.querySelector('.warehouse-invoice-content').innerHTML = getTruckInvoiceHtml({ ...info,
+                    progressStatus: truck.userData.infoBillboard.userData.progressStatus }, truck.userData.dockCode,
+                    document.body.dataset.brandTitle || '물류 창고', order);
+                invoiceDialog.querySelector('.warehouse-invoice-content').scrollTop = 0;
+                invoiceDialog.showModal();
+            }, { signal });
+            return { truck, button };
+        });
+        // Place native, keyboard-accessible buttons exactly over the buttons drawn on each sprite.
+        function updateTruckInvoiceButtons() {
+            const width = renderer.domElement.clientWidth, height = renderer.domElement.clientHeight;
+            invoiceButtons.forEach(({ truck, button }) => {
+                const sprite = truck.userData.infoBillboard;
+                const world = sprite.getWorldPosition(new THREE.Vector3());
+                const view = world.clone().applyMatrix4(camera.matrixWorldInverse);
+                const projected = world.clone().project(camera);
+                const scale = sprite.getWorldScale(new THREE.Vector3());
+                const divisor = camera.isPerspectiveCamera ? -view.z : 1;
+                const spriteWidth = scale.x * camera.projectionMatrix.elements[0] / divisor * width / 2;
+                const spriteHeight = scale.y * camera.projectionMatrix.elements[5] / divisor * height / 2;
+                const x = (projected.x + 1) * width / 2 + spriteWidth * (24 / 520 - 0.5);
+                const y = (1 - projected.y) * height / 2 + spriteHeight * (242 / 300 - 0.5);
+                button.hidden = !sprite.visible || !truck.visible || view.z >= 0 || projected.z < -1 || projected.z > 1
+                    || x + spriteWidth * 472 / 520 < 0 || x > width || y + spriteHeight * 40 / 300 < 0 || y > height;
+                if (button.hidden) return;
+                button.style.left = `${x}px`; button.style.top = `${y}px`;
+                button.style.width = `${spriteWidth * 472 / 520}px`; button.style.height = `${spriteHeight * 40 / 300}px`;
+            });
+        }
+        invoiceDialog.querySelector('.warehouse-invoice-close').addEventListener('click', () => invoiceDialog.close(), { signal });
+        invoiceDialog.addEventListener('keydown', event => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault(); event.stopPropagation(); invoiceDialog.close();
+        }, { signal });
+        invoiceDialog.addEventListener('click', event => {
+            if (event.target !== invoiceDialog) return;
+            const rect = invoiceDialog.getBoundingClientRect();
+            if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) invoiceDialog.close();
+        }, { signal });
+        invoiceDialog.addEventListener('close', () => { invoiceOpener?.focus({ preventScroll: true }); invoiceOpener = null; }, { signal });
+        signal.addEventListener('abort', () => {
+            invoiceDialog.close(); invoiceDialog.remove(); invoiceButtons.forEach(({ button }) => button.remove());
+        }, { once: true });
         let hoveredZoneCode = '';
         let selectedZoneCode = '';
         const getZoneStatistics = (zoneCode) => {
@@ -4938,6 +5652,7 @@
         const showZoneSelection = (zoneCode) => {
             const zone = zoneByCode.get(zoneCode);
             if (!zone) { showDefaultInspector(); return; }
+            resetInspectorLayout();
             const statistics = getZoneStatistics(zoneCode);
             const defaultRackType = rackTypeByCode.get(zone.defaultRackTypeCode);
             const rackTypeText = defaultRackType
@@ -4980,6 +5695,7 @@
             else showDefaultInspector();
         };
         const clearObjectSelectionForZone = () => {
+            setSelectedBarcodeTunnel(null);
             setSelectedAmr(null);
             setSelectedSlot(null);
             setHoveredSlot(null);
@@ -4989,29 +5705,38 @@
         };
         const selectableZones = data.zones.filter((zone) => zoneVisualizationEntries.some((entry) => entry.zoneCode === zone.code));
         const communicationIcon = (online) => `<svg class="warehouse-3d-connection-icon ${online ? 'is-online' : 'is-offline'}" viewBox="0 0 24 24" role="img" aria-label="${online ? '온라인' : '오프라인'}"><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/>${online ? '' : '<path d="m3 3 18 18"/>'}</svg>`;
+        const mobileEquipmentRows = [...amrFleet, ...shuttleFleet].map(equipment => ({
+            code: equipment.equipmentCode,
+            name: equipment.equipmentName,
+            detail: equipment.equipmentStatus,
+            value: equipment,
+            equipmentKind: 'mobile'
+        }));
+        const barcodeTunnelEquipmentRows = barcodeTunnelModel.entries.map(entry => ({
+            code: entry.tunnel.name,
+            name: `${entry.tunnel.name} 스캔 터널`,
+            detail: entry.equipmentStatus,
+            value: entry,
+            equipmentKind: 'barcode-tunnel'
+        }));
         const objectGroups = {
             zone: selectableZones.map((zone) => ({ code: zone.code, name: zone.code, detail: zone.name || zone.purpose || '구역', value: zone })),
             rack: rackEntries.map(entry => ({ code: entry.rack.code, name: entry.rack.code, detail: entry.rack.zoneCode || '', value: entry })),
-            equipment: [...amrFleet, ...shuttleFleet]
-                .map(equipment => ({
-                    code: equipment.equipmentCode,
-                    name: equipment.equipmentName,
-                    detail: equipment.equipmentStatus,
-                    value: equipment
-                }))
+            equipment: [...mobileEquipmentRows, ...barcodeTunnelEquipmentRows]
         };
         let visibleObjectItems = [];
         let expandedBeforeSearch = null;
-        const clearObjectPreview = () => { setHoveredZone(''); setHoveredRack(null); setHoveredAmr(null); };
+        const clearObjectPreview = () => { setHoveredZone(''); setHoveredRack(null); setHoveredAmr(null); setHoveredBarcodeTunnel(null); };
         const isObjectSelected = (item) => item.kind === 'zone' ? selectedZoneCode === item.code
-            : item.kind === 'rack' ? selectedRack === item.value.rackData : followedAmr === item.value;
+            : item.kind === 'rack' ? selectedRack === item.value.rackData
+                : item.equipmentKind === 'barcode-tunnel' ? selectedBarcodeTunnel === item.value : followedAmr === item.value;
         shell.syncObjectSelection = () => {
             shell.zoneButtons.querySelectorAll('[data-warehouse-object-index]').forEach(button => {
                 const item = visibleObjectItems[Number(button.dataset.warehouseObjectIndex)];
                 button.setAttribute('aria-pressed', String(Boolean(item && isObjectSelected(item))));
             });
             shell.objectOverview.setAttribute('aria-pressed', String(
-                !selectedZoneCode && !selectedRack && !followedAmr && !selectedOutline.visible
+                !selectedZoneCode && !selectedRack && !followedAmr && !selectedBarcodeTunnel && !selectedOutline.visible
                 && !shell.objectSearch.value.trim()
             ));
         };
@@ -5060,6 +5785,7 @@
             if (!item) return;
             if (item.kind === 'zone') setHoveredZone(item.code);
             else if (item.kind === 'rack') setHoveredRack(item.value.rackData);
+            else if (item.equipmentKind === 'barcode-tunnel') setHoveredBarcodeTunnel(item.value);
             else setHoveredAmr(item.value);
         };
         shell.zoneButtons.addEventListener('pointerover', event => {
@@ -5079,7 +5805,8 @@
             else if (item.kind === 'rack') {
                 const rack = item.value.rackData;
                 setSelectedRack(rack); setFocusedRack(rack); focusRackInCurrentView(rack); showSelection(rack);
-            } else setSelectedAmr(item.value);
+            } else if (item.equipmentKind === 'barcode-tunnel') setSelectedBarcodeTunnel(item.value);
+            else setSelectedAmr(item.value);
         }, { signal });
         shell.objectSearch.addEventListener('input', () => {
             clearObjectPreview();
@@ -5285,6 +6012,7 @@
             cameraFocusTransitionToken += 1;
             setHoveredRack(null);
             setHoveredAmr(null);
+            if (typeof setHoveredBarcodeTunnel === 'function') setHoveredBarcodeTunnel(null);
             // Preserve the current framing if a drag interrupts the focus animation.
             if (followedAmr) {
                 amrFocusTransition = null;
@@ -5362,7 +6090,7 @@
             requestRender();
         }, { signal, passive: false });
         shell.root.addEventListener('keydown', (event) => {
-            if (event.key !== 'Escape' || (!followedAmr && !selectedZoneCode && !selectedRack)) return;
+            if (event.key !== 'Escape' || (!followedAmr && !selectedZoneCode && !selectedRack && !selectedBarcodeTunnel)) return;
             event.preventDefault();
             clearPanelSelection();
         }, { signal });
@@ -5391,7 +6119,7 @@
             pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
             pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
             raycaster.setFromCamera(pointer, camera);
-            const hit = raycaster.intersectObjects([...levelLabelTargets, ...labelTargets, ...amrLabelTargets], false).find((candidate) => isRaycastTargetVisible(candidate.object));
+            const hit = raycaster.intersectObjects([...levelLabelTargets, ...barcodeTunnelLabelTargets, ...labelTargets, ...amrLabelTargets], false).find((candidate) => isRaycastTargetVisible(candidate.object));
             return hit?.object.userData || null;
         };
         const getRackLevelLabelAtPointer = (event) => {
@@ -5406,6 +6134,19 @@
             const label = getBillboardAtPointer(event);
             return label?.kind === 'amr-label' ? label.amr : null;
         };
+        const getLabelBarcodeTunnelAtPointer = event => {
+            const label = getBillboardAtPointer(event);
+            return label?.kind === 'barcode-tunnel-label' ? label.barcodeTunnel : null;
+        };
+        const getBarcodeTunnelAtPointer = event => {
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+            const hit = raycaster.intersectObjects(barcodeTunnelTargets, false)
+                .find(candidate => isRaycastTargetVisible(candidate.object));
+            return hit?.object.userData?.barcodeTunnel || null;
+        };
         const getRackAtPointer = (event) => {
             const rect = renderer.domElement.getBoundingClientRect();
             pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -5415,6 +6156,7 @@
             return hits.find((candidate) => candidate.object.userData.kind === 'rack')?.object.userData || null;
         };
         const showSelection = (selection) => {
+            resetInspectorLayout();
             if (selection.kind === 'slot') {
                 const statusLabels = { normal: '정상', warning: '주의', hold: '보류', defect: '불량' };
                 const capacity = Number(selection.stock?.capacity || selection.location?.capacity || 0);
@@ -5443,6 +6185,17 @@
                 setHoveredSlot(null);
                 setHoveredRack(null);
                 setHoveredAmr(null);
+                setHoveredBarcodeTunnel(null);
+                return;
+            }
+            const barcodeTunnel = typeof getLabelBarcodeTunnelAtPointer === 'function'
+                ? getLabelBarcodeTunnelAtPointer(event) || getBarcodeTunnelAtPointer(event)
+                : null;
+            setHoveredBarcodeTunnel(barcodeTunnel);
+            if (barcodeTunnel) {
+                setHoveredSlot(null);
+                setHoveredRack(null);
+                setHoveredAmr(null);
                 return;
             }
             const labelAmr = getLabelAmrAtPointer(event);
@@ -5467,6 +6220,7 @@
             setHoveredSlot(null);
             setHoveredRack(null);
             setHoveredAmr(null);
+            setHoveredBarcodeTunnel(null);
         }, { signal });
         renderer.domElement.addEventListener('pointerup', (event) => {
             if (!pointerStart || event.pointerId !== pointerStart.pointerId) return;
@@ -5481,9 +6235,26 @@
                 setHoveredSlot(null);
                 setHoveredRack(null);
                 setSelectedAmr(null);
+                if (typeof setSelectedBarcodeTunnel === 'function') setSelectedBarcodeTunnel(null);
                 selectRackLevel(rackLevelLabel);
                 return;
             }
+            const barcodeTunnel = typeof getLabelBarcodeTunnelAtPointer === 'function'
+                ? getLabelBarcodeTunnelAtPointer(event) || getBarcodeTunnelAtPointer(event)
+                : null;
+            if (barcodeTunnel) {
+                setSelectedZone('', false);
+                setSelectedSlot(null);
+                setHoveredSlot(null);
+                setHoveredRack(null);
+                setSelectedRack(null);
+                setFocusedRack(null);
+                setSelectedAmr(null);
+                setSelectedBarcodeTunnel(barcodeTunnel);
+                renderer.domElement.focus();
+                return;
+            }
+            if (typeof setSelectedBarcodeTunnel === 'function') setSelectedBarcodeTunnel(null);
             const labelAmr = getLabelAmrAtPointer(event);
             if (labelAmr) {
                 setSelectedZone('', false);
@@ -5542,6 +6313,7 @@
             outlineGeometryCache.forEach((geometry) => geometry.dispose());
             outlineTubeGeometryCache.forEach((geometry) => geometry.dispose());
             materialCache.forEach((material) => material.dispose());
+            transportCargoResources.forEach(resource => resource.dispose());
             dimmedMaterialCache.forEach((material) => material.dispose());
             rackHoverMaterial.dispose();
             rackSelectedMaterial.dispose();
@@ -5551,6 +6323,8 @@
             passageBoundaryMaterial?.dispose();
             conveyorBoundaryGeometry?.dispose();
             conveyorBoundaryMaterial?.dispose();
+            conveyorModel.resources.forEach((resource) => resource.dispose());
+            barcodeTunnelModel.resources.forEach((resource) => resource.dispose());
             dockBoundaryGeometry?.dispose();
             dockBoundaryMaterial?.dispose();
             bufferBoundaryGeometry?.dispose();
@@ -5578,16 +6352,6 @@
         const abortController = new AbortController();
         const shell = createShell(container);
         const disposePanelResizing = setupPanelResizing(shell, abortController.signal);
-        const padClockPart = value => String(value).padStart(2, '0');
-        const formatLocalDateTime = value => [
-            value.getFullYear(),
-            padClockPart(value.getMonth() + 1),
-            padClockPart(value.getDate())
-        ].join('-') + ' ' + [
-            padClockPart(value.getHours()),
-            padClockPart(value.getMinutes()),
-            padClockPart(value.getSeconds())
-        ].join(':');
         const updateCurrentTime = () => {
             const now = new Date();
             shell.currentTime.dateTime = now.toISOString();
@@ -5631,7 +6395,7 @@
         }
         try {
             const source = options.dataSource || 'data/warehouse-demo.json';
-            const THREE = await loadThree();
+            const [THREE] = await Promise.all([loadThree(), loadOperations(), loadBarcodeTunnels()]);
             let data;
             if (options.googleSheet?.documentId) {
                 data = await loadGoogleSheetData(options.googleSheet, abortController.signal);
@@ -5675,9 +6439,12 @@
         calculateLoadingDockLayouts,
         calculateLoadingDockLayout,
         calculateLoadingYardLayout,
+        calculateTruckYardPlacement,
         getRackDepthFramePositions,
         getWarehouseStructureOcclusion,
         buildPassageBoundarySegments,
+        buildConveyorLayout,
+        createConveyorModel,
         groupConnectedFloorCells,
         calculateAmrPassageClearanceMm,
         buildAmrCorridorAssignments,
@@ -5695,6 +6462,7 @@
         getForkliftTaskSequence,
         calculateRackFocusView,
         getSlotVisualKey,
+        getCartonStackLayout,
         getGoogleSheetQueryUrl,
         googleTableToCsv
     });

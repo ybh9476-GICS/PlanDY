@@ -205,7 +205,7 @@ function loadMenus() {
             .filter(menu => !deletedBuiltinIds.includes(menu.id))
             .map(menu => ({ ...menu, ...(savedById.get(menu.id) || {}), builtin: true }));
         const customs = saved.menus.filter(menu => !menu.builtin && typeof menu.id === 'string' && typeof menu.label === 'string')
-            .map(menu => ({ ...menu, viewType: window.wmsWarehousePage.getViewType(menu) }));
+            .map(menu => ({ ...menu, viewType: window.wmsFloorPlanEditor.isMenu(menu) ? 'floorPlanEditor' : window.wmsWarehousePage.getViewType(menu) }));
         return window.WmsMenuTreeModel.normalizeMenus([...builtins, ...customs]);
     } catch (_) { return window.WmsMenuTreeModel.normalizeMenus(defaultMenus); }
 }
@@ -239,12 +239,14 @@ function ensureCustomPanel(menu) {
         panel.id = 'view-' + menu.id;
         panel.className = 'content-area view-panel';
         const isWarehousePage = window.wmsWarehousePage.getViewType(menu) === 'warehouse3d';
-        panel.dataset.viewType = isWarehousePage ? 'warehouse3d' : 'cards';
+        const isFloorPlanEditor = window.wmsFloorPlanEditor.isMenu(menu);
+        panel.dataset.viewType = isFloorPlanEditor ? 'floorPlanEditor' : isWarehousePage ? 'warehouse3d' : 'cards';
+        panel.classList.toggle('floor-plan-page', isFloorPlanEditor);
         panel.classList.toggle('warehouse-page', isWarehousePage);
         panel.setAttribute('aria-label', menu.label);
-        if (!isWarehousePage) panel.innerHTML = '<div class="test-card-list custom-card-list"></div><button type="button" class="test-add-card-btn custom-add-card-btn" aria-label="카드 추가">+</button>';
+        if (!isWarehousePage && !isFloorPlanEditor) panel.innerHTML = '<div class="test-card-list custom-card-list"></div><button type="button" class="test-add-card-btn custom-add-card-btn" aria-label="카드 추가">+</button>';
         document.getElementById('main-content').appendChild(panel);
-        if (!isWarehousePage) initializeCustomCardArea(menu, panel);
+        if (!isWarehousePage && !isFloorPlanEditor) initializeCustomCardArea(menu, panel);
     }
     return panel;
 }
@@ -662,6 +664,7 @@ function switchTab(tabId) {
         const isWarehousePage = panel.dataset.viewType === 'warehouse3d';
         panel.style.display = active ? (isWarehousePage ? 'flex' : 'block') : 'none';
         if (isWarehousePage) window.wmsWarehousePage.setActive(panel, active, activeMenu);
+        if (panel.dataset.viewType === 'floorPlanEditor') window.wmsFloorPlanEditor.setActive(panel, active, activeMenu);
     });
 }
 
@@ -672,7 +675,10 @@ renderMenus();
 window.addEventListener('hashchange', () => switchTab(window.location.hash.replace('#', '')));
 window.addEventListener('wms-auth-change', (event) => {
     if (event.detail?.authenticated) switchTab(window.location.hash.replace('#', '') || getVisibleTabs()[0]);
-    else document.querySelectorAll('.warehouse-page').forEach(panel => window.wmsWarehousePage.dispose(panel));
+    else {
+        document.querySelectorAll('.warehouse-page').forEach(panel => window.wmsWarehousePage.dispose(panel));
+        document.querySelectorAll('.floor-plan-page').forEach(panel => window.wmsFloorPlanEditor.dispose(panel));
+    }
 });
 switchTab(window.location.hash.replace('#', '') || getVisibleTabs()[0]);
 
@@ -781,6 +787,7 @@ function removeMenu(id) {
     } else {
         const panel = document.getElementById('view-' + id);
         if (panel?.dataset.viewType === 'warehouse3d') window.wmsWarehousePage.dispose(panel);
+        if (panel?.dataset.viewType === 'floorPlanEditor') window.wmsFloorPlanEditor.dispose(panel);
         panel?.remove();
         menus = menus.filter(item => item.id !== id);
     }

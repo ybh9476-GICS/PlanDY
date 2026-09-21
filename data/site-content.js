@@ -1,7 +1,7 @@
 (function () {
     window.WMS_PUBLISHED_CONTENT = {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-15T01:16:32.747Z",
+  "updatedAt": "2026-09-17T00:24:11.309Z",
   "storage": {
     "menus": {
       "schemaVersion": 2,
@@ -15,7 +15,8 @@
           "builtin": false,
           "visible": true,
           "order": 0,
-          "parentId": null
+          "parentId": null,
+          "viewType": "cards"
         },
         {
           "id": "custom-1787718566928",
@@ -26,7 +27,8 @@
           "parentId": "custom-1786691916656",
           "builtin": false,
           "visible": true,
-          "order": 0
+          "order": 0,
+          "viewType": "cards"
         },
         {
           "id": "custom-1787900342908",
@@ -37,7 +39,8 @@
           "parentId": "custom-1786691916656",
           "builtin": false,
           "visible": true,
-          "order": 1
+          "order": 1,
+          "viewType": "cards"
         },
         {
           "id": "custom-1787900401783",
@@ -48,7 +51,8 @@
           "parentId": "custom-1786691916656",
           "builtin": false,
           "visible": true,
-          "order": 2
+          "order": 2,
+          "viewType": "cards"
         },
         {
           "id": "custom-1788911575236",
@@ -59,11 +63,11 @@
           "parentId": null,
           "builtin": false,
           "visible": true,
-          "order": 1
+          "order": 1,
+          "viewType": "cards"
         },
         {
           "id": "custom-1788157191456",
-          "viewType": "warehouse3d",
           "label": "3D 테스트",
           "tooltip": "3D 테스트",
           "icon": "<svg class=\"nav-icon\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path><polyline points=\"14 2 14 8 20 8\"></polyline><line x1=\"8\" y1=\"13\" x2=\"16\" y2=\"13\"></line><line x1=\"8\" y1=\"17\" x2=\"16\" y2=\"17\"></line></svg>",
@@ -71,7 +75,20 @@
           "parentId": null,
           "builtin": false,
           "visible": true,
-          "order": 2
+          "order": 2,
+          "viewType": "warehouse3d"
+        },
+        {
+          "id": "custom-1789604650974",
+          "viewType": "floorPlanEditor",
+          "label": "평면도 에디터",
+          "tooltip": "평면도 에디터",
+          "icon": "<svg class=\"nav-icon\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path><polyline points=\"14 2 14 8 20 8\"></polyline><line x1=\"8\" y1=\"13\" x2=\"16\" y2=\"13\"></line><line x1=\"8\" y1=\"17\" x2=\"16\" y2=\"17\"></line></svg>",
+          "iconAuto": true,
+          "parentId": null,
+          "builtin": false,
+          "visible": true,
+          "order": 3
         }
       ],
       "deletedBuiltinIds": [

@@ -14,3 +14,6 @@ Thumbs.db
 
 # Recoverable local attachment trash
 .local-attachment-trash/
+
+# Local browser QA artifacts
+output/

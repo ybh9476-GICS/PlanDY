@@ -198,7 +198,7 @@ assert.ok(warehouseRenderer.includes("cargoDimensions: { length: 6.2, width: 2.2
 assert.ok(warehouseRenderer.includes('const createCabGeometry = () => {'), 'The truck must use one low-poly cab-over shell.');
 assert.ok(warehouseRenderer.includes("addPart('truck-cab-shell', createCabGeometry()"), 'The sloped cab shell must replace stacked rectangular cab boxes.');
 assert.ok(warehouseRenderer.includes("modelStyle: 'reference-low-poly-cab-over'"), 'The truck must identify the attached-image-inspired model style.');
-assert.ok(warehouseRenderer.includes("box('truck-windshield', [1.82, 0.82, 0.06]"), 'The reference truck must include a broad teal front windshield.');
+assert.ok(warehouseRenderer.includes("box('truck-windshield', [1.82, 0.82, 0.012], [0, 2.08, 8.17], materials.glass);"), 'The broad front windshield must sit flat outside the vertical cab face.');
 assert.ok(warehouseRenderer.includes("new THREE.ShapeGeometry(sideWindowShape)"), 'The cab must include trapezoidal side windows from the reference silhouette.');
 assert.ok(warehouseRenderer.includes("box('truck-side-mirror'"), 'The reference truck must include side mirrors.');
 assert.ok(warehouseRenderer.includes("box('truck-front-grille'"), 'The reference truck must include the dark front grille.');
@@ -217,8 +217,8 @@ assert.ok(warehouseRenderer.includes("shell.viewport.dataset.warehouseTruckAxleC
 assert.ok(warehouseRenderer.includes('function createTruckInfoBillboardSprite(THREE, info = {})'), 'Truck information must use a dedicated billboard renderer.');
 assert.ok(warehouseRenderer.includes("context.fillText(workType, 28, 44);"), 'The truck billboard title must start with the inbound or outbound label.');
 assert.ok(warehouseRenderer.includes('canvas.width = 520 * worldUiResolutionScale;'), 'The truck billboard must remove unused horizontal space.');
-assert.ok(warehouseRenderer.includes('canvas.height = 210 * worldUiResolutionScale;'), 'The truck billboard must remove unused vertical space.');
-assert.ok(warehouseRenderer.includes("context.fillText(vehicleNumber, 104, 44, 260);"), 'The vehicle registration number must sit close to the operation label on the title row.');
+assert.ok(warehouseRenderer.includes('canvas.height = 300 * worldUiResolutionScale;'), 'The truck billboard must fit progress and the bottom invoice button.');
+assert.ok(warehouseRenderer.includes("context.fillText(vehicleNumber, 104, 44, 392);"), 'The vehicle registration number must sit close to the operation label on the title row.');
 assert.ok(warehouseRenderer.includes('const y = 116 + index * 50;'), 'Truck billboard body rows must use compact vertical spacing.');
 assert.ok(warehouseRenderer.includes('context.fillText(value, 136, y, 360);'), 'Truck billboard values must sit close to their labels.');
 assert.ok(warehouseRenderer.includes("const invoiceButtonLabel = '송장보기';"), 'The truck billboard must display the invoice button label.');
@@ -297,7 +297,7 @@ assert.ok(!warehouseRenderer.includes('shell.fullscreen.textContent'), 'Fullscre
 assert.ok(warehouseRenderer.includes("shell.fullscreen.setAttribute('aria-label', label)"), 'Fullscreen state must still have an accessible name.');
 assert.ok(!warehouseRenderer.includes('warehouse-3d-count'), 'The former top-right object summary must be removed.');
 assert.ok(warehouseRenderer.includes('shell.currentTime.textContent = formatLocalDateTime(now);'), 'The date-time label must refresh from the local clock.');
-assert.ok(warehouseRenderer.includes("].join('-') + ' ' + ["), 'The date and time must use YYYY-MM-DD HH:mm:ss separators.');
+assert.ok(warehouseRenderer.includes('formatLocalDateTime(new Date(value))'), 'Equipment history and the clock must use the same local date-time format.');
 assert.ok(warehouseRenderer.includes('const currentTimeTimer = setInterval(updateCurrentTime, 1000);'), 'The current time must refresh every second.');
 assert.ok(warehouseRenderer.includes('clearInterval(currentTimeTimer);'), 'Leaving the 3D screen must stop its clock timer.');
 assert.ok(warehouseRenderer.includes('<aside class="warehouse-3d-side-panel warehouse-3d-side-panel-left" aria-label="객체 선택 패널">'), 'The left-side panel must contain the object selector.');
@@ -316,7 +316,9 @@ assert.ok(warehouseRenderer.includes("shell.objectOverview.addEventListener('cli
 for (const kind of ['zone', 'rack', 'equipment']) {
     assert.ok(warehouseRenderer.includes(`data-warehouse-object-section="${kind}"`), `${kind} must have its own expandable section.`);
 }
-assert.ok(warehouseRenderer.includes('equipment: [...amrFleet, ...shuttleFleet]'), 'Equipment rows must represent the real AMR and shuttle fleets, not mockup entries.');
+assert.ok(warehouseRenderer.includes('const mobileEquipmentRows = [...amrFleet, ...shuttleFleet].map'), 'Equipment rows must represent the real AMR and shuttle fleets, not mockup entries.');
+assert.ok(warehouseRenderer.includes('const barcodeTunnelEquipmentRows = barcodeTunnelModel.entries.map'), 'Scan tunnels must be represented in the equipment rows.');
+assert.ok(warehouseRenderer.includes('equipment: [...mobileEquipmentRows, ...barcodeTunnelEquipmentRows]'), 'The equipment group must combine transport equipment and scan tunnels.');
 assert.ok(warehouseRenderer.includes('rack: rackEntries.map'), 'Rack rows must represent the real rendered racks.');
 assert.ok(warehouseRenderer.includes('const query = shell.objectSearch.value.trim().toLocaleLowerCase();'), 'Search must read one query for all object groups.');
 assert.ok(warehouseRenderer.includes('shell.syncObjectSelection?.();'), 'Viewport selections must synchronize back to the list.');
@@ -543,6 +545,69 @@ const getRackDepthFramePositions = sandbox.window.wmsWarehouse3D.getRackDepthFra
 const getWarehouseStructureOcclusion = sandbox.window.wmsWarehouse3D.getWarehouseStructureOcclusion;
 const buildPassageBoundarySegments = sandbox.window.wmsWarehouse3D.buildPassageBoundarySegments;
 const groupConnectedFloorCells = sandbox.window.wmsWarehouse3D.groupConnectedFloorCells;
+const buildConveyorLayout = sandbox.window.wmsWarehouse3D.buildConveyorLayout;
+const conveyorRect = (x, y, width, depth, size = 500) => Array.from({ length: width * depth }, (_, i) => ({
+    x: (x + i % width) * size, y: (y + Math.floor(i / width)) * size
+}));
+const verifyConveyorCoverage = (cells, layout) => {
+    const expected = new Set(cells.map((cell) => `${cell.x}:${cell.y}`));
+    const covered = new Set();
+    layout.modules.forEach((module) => {
+        for (let y = module.minY; y < module.maxY; y += layout.cellSize) {
+            for (let x = module.minX; x < module.maxX; x += layout.cellSize) {
+                const key = `${x}:${y}`;
+                assert.ok(expected.has(key), 'Conveyors must not cover non-CV floor cells.');
+                assert.ok(!covered.has(key), 'Junctions must never contain overlapping conveyor modules.');
+                covered.add(key);
+            }
+        }
+    });
+    assert.strictEqual(covered.size, expected.size, 'Every CV cell must have a conveyor surface.');
+    layout.rails.forEach((rail) => {
+        const x = rail.x - rail.dx * layout.cellSize / 2 - layout.cellSize / 2;
+        const y = rail.y - rail.dy * layout.cellSize / 2 - layout.cellSize / 2;
+        assert.ok(!expected.has(`${x + rail.dx * layout.cellSize}:${y + rail.dy * layout.cellSize}`),
+            'No side rail may block a shared conveyor connection.');
+    });
+};
+assert.strictEqual(buildConveyorLayout([]).modules.length, 0, 'Removing CV must remove all conveyor modules.');
+[4, 2, 1].forEach((width) => {
+    const cells = conveyorRect(0, 0, 16, width);
+    const layout = buildConveyorLayout(cells);
+    verifyConveyorCoverage(cells, layout);
+    assert.strictEqual(layout.modules.length, 1);
+    assert.strictEqual(layout.modules[0].axis, 'x');
+    assert.strictEqual(layout.modules[0].width, width * 500, 'Conveyor width must follow 2m, 1m and 0.5m CV bands.');
+    assert.ok(layout.rails.every((rail) => rail.axis === 'x'), 'Straight endpoints must stay open.');
+    const rotated = buildConveyorLayout(cells.map((cell) => ({ x: cell.y, y: cell.x })));
+    assert.strictEqual(rotated.modules[0].axis, 'z');
+    assert.strictEqual(rotated.modules[0].width, width * 500);
+});
+const conveyorShapes = {
+    corner: [...conveyorRect(0, 0, 16, 4), ...conveyorRect(0, 0, 4, 16)],
+    tee: [...conveyorRect(0, 0, 20, 4), ...conveyorRect(8, 0, 4, 16)],
+    cross: [...conveyorRect(0, 8, 20, 4), ...conveyorRect(8, 0, 4, 20)],
+    multiple: [...conveyorRect(0, 0, 32, 4), ...conveyorRect(8, 0, 4, 16), ...conveyorRect(22, 0, 4, 16)],
+    widthChange: [...conveyorRect(0, 0, 10, 4), ...conveyorRect(10, 1, 10, 2)],
+    separated: [...conveyorRect(0, 0, 16, 4), ...conveyorRect(30, 20, 2, 12)]
+};
+Object.entries(conveyorShapes).forEach(([name, cells]) => {
+    const layout = buildConveyorLayout(cells);
+    verifyConveyorCoverage(cells, layout);
+    if (['corner', 'tee', 'cross'].includes(name)) {
+        assert.strictEqual(layout.modules.filter((module) => module.axis === 'transfer').length, 1,
+            `${name} must contain exactly one transfer module.`);
+        assert.strictEqual(layout.modules.find((module) => module.axis === 'transfer').width, 2000);
+    }
+    if (name === 'multiple') assert.strictEqual(layout.modules.filter((module) => module.axis === 'transfer').length, 2);
+    if (name === 'widthChange') assert.deepStrictEqual([...new Set(layout.modules.map((module) => module.width))], [2000, 1000]);
+    const moved = buildConveyorLayout(cells.map((cell) => ({ x: cell.x + 3500, y: cell.y + 2000 })));
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(moved.modules)), JSON.parse(JSON.stringify(layout.modules.map((module) => ({
+        ...module, minX: module.minX + 3500, maxX: module.maxX + 3500, minY: module.minY + 2000, maxY: module.maxY + 2000
+    })))), 'Moving CV cells must translate their modules without changing dimensions.');
+});
+const coarseConveyor = buildConveyorLayout(conveyorRect(0, 0, 8, 2, 1000), 1000);
+assert.strictEqual(coarseConveyor.modules[0].width, 2000, 'Conveyors must respect the configured cell size.');
 const calculateAmrPassageClearanceMm = sandbox.window.wmsWarehouse3D.calculateAmrPassageClearanceMm;
 const buildAmrCorridorAssignments = sandbox.window.wmsWarehouse3D.buildAmrCorridorAssignments;
 const buildShuttleRailLayout = sandbox.window.wmsWarehouse3D.buildShuttleRailLayout;
@@ -559,6 +624,46 @@ const getForkTargetHeight = sandbox.window.wmsWarehouse3D.getForkTargetHeight;
 const getForkliftTaskSequence = sandbox.window.wmsWarehouse3D.getForkliftTaskSequence;
 const calculateRackFocusView = sandbox.window.wmsWarehouse3D.calculateRackFocusView;
 const getSlotVisualKey = sandbox.window.wmsWarehouse3D.getSlotVisualKey;
+const getCartonStackLayout = sandbox.window.wmsWarehouse3D.getCartonStackLayout;
+[[1, 0.86, 1], [2.4, 1.1, 1.8], [0.25, 0.1, 0.4]].forEach(([width, height, depth]) => {
+    const layout = getCartonStackLayout(width, height, depth);
+    assert.strictEqual(layout.positions.length, 8, 'A transport unit must show eight individual cartons.');
+    const [w, h, d] = layout.cartonSize;
+    const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} must equal ${expected}`);
+    near(Math.min(...layout.positions.map(p => p.x - w / 2)), -width / 2);
+    near(Math.max(...layout.positions.map(p => p.x + w / 2)), width / 2);
+    near(Math.min(...layout.positions.map(p => p.y - h / 2)), 0);
+    near(Math.max(...layout.positions.map(p => p.y + h / 2)), height);
+    near(Math.min(...layout.positions.map(p => p.z - d / 2)), -depth / 2);
+    near(Math.max(...layout.positions.map(p => p.z + d / 2)), depth / 2);
+    layout.positions.forEach((a, i) => layout.positions.slice(i + 1).forEach(b => {
+        assert.ok(Math.abs(a.x - b.x) >= w || Math.abs(a.y - b.y) >= h || Math.abs(a.z - b.z) >= d,
+            'Cartons must remain separated instead of overlapping when cell dimensions change.');
+    }));
+});
+const cartonAppearanceContext = vm.createContext({});
+vm.runInContext(warehouseRenderer.slice(warehouseRenderer.indexOf('    function setUnitLoadStoredAppearance('),
+    warehouseRenderer.indexOf('    function getSlotVisualKey(')), cartonAppearanceContext);
+const changeStoredAppearance = vm.runInContext('setUnitLoadStoredAppearance', cartonAppearanceContext);
+let storedCargoColor;
+const inventoryCargo = { visible: true, material: { color: { set(color) { storedCargoColor = color; } } } };
+const transportCartons = { visible: false };
+const testPallet = { width: 1, depth: 1 };
+const testLoad = { userData: { loadSize: [1, 1, 1] }, pallet: testPallet,
+    getObjectByName(name) { return name === 'forklift-carried-load-box' ? inventoryCargo : transportCartons; } };
+changeStoredAppearance(testLoad, false, '#ef4444');
+assert.strictEqual(inventoryCargo.visible, false);
+assert.strictEqual(transportCartons.visible, true, 'Non-rack cargo must use cardboard packaging independently of inventory color.');
+changeStoredAppearance(testLoad, true, '#f59e0b');
+assert.strictEqual(inventoryCargo.visible, true);
+assert.strictEqual(transportCartons.visible, false, 'Stored packaging must not duplicate the inventory-colored rack cargo.');
+assert.strictEqual(storedCargoColor, '#f59e0b');
+changeStoredAppearance(testLoad, true, '#22c55e');
+assert.strictEqual(storedCargoColor, '#22c55e', 'Stored cargo must follow a changed inventory color view.');
+changeStoredAppearance(testLoad, false);
+assert.strictEqual(transportCartons.visible, true, 'Picking must restore cardboard packaging.');
+assert.strictEqual(testLoad.pallet, testPallet);
+assert.deepStrictEqual(testLoad.userData.loadSize, [1, 1, 1], 'Appearance changes must preserve the transported unit dimensions.');
 assert.deepStrictEqual(
     JSON.parse(JSON.stringify(getRackDepthFramePositions(1, 4, 6))),
     [0, 1.5, 3, 4.5, 6],
@@ -659,15 +764,44 @@ assert.strictEqual(
 );
 const frontLoadingYard = JSON.parse(JSON.stringify(calculateLoadingYardLayout(frontLoadingDock, 10000, 8000)));
 assert.deepStrictEqual(frontLoadingYard, {
-    side: 'front', approachDepth: 11000,
-    centerX: 5000, centerZ: 13500, sizeX: 14000, sizeZ: 11000
+    side: 'front', approachDepth: 15000,
+    centerX: 5000, centerZ: 15500, sizeX: 14000, sizeZ: 15000
 }, 'The vehicle yard must extend from the front floor-plan boundary with side shoulders.');
 const rightLoadingYard = JSON.parse(JSON.stringify(calculateLoadingYardLayout(rightLoadingDock, 10000, 8000)));
 assert.deepStrictEqual(rightLoadingYard, {
-    side: 'right', approachDepth: 11000,
-    centerX: 15500, centerZ: 4000, sizeX: 11000, sizeZ: 12000
+    side: 'right', approachDepth: 15000,
+    centerX: 17500, centerZ: 4000, sizeX: 15000, sizeZ: 12000
 }, 'Moving W04 to a side wall must rotate and reposition the vehicle yard with the floor plan.');
 assert.strictEqual(calculateLoadingYardLayout(null, 10000, 8000), null, 'A missing W04 loading side must not create an arbitrary vehicle yard.');
+const calculateTruckYardPlacement = sandbox.window.wmsWarehouse3D.calculateTruckYardPlacement;
+const truckFootprint = { minX: -1300, maxX: 1300, minZ: -250, maxZ: 8500 };
+const cornerDocks = calculateLoadingDockLayouts([], [], 20000, 30000, 'W04', [
+    { x: 3000, y: 28000, code: 'D01' }, { x: 19500, y: 28000, code: 'D03' }
+], 500);
+assert.strictEqual(cornerDocks[1].side, 'right', 'Reproduce the corner dock that previously sent D03 onto unsupported ground.');
+const cornerYard = calculateLoadingYardLayout(cornerDocks[0], 20000, 30000);
+const correctedCornerTruck = calculateTruckYardPlacement(cornerDocks[1], cornerYard, truckFootprint);
+assert.strictEqual(correctedCornerTruck.side, 'front', 'D03 must park on the existing front yard, even when the dock is closer to a side wall.');
+assert.strictEqual(correctedCornerTruck.yaw, 0);
+assert.strictEqual(correctedCornerTruck.anchorX, 19750, 'The truck must retain its alignment with the dock along the yard edge.');
+['front', 'back', 'left', 'right'].forEach((side) => {
+    [[20000, 30000], [500, 500], [52000, 8000]].forEach(([width, depth]) => {
+        const yard = calculateLoadingYardLayout({ side }, width, depth);
+        [{ minX: -5000, maxX: -4500, minZ: -5000, maxZ: -4500 },
+            { minX: width, maxX: width + 500, minZ: depth, maxZ: depth + 500 }].forEach((bounds) => {
+            const placement = calculateTruckYardPlacement({ bounds }, yard, truckFootprint);
+            assert.ok(placement, 'Every supported yard orientation and floor size must fit the truck.');
+            const result = placement.bounds;
+            assert.ok(result.minX >= yard.centerX - yard.sizeX / 2 + 249.99);
+            assert.ok(result.maxX <= yard.centerX + yard.sizeX / 2 - 249.99);
+            assert.ok(result.minZ >= yard.centerZ - yard.sizeZ / 2 + 249.99);
+            assert.ok(result.maxZ <= yard.centerZ + yard.sizeZ / 2 - 249.99);
+        });
+    });
+});
+assert.strictEqual(calculateTruckYardPlacement(cornerDocks[0], null, truckFootprint), null, 'No yard must mean no floating truck.');
+assert.strictEqual(calculateTruckYardPlacement(cornerDocks[0], { ...cornerYard, sizeZ: 1000 }, truckFootprint), null,
+    'A truck must never be displayed on a yard too small for its physical footprint.');
 const frontStructureOcclusion = JSON.parse(JSON.stringify(getWarehouseStructureOcclusion(
     { x: 50, y: 5, z: 80 },
     100,
@@ -934,8 +1068,8 @@ const converted = converter({
     items: csv('품목 마스터', ['품목코드', '품목명', '표시색상'], ['P-1', '테스트 품목', '#E74C3C']),
     inventory: csv('재고 현황', ['로케이션코드', '품목코드', '재고수량', '재고상태'], ['A01-W01-01-01-01', 'P-1', '8', '주의']),
     workOrders: [
-        '작업 코드,작업 구분,품목코드,수량(개),도크 코드,차량 번호,보낸 회사명,받을 회사명',
-        'IN-001,입고,P-1,18,D01,81가1234,공급사 A,',
+        '작업 코드,작업 구분,품목코드,수량(개),도크 코드,차량 번호,보낸 회사명,받을 회사명,경로 코드',
+        'IN-001,입고,P-1,18,D01,81가1234,공급사 A,,IN01',
         'OUT-001,출고,P-1,6,D02,82나5678,,고객사 B'
     ].join('\n')
 }, {
@@ -966,8 +1100,8 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.shuttlePassageCe
 assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.conveyorCells)), [{ x: 1500, y: 0 }], 'CV must be stored separately as a conveyor-track coordinate.');
 assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.bufferCells)), [{ x: 2000, y: 0, code: 'B04' }], 'A numbered B value must retain its normalized handoff buffer number and coordinate.');
 assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.truckSchedules)), [
-    { scheduleCode: 'IN-001', workType: '입고', dockCode: 'D01', vehicleNumber: '81가1234', senderCompanyName: '공급사 A', receiverCompanyName: '', itemCode: 'P-1', itemName: '테스트 품목', quantity: 18 },
-    { scheduleCode: 'OUT-001', workType: '출고', dockCode: 'D02', vehicleNumber: '82나5678', senderCompanyName: '', receiverCompanyName: '고객사 B', itemCode: 'P-1', itemName: '테스트 품목', quantity: 6 }
+    { scheduleCode: 'IN-001', routeCode: 'IN01', workType: '입고', dockCode: 'D01', vehicleNumber: '81가1234', senderCompanyName: '공급사 A', receiverCompanyName: '', itemCode: 'P-1', itemName: '테스트 품목', quantity: 18 },
+    { scheduleCode: 'OUT-001', routeCode: '', workType: '출고', dockCode: 'D02', vehicleNumber: '82나5678', senderCompanyName: '', receiverCompanyName: '고객사 B', itemCode: 'P-1', itemName: '테스트 품목', quantity: 6 }
 ], 'Truck schedules must preserve dock, vehicle, company, item, and quantity information from the work-order sheet.');
 assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.stationCells)), [{ x: 1000, y: 0, code: 'S07' }], 'A numbered S value must retain its normalized station number and coordinate.');
 assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.dockCells)), [{ x: 2500, y: 0, code: 'D27' }], 'Any D-prefixed numeric code must retain its loading dock number and coordinate.');
@@ -1090,7 +1224,10 @@ assert.ok(warehouseRenderer.includes("'A2:O1000'"), 'Equipment status loading mu
 assert.ok(warehouseRenderer.includes("const equipmentStatusByCode = new Map"));
 assert.ok(warehouseRenderer.includes("type === '4WAY' || /^4SHUTTLE-/i.test(code)"), 'Enabled 4WAY equipment rows must create the 3D shuttle fleet.');
 assert.ok(warehouseRenderer.includes('shuttleEquipment.forEach((configuredEquipment, index) => {'), 'Every enabled shuttle master row must receive a 3D shuttle.');
-assert.ok(warehouseRenderer.includes('equipment: [...amrFleet, ...shuttleFleet]'), 'The equipment tree must include AMRs and shuttles.');
+assert.ok(warehouseRenderer.includes('equipment: [...mobileEquipmentRows, ...barcodeTunnelEquipmentRows]'), 'The equipment tree must include AMRs, shuttles and scan tunnels.');
+assert.ok(warehouseRenderer.includes("item.equipmentKind === 'barcode-tunnel' ? selectedBarcodeTunnel === item.value"), 'A scan-tunnel row must synchronize its selected state.');
+assert.ok(warehouseRenderer.includes("else if (item.equipmentKind === 'barcode-tunnel') setHoveredBarcodeTunnel(item.value);"), 'Hovering a scan-tunnel row must preview the 3D tunnel.');
+assert.ok(warehouseRenderer.includes("else if (item.equipmentKind === 'barcode-tunnel') setSelectedBarcodeTunnel(item.value);"), 'Clicking a scan-tunnel row must select it and open its details.');
 assert.ok(warehouseRenderer.includes('shell.viewport.dataset.shuttleEquipmentCodes'), 'The viewport must expose shuttle master codes for browser verification.');
 assert.ok(warehouseRenderer.includes('shuttle.label = createAmrLabelSprite(THREE, {'), 'Shuttles must reuse the AMR communication and equipment status billboard.');
 assert.ok(warehouseRenderer.includes("equipmentKind: 'shuttle'"), 'Shuttle billboards must identify their equipment kind for interaction.');
@@ -1167,13 +1304,51 @@ vm.runInNewContext(`${forkHeightSource}
 
 const inspectorContext = vm.createContext({ assert });
 vm.runInContext(warehouseRenderer.slice(warehouseRenderer.indexOf('    function escapeHtml('), warehouseRenderer.indexOf('    const slotColorPalette'))
-    + warehouseRenderer.slice(warehouseRenderer.indexOf('    function getAmrInspectorHtml('), warehouseRenderer.indexOf('    function getAmrEquipmentStatusColor(')), inspectorContext);
+    + warehouseRenderer.slice(warehouseRenderer.indexOf('    function getAmrInspectorHtml('), warehouseRenderer.indexOf('    function createAmrLabelSprite(')), inspectorContext);
 const getAmrInspectorHtml = vm.runInContext('getAmrInspectorHtml', inspectorContext);
+const formatLocalDateTime = vm.runInContext('formatLocalDateTime', inspectorContext);
+vm.runInContext(warehouseRenderer.slice(warehouseRenderer.indexOf('    function getTruckInvoiceHtml('),
+    warehouseRenderer.indexOf('    function createLevelBadgeSprite(')), inspectorContext);
+const getTruckInvoiceHtml = vm.runInContext('getTruckInvoiceHtml', inspectorContext);
+const invoiceAt = new Date(2026, 8, 16, 16, 58, 25);
+const inboundInvoice = getTruckInvoiceHtml({ workType: '입고', scheduleCode: 'IN-REF', routeCode: 'IN01',
+    vehicleNumber: '부산12가3456', senderCompanyName: '납품 회사', receiverCompanyName: '다른 수령처',
+    itemCode: 'P-1', itemName: '품목 A', quantity: 1234, progressStatus: '하차 대기' }, 'D01', '테스트 창고', { barcode: 'HU-IN-REF' }, invoiceAt);
+assert.ok(inboundInvoice.includes('입고 운송 송장') && inboundInvoice.includes('발송 정보 · 납품처'));
+assert.ok(inboundInvoice.includes('납품 회사') && inboundInvoice.includes('테스트 창고') && !inboundInvoice.includes('다른 수령처'));
+assert.ok(inboundInvoice.includes('D01 / IN01') && inboundInvoice.includes('HU-IN-REF'));
+assert.equal((inboundInvoice.match(/>1,234</g) || []).length, 2, 'The item quantity and total must agree.');
+assert.ok(inboundInvoice.includes('2026-09-16 오후 4:58:25'));
+const outboundInvoice = getTruckInvoiceHtml({ workType: '출고', receiverCompanyName: '수령 회사', quantity: 6 }, 'D03', '테스트 창고', {}, invoiceAt);
+assert.ok(outboundInvoice.includes('출고 운송 송장') && outboundInvoice.includes('수령 정보 · 공급처') && outboundInvoice.includes('수령 회사'));
+assert.ok(outboundInvoice.includes('부산12가3456') && outboundInvoice.includes('미등록'), 'Missing metadata must remain explicitly unregistered.');
+const unsafeInvoice = getTruckInvoiceHtml({ itemName: '<img src=x onerror=alert(1)>', senderCompanyName: '<script>bad</script>', quantity: -1 },
+    '<dock>', '<warehouse>', { barcode: '<barcode>' }, invoiceAt);
+assert.ok(!unsafeInvoice.includes('<img') && !unsafeInvoice.includes('<script>'));
+assert.ok(unsafeInvoice.includes('&lt;barcode&gt;') && unsafeInvoice.includes('&lt;dock&gt;'));
+assert.equal((unsafeInvoice.match(/>0</g) || []).length, 2, 'Invalid negative quantities must never be displayed as negative totals.');
+assert.equal(formatLocalDateTime(new Date(2026, 8, 16, 16, 58, 25)), '2026-09-16 오후 4:58:25');
+assert.equal(formatLocalDateTime(new Date(2026, 0, 2, 0, 3, 4)), '2026-01-02 오전 12:03:04');
+assert.equal(formatLocalDateTime(new Date(2026, 8, 16, 12, 0, 0)), '2026-09-16 오후 12:00:00');
 assert.ok(getAmrInspectorHtml({ communicationStatus: 'OFFLINE' }).includes('오프라인 (OFFLINE)'));
 assert.ok(getAmrInspectorHtml({}).includes('미설정'));
 const escapedInspector = getAmrInspectorHtml({equipmentCode:'<code>', equipmentName:'<img src=x onerror=alert(1)>', equipmentStatus:'<script>bad</script>'});
 assert.ok(!escapedInspector.includes('<img') && !escapedInspector.includes('<script>'));
 assert.ok(escapedInspector.includes('&lt;code&gt;'));
+assert.ok(getAmrInspectorHtml({}).includes('data-warehouse-history="transport"'));
+assert.ok(!getAmrInspectorHtml({}).includes('<ol'), 'The inspector exposes a button instead of inline history.');
+const getTransportHistoryHtml = vm.runInContext('getTransportHistoryHtml', inspectorContext);
+const transportInspector = getTransportHistoryHtml({ transportHistory: [{ jobCode: 'JOB1', status: '완료',
+    itemInfo: '<item>', barcode: '<barcode>', from: 'B01', to: 'S02',
+    assignedAt: '2026-09-16T00:00:00Z', loadedAt: null, unloadedAt: null }] });
+assert.equal((transportInspector.match(/<td/g) || []).length, 8, 'A transport row keeps all eight requested fields.');
+for (const text of ['완료', 'B01', 'S02', '—']) assert.ok(transportInspector.includes(text));
+assert.ok(transportInspector.includes('&lt;item&gt;') && transportInspector.includes('&lt;barcode&gt;'));
+assert.ok(getTransportHistoryHtml({}).includes('colspan="8"'));
+const getScanHistoryHtml = vm.runInContext('getScanHistoryHtml', inspectorContext);
+const scanRow = getScanHistoryHtml({ history: [{ passedAt: '2026-09-16T00:00:00Z', itemInfo: '<item>', barcode: 'HU-001', result: '정상 인식', destination: 'B03' }] });
+assert.equal((scanRow.match(/<td/g) || []).length, 5);
+for (const text of ['&lt;item&gt;', 'HU-001', '정상 인식', 'B03']) assert.ok(scanRow.includes(text));
 
 const followSource = warehouseRenderer.slice(
     warehouseRenderer.indexOf('        const setSelectedAmr = (amr) => {'),
@@ -1186,11 +1361,11 @@ const followContext = vm.createContext({
     floorWidth: 55.5, floorDepth: 33, projectionMode: 'orthographic', alignedCameraView: null, signal: {},
     target: new FollowVector(28, 2.5, 16), distance: 60, orthographicViewHeight: 50,
     minimumCameraDistance: 8, maximumCameraDistance: 140, perspectiveHalfFov: Math.PI / 8,
-    yaw: 0.65, pitch: 0.45, shell: { viewport: { dataset: {} }, inspector: { innerHTML: '' } },
+    yaw: 0.65, pitch: 0.45, shell: { viewport: { dataset: {} }, inspector: { innerHTML: '', classList: { add() {} } } },
     getAmrInspectorHtml,
     showDefaultInspector() { followContext.shell.inspector.innerHTML = '<h5>선택 정보</h5>'; },
     easeOutCubic: t => 1 - (1 - t) ** 3,
-    setAmrLabelState() {}, setHoveredSlot() {}, requestRender() {}, updateProjectionMatrices() {}, updateCamera() {}
+    resetInspectorLayout() {}, setAmrLabelState() {}, setHoveredSlot() {}, requestRender() {}, updateProjectionMatrices() {}, updateCamera() {}
 });
 vm.runInContext(`
     ${followSource}
@@ -1295,6 +1470,10 @@ vm.runInContext(`
     const getRackLevelLabelAtPointer = () => levelHit;
     const getLabelRackAtPointer = () => rackHit;
     const getLabelAmrAtPointer = () => amrHit;
+    const getLabelBarcodeTunnelAtPointer = () => null;
+    const getBarcodeTunnelAtPointer = () => null;
+    const setHoveredBarcodeTunnel = () => {};
+    const setSelectedBarcodeTunnel = () => {};
     const setHoveredRackLevelLabel = () => {};
     const selectRackLevel = value => { selectedLevel = value; };
     ${slotPointerDownAndMove}
@@ -1392,8 +1571,14 @@ vm.runInContext(`
     assert.strictEqual(levelCanvas.lineStrokes, 4, 'Level badges must retain their circular border in every state.');
     assert.ok(levelCanvas.texts.every(text => text === 'L7'), 'Level badges must use the compact L-number format.');
     assert.strictEqual(levelBadge.userData.badgeShape, 'circle');
-    assert.deepStrictEqual(JSON.parse(JSON.stringify(inboundTruckCanvas.texts)), ['입고', '81가1234', '송장보기', '납품처', 'ABC물류', '입고 예정', '품목 A · 120개']);
-    assert.deepStrictEqual(JSON.parse(JSON.stringify(outboundTruckCanvas.texts)), ['출고', '82나5678', '송장보기', '공급처', 'XYZ유통', '출고 예정', '품목 B · 80개']);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(inboundTruckCanvas.texts)), ['입고', '81가1234', '납품처', 'ABC물류', '입고 예정', '품목 A · 120개', '진행상태', '하차 대기', '송장보기']);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(outboundTruckCanvas.texts)), ['출고', '82나5678', '공급처', 'XYZ유통', '출고 예정', '품목 B · 80개', '진행상태', '상차 대기', '송장보기']);
+    inboundTruckLabel.setProgressStatus('하차 완료');
+    outboundTruckLabel.setProgressStatus('상차 중');
+    assert.equal(inboundTruckLabel.userData.progressStatus, '하차 완료');
+    assert.equal(outboundTruckLabel.userData.progressStatus, '상차 중');
+    assert.equal(inboundTruckCanvas.texts.at(-2), '하차 완료');
+    assert.equal(outboundTruckCanvas.texts.at(-2), '상차 중');
     assert.strictEqual(inboundTruckLabel.userData.fontReference, 'transport-equipment-billboard');
     assert.strictEqual(defaultTruckLabel.userData.vehicleNumber, '부산12가3456');
     assert.strictEqual(defaultTruckLabel.userData.spacing, 'compact');
