@@ -1,4 +1,87 @@
-const {chromium}=require(process.env.PLANDY_PLAYWRIGHT||'playwright'),assert=require('assert/strict'),fs=require('fs');
-(async()=>{const b=await chromium.launch({headless:true,channel:'msedge'});try{for(const editor of [false,true]){const c=await b.newContext({viewport:{width:1500,height:1050}}),p=await c.newPage();await p.goto('http://127.0.0.1:4173/#custom-1789604650974');await p.locator('#loginUserId').fill(editor?'edituser':'viewuser');await p.locator('#loginPassword').fill(editor?'edit!@#$':'view1234');await p.locator('#loginSubmitBtn').click();await p.locator('.fp-editor').waitFor();if(process.argv.includes('--before')){assert.equal(await p.locator('[data-drawing-tabs]').count(),0);await p.locator('[data-action=new]').click();assert.match(await p.locator('dialog[open]').textContent(),/현재 작업을 바꿉니다/);console.log('BEFORE '+(editor?'Editor':'Viewer')+': new drawing replaces current drawing, no tabs');await c.close();continue;}
-const tabs=()=>p.locator('[data-tab-select]'),names=()=>p.locator('[data-tab-title]').allTextContents(),choose=async(name)=>p.locator('[data-tab-select]').filter({has:p.getByText(name,{exact:true})}).click(),key='wms-floor-plan-editor-draft-v2:custom-1789604650974',tabsKey=key+':tabs-v1';assert.equal(await tabs().count(),1);const first=(await names())[0];await p.locator('[data-field=w]').fill('4.25');await p.locator('[data-field=w]').press('Enter');await p.locator('[data-action=new]').click();assert.deepEqual(await names(),[first,'새 도면']);assert.equal(await p.locator('dialog[open]').count(),0);assert.equal(await p.locator('[data-plan-settings]').count(),1);await p.locator('[data-setting=width]').fill('50');await p.locator('[data-setting=width]').press('Enter');await p.locator('[data-action=new]').click();await p.locator('[data-action=new]').click();assert.deepEqual(await names(),[first,'새 도면','새 도면1','새 도면2']);await choose(first);assert.equal(await p.locator('[data-field=w]').inputValue(),'4.25');await p.locator('[data-action=undo]').click();assert.equal(await p.locator('[data-field=w]').inputValue(),'4.00');await p.locator('[data-action=redo]').click();assert.equal(await p.locator('[data-field=w]').inputValue(),'4.25');await choose('새 도면');assert.equal(await p.locator('[data-setting=width]').inputValue(),'50.00');await p.locator('[data-action=undo]').click();assert.equal(await p.locator('[data-setting=width]').inputValue(),'30.00');await p.locator('[data-action=redo]').click();assert.equal(await p.locator('[data-setting=width]').inputValue(),'50.00');await choose('새 도면2');await p.locator('[data-tool=CV]').click();await p.locator('.fp-canvas').click({position:{x:150,y:150}});await choose('새 도면');await p.locator('[data-action=export]').click();assert.match(await p.locator('.fp-notice').textContent(),/새 도면2.*경로/);assert.equal(await p.evaluate(k=>localStorage.getItem(k),tabsKey),null);await choose('새 도면2');assert.ok(await p.locator('[data-path-actions]').isVisible());await p.locator('.fp-canvas').press('Escape'); await p.locator('[data-tab-title]').getByText('새 도면1',{exact:true}).dblclick();await p.locator('dialog [data-tab-name]').fill('작업 구역');await p.locator('dialog [data-tab-name]').press('Enter');assert.deepEqual(await names(),[first,'새 도면','작업 구역','새 도면2']);assert.equal(await p.locator('[data-setting=name]').inputValue(),'작업 구역');await p.locator('[data-action=undo]').click();assert.ok((await names()).includes('새 도면1'));await p.locator('[data-action=redo]').click();assert.ok((await names()).includes('작업 구역'));await p.locator('[data-tab-title]').getByText('작업 구역',{exact:true}).dblclick();await p.locator('dialog [data-tab-name]').fill('취소할 이름');await p.locator('dialog').getByRole('button',{name:'취소',exact:true}).click();assert.ok((await names()).includes('작업 구역'));
-const row=name=>p.locator('[data-tab-id]').filter({has:p.getByText(name,{exact:true})});await row('새 도면2').locator('[data-tab-close]').click();await p.locator('dialog').getByRole('button',{name:'취소',exact:true}).click();assert.equal(await tabs().count(),4);await row('새 도면2').locator('[data-tab-close]').click();await p.locator('dialog').getByRole('button',{name:'닫기',exact:true}).click();assert.deepEqual(await names(),[first,'새 도면','작업 구역']);assert.equal(await p.locator('[data-tab-select][aria-selected=true]').textContent(),'작업 구역');await p.locator('[data-action=new]').click();assert.ok((await names()).includes('새 도면3'));await choose(first);await p.locator('[data-action=export]').click();assert.equal(await p.locator('.fp-save-state').textContent(),'변경 없음');const saved=await p.evaluate(k=>JSON.parse(localStorage.getItem(k)),tabsKey);assert.equal(saved.documents.length,4);assert.equal(saved.documents[0].plan.objects[0].w,4.25);assert.equal(saved.documents[1].plan.width,50);const single=await p.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);assert.equal(single.objects[0].w,4.25);assert.equal(single.version,2);await p.reload();await p.locator('[data-drawing-tabs]').waitFor();assert.deepEqual(await names(),[first,'새 도면','작업 구역','새 도면3']);assert.equal(await p.locator('[data-field=w]').inputValue(),'4.25');await choose('새 도면');assert.equal(await p.locator('[data-setting=width]').inputValue(),'50.00');await p.locator('[data-tab-select][aria-selected=true]').focus();await p.keyboard.press('ArrowRight');assert.equal(await p.locator('[data-tab-select][aria-selected=true]').textContent(),'작업 구역');if(editor){fs.mkdirSync('output/floor-plan-tabs',{recursive:true});await p.screenshot({path:'output/floor-plan-tabs/editor.png'});}const beforeSave=await p.evaluate(([k,t])=>[localStorage.getItem(k),localStorage.getItem(t)],[key,tabsKey]);await choose('새 도면3');await p.locator('[data-setting=width]').fill('45');await p.locator('[data-setting=width]').press('Enter');await p.evaluate(t=>{window.originalStorageSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k===t)throw new DOMException('Simulated quota exceeded','QuotaExceededError');return window.originalStorageSetItem.call(this,k,v);};},tabsKey);await p.locator('[data-action=export]').click();assert.match(await p.locator('.fp-notice').textContent(),/저장 실패/);assert.deepEqual(await p.evaluate(([k,t])=>[localStorage.getItem(k),localStorage.getItem(t)],[key,tabsKey]),beforeSave);await p.reload();await p.locator('[data-drawing-tabs]').waitFor();assert.equal(await p.locator('[data-field=w]').inputValue(),'4.25');const other=await c.newPage();await other.goto('http://127.0.0.1:4173/');await other.evaluate(t=>{const data=JSON.parse(localStorage.getItem(t));data.documents[0].plan.name='다른 창에서 변경';localStorage.setItem(t,JSON.stringify(data));},tabsKey);await p.locator('.fp-notice').filter({hasText:'다른 창에서 초안이 변경'}).waitFor();assert.ok(await p.locator('[data-field=w]').isDisabled());await other.close();await p.reload();await p.locator('[data-drawing-tabs]').waitFor();assert.ok((await names()).includes('다른 창에서 변경')); while(await tabs().count()){await p.locator('[data-tab-close]').last().click();await p.locator('dialog').getByRole('button',{name:'닫기',exact:true}).click();}assert.equal(await p.locator('[data-floor]').count(),0);assert.equal(await p.locator('[data-setting]').count(),0);await p.locator('[data-action=export]').click();await p.reload();await p.locator('[data-drawing-tabs]').waitFor();assert.equal(await tabs().count(),0);await p.locator('[data-action=new]').click();assert.deepEqual(await names(),['새 도면4']);assert.equal(await p.locator('[data-plan-settings]').count(),1);console.log('PASS '+(editor?'Editor':'Viewer')+': sequential new tabs, independent plans/undo/path progress, inactive double-click rename, cancel/confirm close, keyboard tabs, all-tab draft restore, original JSON compatibility, close all/reopen, quota rollback, real cross-window conflict');await c.close();}}finally{await b.close();}})().catch(error=>{console.error(error);process.exitCode=1;});
+const {chromium}=require(process.env.PLANDY_PLAYWRIGHT||'playwright');
+const assert=require('assert/strict');
+const key='wms-floor-plan-editor-draft-v2:custom-1789604650974';
+const tabsKey=key+':tabs-v1';
+(async()=>{
+ const browser=await chromium.launch({headless:true,channel:'msedge'});
+ try{
+  for(const editor of [false,true]){
+   const context=await browser.newContext({viewport:{width:1500,height:1050},acceptDownloads:true});
+   let page=await context.newPage();
+   await page.goto('http://127.0.0.1:4173/#custom-1789604650974');
+   await page.evaluate(()=>localStorage.clear());
+   await page.reload();
+   async function login(target){
+    await target.locator('#loginUserId').fill(editor?'edituser':'viewuser');
+    await target.locator('#loginPassword').fill(editor?'edit!@#$':'view1234');
+    await target.locator('#loginSubmitBtn').click();
+    await target.locator('.fp-editor').waitFor();
+   }
+   await login(page);
+   const names=()=>page.locator('[data-tab-title]').allTextContents();
+   const choose=name=>page.locator('[data-tab-select]').filter({has:page.getByText(name,{exact:true})}).click();
+   const first=(await names())[0];
+   await page.locator('[data-field=w]').fill('4.25');
+   await page.locator('[data-field=w]').press('Enter');
+   await page.locator('[data-action=new]').click();
+   await page.locator('[data-setting=width]').fill('50');
+   await page.locator('[data-setting=width]').press('Enter');
+   await page.evaluate(()=>window.showSaveFilePicker=undefined);
+   const [download]=await Promise.all([page.waitForEvent('download'),page.locator('[data-action=export]').click()]);
+   assert.ok(download.suggestedFilename().endsWith('.gics'));
+   await page.locator('[data-action=new]').click();
+   await page.locator('[data-setting=name]').fill('저장하지 않은 도면');
+   await page.locator('[data-setting=name]').press('Enter');
+   assert.deepEqual(await names(),[first,'새 도면','저장하지 않은 도면']);
+   const activeBefore=await page.locator('[data-tab-select][aria-selected=true]').getAttribute('data-tab-select');
+   const stored=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),tabsKey);
+   assert.equal(stored.version,2);
+   assert.equal(stored.documents.length,3);
+   assert.equal(stored.activeId,activeBefore);
+   assert.equal(stored.documents[0].plan.objects[0].w,4.25);
+   assert.equal(stored.documents[0].savedPlan.objects[0].w,4);
+   assert.equal(stored.documents[1].plan.width,50);
+   assert.equal(stored.documents[1].savedPlan.width,50);
+   assert.equal(stored.documents[2].savedPlan,null);
+   page.once('dialog',dialog=>dialog.accept());
+   await page.close({runBeforeUnload:true});
+   await new Promise(resolve=>setTimeout(resolve,100));
+   page=await context.newPage();
+   await page.goto('http://127.0.0.1:4173/#custom-1789604650974');
+   await login(page);
+   assert.deepEqual(await names(),[first,'새 도면','저장하지 않은 도면']);
+   assert.equal(await page.locator('[data-tab-select][aria-selected=true]').getAttribute('data-tab-select'),activeBefore);
+   await choose(first);
+   assert.equal(await page.locator('[data-field=w]').inputValue(),'4.25');
+   assert.equal(await page.locator('[data-tab-select][aria-selected=true]').getAttribute('data-dirty'),'true');
+   await choose('새 도면');
+   assert.equal(await page.locator('[data-setting=width]').inputValue(),'50.00');
+   assert.equal(await page.locator('[data-tab-select][aria-selected=true]').getAttribute('data-dirty'),'false');
+   await choose('저장하지 않은 도면');
+   assert.equal(await page.locator('[data-setting=name]').inputValue(),'저장하지 않은 도면');
+   assert.equal(await page.locator('[data-tab-select][aria-selected=true]').getAttribute('data-dirty'),'true');
+   await page.locator('[data-tab-id]').filter({has:page.getByText('새 도면',{exact:true})}).locator('[data-tab-close]').click();
+   await page.locator('dialog').getByRole('button',{name:'닫기',exact:true}).click();
+   assert.deepEqual(await names(),[first,'저장하지 않은 도면']);
+   page.once('dialog',dialog=>dialog.accept());
+   await page.close({runBeforeUnload:true});
+   await new Promise(resolve=>setTimeout(resolve,100));
+   page=await context.newPage();
+   await page.goto('http://127.0.0.1:4173/#custom-1789604650974');
+   await login(page);
+   assert.deepEqual(await names(),[first,'저장하지 않은 도면']);
+   assert.equal(await page.locator('[data-tab-select][aria-selected=true]').textContent(),'저장하지 않은 도면');
+   await choose(first);
+   const beforeFailure=await page.evaluate(k=>localStorage.getItem(k),tabsKey);
+   await page.evaluate(k=>{window.originalStorageSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(name,value){if(name===k)throw new DOMException('Simulated quota exceeded','QuotaExceededError');return window.originalStorageSetItem.call(this,name,value);};},tabsKey);
+   await page.locator('[data-field=w]').fill('4.50');
+   await page.locator('[data-field=w]').press('Enter');
+   await page.locator('.fp-notice').filter({hasText:'브라우저 작업공간 자동 저장 실패'}).waitFor();
+   assert.equal(await page.locator('[data-field=w]').inputValue(),'4.50');
+   assert.equal(await page.evaluate(k=>localStorage.getItem(k),tabsKey),beforeFailure);
+   await page.evaluate(()=>Storage.prototype.setItem=window.originalStorageSetItem);
+   console.log('PASS '+(editor?'Editor':'Viewer')+': saved and unsaved tabs, order, active tab, content, dirty state, closed tabs and storage failure handling survive browser restart');
+   await context.close();
+  }
+ }finally{await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

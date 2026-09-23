@@ -1,0 +1,76 @@
+const {chromium}=require(process.env.PLANDY_PLAYWRIGHT);
+const assert=require('assert/strict');
+const M=require('../js/floor-plan-model.js');
+const before=process.argv.includes('--before');
+const editor=process.argv.includes('--editor');
+(async()=>{
+ const browser=await chromium.launch({headless:true,channel:'msedge'});
+ try{
+  const context=await browser.newContext({viewport:{width:1500,height:1050}});
+  const plan=M.sample();plan.objects.push({id:'BT01',kind:'BT',x:20,y:20,w:2,h:1.5,angle:0,conveyorId:'CV01',offset:5,locked:false});
+  const key='wms-floor-plan-editor-draft-v2:custom-1789604650974';
+  await context.addInitScript(({key,plan})=>{localStorage.setItem(key,JSON.stringify(plan));localStorage.removeItem(key+':tabs-v1');},{key,plan});
+  const page=await context.newPage();
+  await page.goto('http://127.0.0.1:4173/#custom-1789604650974');
+  await page.locator('#loginUserId').fill(editor?'edituser':'viewuser');
+  await page.locator('#loginPassword').fill(editor?'edit!@#$':'view1234');
+  await page.locator('#loginSubmitBtn').click();
+  await page.locator('.fp-editor').waitFor();
+  await page.locator('.fp-list [data-select=BT01]').click();
+  if(before){
+   assert.equal(await page.locator('.fp-prop-top h3').textContent(),'선택 대상 · 스캔 터널');
+   assert.equal(await page.locator('.fp-pending').count(),1);
+   assert.equal(await page.locator('[data-field=id]').locator('..').evaluate(el=>el.childNodes[0].textContent.trim()),'대상 코드');
+   assert.equal(await page.locator('[data-lock]').count(),1);
+   assert.equal(await page.locator('[data-action=toggleObjectLock]').count(),0);
+   const axis=page.locator('[data-axis-panel]');
+   assert.ok(await axis.evaluate((el,size)=>el.compareDocumentPosition(document.querySelector('[data-field=w]'))&Node.DOCUMENT_POSITION_FOLLOWING),'axis currently appears before tunnel size');
+   console.log('Reproduced generic tunnel title/code, bottom checkbox lock and axis-before-properties layout');
+  }else{
+   assert.equal(await page.locator('.fp-prop-top h3').textContent(),'스캔 터널 정보');
+   assert.equal(await page.locator('.fp-pending').count(),0);
+   assert.equal(await page.locator('[data-field=id]').locator('..').evaluate(el=>el.childNodes[0].textContent.trim()),'스캔 터널 코드');
+   assert.equal(await page.locator('[data-lock]').count(),0);
+   const lock=page.locator('[data-action=toggleObjectLock]');
+   assert.equal(await lock.count(),1);
+   const expected=['id','w','h','angle','conveyorId','offset','x','y'];
+   assert.deepEqual(await page.locator('[data-field]').evaluateAll(elements=>elements.map(el=>el.dataset.field)),expected);
+   assert.equal(await page.locator('[data-field=anchor]').count(),0);
+   assert.equal(await page.locator('[data-field=x]').locator('..').evaluate(el=>el.childNodes[0].textContent.trim()),'중심 X (m)');
+   assert.equal(await page.locator('[data-field=y]').locator('..').evaluate(el=>el.childNodes[0].textContent.trim()),'중심 Y (m)');
+   assert.equal(await page.locator('[data-field=x]').inputValue(),'21.00');
+   assert.equal(await page.locator('[data-field=y]').inputValue(),'20.75');
+   const props=page.locator('.fp-tunnel-properties'),axis=page.locator('[data-axis-panel]'),position=page.locator('.fp-tunnel-position');
+   assert.equal(await props.count(),1);
+   assert.ok(await props.evaluate(el=>el.compareDocumentPosition(document.querySelector('[data-axis-panel]'))&Node.DOCUMENT_POSITION_FOLLOWING),'properties precede axis');
+   assert.ok(await axis.evaluate(el=>el.compareDocumentPosition(document.querySelector('.fp-tunnel-position'))&Node.DOCUMENT_POSITION_FOLLOWING),'axis precedes X/Y');
+   assert.equal(await props.locator('[data-action=alignTunnel]').count(),1);
+   assert.equal(await page.locator('[data-action=rotate]').count(),0);
+   assert.equal(await page.locator('[data-action=objectClockwise],[data-action=objectCounterclockwise]').count(),2);
+   assert.equal(await page.locator('[data-action=delete]').count(),1);
+   await lock.click();
+   for(const name of ['w','h','angle','conveyorId','offset','x','y'])assert.ok(await page.locator('[data-field='+name+']').isDisabled(),name+' is locked');
+   assert.ok(await lock.isEnabled());
+   await lock.click();
+   await page.locator('[data-field=w]').fill('2.50');
+   await page.locator('[data-field=w]').press('Enter');
+   assert.equal(await page.locator('[data-field=w]').inputValue(),'2.50');
+   await page.locator('[data-action=alignTunnel]').click();
+   assert.equal(await page.locator('.fp-prop-error').textContent(),'');
+   const angle=Number(await page.locator('[data-field=angle]').inputValue());
+   await page.locator('[data-action=objectClockwise]').click();
+   assert.equal(Number(await page.locator('[data-field=angle]').inputValue()),(angle+90)%360);
+   await page.locator('[data-action=objectCounterclockwise]').click();
+   assert.equal(Number(await page.locator('[data-field=angle]').inputValue()),angle);
+   await page.locator('.fp-list [data-select=W01]').click();
+   assert.equal(await page.locator('.fp-prop-top h3').textContent(),'랙 기준 정보');
+   assert.equal(await page.locator('[data-action=toggleRackLock]').count(),1);
+   await page.locator('.fp-list [data-select=B01]').click();
+   assert.equal(await page.locator('.fp-prop-top h3').textContent(),'선택 대상 · 버퍼');
+   assert.equal(await page.locator('[data-lock]').count(),1);
+   assert.equal(await page.locator('[data-action=toggleObjectLock]').count(),0);
+   console.log((editor?'Editor':'Viewer')+': PASS scan tunnel center coordinates without position-basis field, preserved actions, header lock, auto-apply, alignment, rotation and unaffected rack/buffer panels');
+  }
+  await context.close();
+ }finally{await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

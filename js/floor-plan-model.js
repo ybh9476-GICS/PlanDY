@@ -26,7 +26,7 @@ function migrate(value){
   return o;
  });return p;
 }
-function sample(){const p=blank();p.name='연습용 창고';p.objects=[...[2,8,14].map((x,i)=>({id:'W0'+(i+1),kind:'W',x,y:3,w:4,h:3,angle:0,rackTypeId:'PALLET-4L-DBL',bayGap:0,rowGap:0,locked:false})),...[2,8,14].map((x,i)=>({id:'W0'+(i+4),kind:'W',x,y:9,w:4,h:3,angle:0,rackTypeId:'PALLET-4L-DBL',bayGap:0,rowGap:0,locked:false})),{id:'ST01',kind:'ST',points:[{x:2,y:7},{x:19.5,y:7}],width:1.5,cap:'butt',locked:false},{id:'S01',kind:'S',x:19.5,y:6,w:2,h:2,angle:0,locked:false},{id:'T01',kind:'T',points:[{x:22.5,y:7},{x:22.5,y:14.5}],width:2,cap:'butt',locked:false},{id:'B01',kind:'B',x:23.5,y:13,w:3,h:3,angle:0,locked:false},{id:'CV01',kind:'CV',points:[{x:27.25,y:13},{x:27.25,y:20.5}],width:1.5,cap:'butt',locked:false},{id:'D01',kind:'D',x:24,y:20.5,w:5,h:2.5,angle:0,locked:false}];return p;}
+function sample(){const p=blank();p.name='연습용 창고';p.objects=[...[2,8,14].map((x,i)=>({id:'W0'+(i+1),kind:'W',x,y:3,w:4,h:3,angle:0,rackTypeId:'PALLET-4L-DBL',bayGap:0,rowGap:0,locked:false})),...[2,8,14].map((x,i)=>({id:'W0'+(i+4),kind:'W',x,y:9,w:4,h:3,angle:0,rackTypeId:'PALLET-4L-DBL',bayGap:0,rowGap:0,locked:false})),{id:'ST01',kind:'ST',points:[{x:2,y:7},{x:19.5,y:7}],width:1.5,cap:'butt',segmentDirections:{main:['forward']},locked:false},{id:'S01',kind:'S',x:19.5,y:6,w:2,h:2,angle:0,locked:false},{id:'T01',kind:'T',points:[{x:22.5,y:7},{x:22.5,y:14.5}],width:2,cap:'butt',segmentDirections:{main:['forward']},locked:false},{id:'B01',kind:'B',x:23.5,y:13,w:3,h:3,angle:0,locked:false},{id:'CV01',kind:'CV',points:[{x:27.25,y:13},{x:27.25,y:20.5}],width:1.5,cap:'butt',segmentDirections:{main:['forward']},locked:false},{id:'D01',kind:'D',x:24,y:20.5,w:5,h:2.5,angle:0,locked:false}];return p;}
 function read(value){
  const v=migrate(value);number(v.width,'도면 가로',5);number(v.height,'도면 세로',5);number(v.grid,'격자 간격',.001,10);
  if(typeof v.name!=='string'||!v.name.trim()||v.name.length>80)throw new Error('도면 이름은 1~80자여야 합니다.');
@@ -42,11 +42,12 @@ function read(value){
  const ids=new Set();const objects=v.objects.map(o=>{
   if(!o||!Object.hasOwn(kinds,o.kind))throw new Error('대상 종류가 올바르지 않습니다.');const id=code(o.id,'대상 코드');if(ids.has(id))throw new Error('대상 코드가 중복됩니다.');ids.add(id);
   const n={id,kind:o.kind,locked:o.locked===true};
+  if((pathKinds.includes(o.kind)||o.kind==='BT')&&o.flowDirection!==undefined){if(!['forward','reverse'].includes(o.flowDirection))throw Error(id+': 팔레트 진행 방향을 확인하세요.');n.flowDirection=o.flowDirection;}
   if(pathKinds.includes(o.kind)){
    n.width=number(o.width,id+' 폭',.001,20);n.cap=o.cap==='legacy-square'?'legacy-square':'butt';
    if(!Array.isArray(o.points)||o.points.length<2||o.points.length>100)throw new Error(id+': 경로 지점은 2~100개입니다.');
    n.points=o.points.map((p,i)=>{if(!p)throw new Error(id+': 지점 정보를 확인하세요.');const pt={x:number(p.x,id+' 지점 X'),y:number(p.y,id+' 지점 Y')};if(i&&distance(pt,o.points[i-1])<.0009)throw new Error(id+': 인접한 지점을 같은 위치에 둘 수 없습니다.');return pt;});
-   if(o.branches!==undefined){
+    if(o.branches!==undefined){
     if(!Array.isArray(o.branches)||o.branches.length>20)throw Error(id+': 분기는 최대 20개입니다.');
     const branchIds=new Set();
     n.branches=o.branches.map(branch=>{
@@ -70,8 +71,14 @@ function read(value){
      const line=[source,...branch.points];visiting.delete(branch.id);cache.set(branch.id,line);return line;
     };
     n.branches.forEach(resolve);
-    if(n.points.length+n.branches.reduce((sum,b)=>sum+b.points.length,0)>100)throw Error(id+': 본선과 분기 지점은 합계 100개까지입니다.');
-   }
+     if(n.points.length+n.branches.reduce((sum,b)=>sum+b.points.length,0)>100)throw Error(id+': 본선과 분기 지점은 합계 100개까지입니다.');
+    }
+    if(o.segmentDirections!==undefined){
+     if(!o.segmentDirections||typeof o.segmentDirections!=='object'||Array.isArray(o.segmentDirections))throw Error(id+': 구간 진행 방향을 확인하세요.');
+     const lines=new Map(pathLines(n).map(line=>[line.id,line])),directions={};
+     for(const [lineId,values] of Object.entries(o.segmentDirections)){const line=lines.get(lineId);if(!line||!Array.isArray(values)||values.length!==line.points.length-1||values.some(value=>!['forward','reverse'].includes(value)))throw Error(id+': '+lineId+' 구간 진행 방향을 확인하세요.');directions[lineId]=values.slice();}
+     n.segmentDirections=directions;
+    }
   }else{
    if(o.snapAnchor!==undefined){if(!axisKeys.includes(o.snapAnchor))throw Error(id+': 축 설정을 확인하세요.');n.snapAnchor=o.snapAnchor;}
    Object.assign(n,{x:number(o.x,id+' X',-200),y:number(o.y,id+' Y',-200),w:number(o.w,id+' 가로/길이',.001),h:number(o.h,id+' 세로/폭',.001),angle:number(o.angle??0,id+' 방향',-360,360)});
@@ -90,6 +97,7 @@ function pathLines(o){
  const main={id:'main',points:o.points,labels:o.points.map((_,index)=>String(index+1))};
  return[main,...branches.map(branch=>({id:branch.id,points:resolve(branch),labels:resolve(branch).map((_,index)=>pointLabel(o,branch.id,index)),branch,parentId:branch.parent||'main'}))];
 }
+function segmentDirection(o,lineId='main',index=0){const value=o?.segmentDirections?.[lineId]?.[index];return ['forward','reverse'].includes(value)?value:o?.flowDirection==='reverse'?'reverse':'forward';}
 function pathPointRef(o,lineId,index){
  if(lineId==='main')return{points:o.points,index};
  const branch=(o.branches||[]).find(item=>item.id===lineId);if(!branch)throw Error('분기를 찾을 수 없습니다.');
@@ -123,11 +131,11 @@ function validate(plan){const issues=[],geometry=plan.objects.map(polygons),boxe
  if(a.kind==='BT'){const cv=plan.objects.find(o=>o.id===a.conveyorId&&o.kind==='CV');if(!cv)issues.push({id:a.id,level:'warning',message:a.id+': 연결할 컨베이어를 지정하세요.'});else{if(a.h<cv.width)issues.push({id:a.id,level:'warning',message:a.id+': 터널 폭이 컨베이어 폭보다 작습니다.'});try{const p=atDistance(cv,a.offset),angleDiff=Math.abs(((a.angle-p.angle+540)%360)-180);if(distance({x:a.x+a.w/2,y:a.y+a.h/2},p)>.003||angleDiff>.1)issues.push({id:a.id,level:'warning',message:a.id+': 컨베이어 기준 위치·방향이 다릅니다. 설치 위치 맞춤을 사용하세요.'});if(a.offset<a.w/2||a.offset+a.w/2>pathLength(cv))issues.push({id:a.id,level:'warning',message:a.id+': 터널 길이가 컨베이어 끝을 벗어납니다.'});}catch(e){issues.push({id:a.id,level:'warning',message:a.id+': '+e.message});}}}
  }return issues;}
 function move(o,x,y,anchor='topLeft'){const b=bounds(o),old=anchor==='center'?{x:b.x+b.w/2,y:b.y+b.h/2}:b,dx=x-old.x,dy=y-old.y;if(o.points){o.points=o.points.map(p=>({x:round(p.x+dx),y:round(p.y+dy)}));if(o.branches)o.branches.forEach(branch=>branch.points=branch.points.map(p=>({x:round(p.x+dx),y:round(p.y+dy)})));}else{o.x=round(o.x+dx);o.y=round(o.y+dy);}}
-function rotate(o){if(!o.points){o.angle=round(((o.angle||0)+90)%360);return;}const b=bounds(o),cx=b.x+b.w/2,cy=b.y+b.h/2;o.points=o.points.map(p=>({x:round(cx-(p.y-cy)),y:round(cy+(p.x-cx))}));if(o.branches)o.branches.forEach(branch=>branch.points=branch.points.map(p=>({x:round(cx-(p.y-cy)),y:round(cy+(p.x-cx))}))); }
+function rotate(o,delta=90){if(!o.points){o.angle=round((((o.angle||0)+delta)%360+360)%360);return;}const b=bounds(o),cx=b.x+b.w/2,cy=b.y+b.h/2,a=delta*Math.PI/180,cos=Math.cos(a),sin=Math.sin(a),turn=p=>({x:round(cx+(p.x-cx)*cos-(p.y-cy)*sin),y:round(cy+(p.x-cx)*sin+(p.y-cy)*cos)});o.points=o.points.map(turn);if(o.branches)o.branches.forEach(branch=>branch.points=branch.points.map(turn));}
 function unique(plan,kind){let i=1;while(plan.objects.some(o=>o.id===kind+String(i).padStart(2,'0')))i++;return kind+String(i).padStart(2,'0');}
 function readFile(value){if(value?.format==='gics-floor-plan'){if(value.version!==1||!value.plan||Object.hasOwn(value,'documents'))throw Error('지원하지 않는 .gics 도면 파일입니다.');return read(value.plan);}return read(value);}
 function serializeFile(plan){return JSON.stringify({format:'gics-floor-plan',version:1,plan:read(plan)},null,2);}
 function fileName(plan){return (plan.name.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').replace(/[. ]+$/g,'').trim()||'평면도')+'.gics';}
 class History{constructor(plan){this.plan=read(plan);this.past=[];this.future=[];}commit(plan){const next=read(plan);if(JSON.stringify(next)===JSON.stringify(this.plan))return false;this.past.push(clone(this.plan));if(this.past.length>80)this.past.shift();this.plan=next;this.future=[];return true;}undo(){if(!this.past.length)return false;this.future.push(this.plan);this.plan=this.past.pop();return true;}redo(){if(!this.future.length)return false;this.past.push(this.plan);this.plan=this.future.pop();return true;}}
-return{readFile,serializeFile,fileName,pathLines,pathPointRef,pointLabel,branchLabel,totalPathLength,axisKeys,axisPoint,moveAxis,roundMeters,formatMeters,presets:defaultTypes,validate,kinds,pathKinds,clone,round,snap,blank,sample,read,migrate,bounds,polygons,rectPolygon,polygonsOverlap,intersects,rackLayout,pathLength,atDistance,alignTunnel,move,rotate,unique,History};
+return{readFile,serializeFile,fileName,pathLines,pathPointRef,pointLabel,branchLabel,segmentDirection,totalPathLength,axisKeys,axisPoint,moveAxis,roundMeters,formatMeters,presets:defaultTypes,validate,kinds,pathKinds,clone,round,snap,blank,sample,read,migrate,bounds,polygons,rectPolygon,polygonsOverlap,intersects,rackLayout,pathLength,atDistance,alignTunnel,move,rotate,unique,History};
 }));

@@ -20,11 +20,12 @@ function element() {
     assert.equal(menu.id, 'custom-1788157191456');
     const data = JSON.stringify(published.storage.customCards);
     let authenticated = true;
+    let role = 'viewer';
     const mounts = [];
     const disposed = [];
     const window = {
         WMS_PUBLISHED_CONTENT: published,
-        wmsPermissions: { isAuthenticated: () => authenticated },
+        wmsPermissions: { isAuthenticated: () => authenticated, isEditor: () => authenticated && role === 'editor', getRole: () => role },
         wmsCardPatchReady: Promise.resolve(),
         wmsWarehouse3D: {
             mount: async (host, options) => mounts.push({ host, options }),
@@ -46,13 +47,17 @@ function element() {
     authenticated = true;
     await api.setActive(panel, true, menu);
     await api.setActive(panel, true, menu);
+    assert.equal(mounts.length, 1, 'Viewer must load the same interactive 3D scene without an Editor-role gate.');
+    assert.equal(role, 'viewer');
+    assert.equal(window.wmsPermissions.isEditor(), false);
     assert.equal(mounts.length, 1, 'Repeated active-route notifications must not duplicate the scene.');
     assert.equal(mounts[0].options.googleSheet.documentId, '12G9JIftGIVStzWUxIVZrz0JZsJ858Mc90V7-fnfBiHM');
     await api.setActive(panel, false, menu);
     assert.equal(disposed.length, 1);
     assert.equal(panel.children.length, 0, 'Leaving the route must remove its scene DOM.');
+    role = 'editor';
     await api.setActive(panel, true, menu);
-    assert.equal(mounts.length, 2, 'Returning to the route must create exactly one new scene.');
+    assert.equal(mounts.length, 2, 'Editor must load the same interactive 3D scene as Viewer.');
     api.dispose(panel);
 
     let finishPatches;
