@@ -47,6 +47,7 @@ const before=process.argv.includes('--before'),viewer=process.argv.includes('--v
    const addBranch=page.locator('[data-action=addBranch]'),addNode=page.locator('[data-action=addNode]');
    const pathActions=page.locator('.fp-path-actions');
    assert.deepEqual(await pathActions.locator('button').evaluateAll(elements=>elements.map(el=>el.dataset.action)),['addBranch','addNode','deleteNode']);
+   assert.equal(await page.locator('[data-action=deleteBranch]').count(),0);
    const actionTops=await pathActions.locator('button').evaluateAll(elements=>elements.map(el=>Math.round(el.getBoundingClientRect().top)));
    assert.equal(new Set(actionTops).size,1,'path edit buttons stay in one row');
    assert.equal(await page.locator('.fp-prop-top [data-field=width]').count(),0,'path width leaves the top property area');

@@ -8,11 +8,10 @@ async function clickPoint(page, branch, index) {
   let box = await target.count() ? await target.boundingBox() : null;
   if (!box) {
     const line = page.locator('[data-segment-hit="0"][data-segment-branch="' + branch + '"]');
-    const center = await line.evaluate(el => {
-      const svg = el.ownerSVGElement.getBoundingClientRect();
-      return { x: svg.x + (Number(el.getAttribute('x1')) + Number(el.getAttribute('x2'))) / 2, y: svg.y + (Number(el.getAttribute('y1')) + Number(el.getAttribute('y2'))) / 2 };
-    });
-    await page.mouse.click(center.x, center.y);
+    const [x1,y1,x2,y2]=await line.evaluate(el=>['x1','y1','x2','y2'].map(name=>Number(el.getAttribute(name))));
+    const svgBox=await page.locator('.fp-canvas').boundingBox();
+    assert.ok(svgBox, 'path canvas is visible');
+    await page.mouse.click(svgBox.x+(x1+x2)/2,svgBox.y+(y1+y2)/2);
     target = page.locator('[data-node-handle="' + index + '"][data-branch-handle="' + branch + '"]');
     box = await target.boundingBox();
   }
@@ -29,6 +28,7 @@ async function clickPoint(page, branch, index) {
       await context.route('**/api/local-content/save', route => route.fulfill({ contentType: 'application/json', body: '{"saved":true}' }));
       const page = await context.newPage();
       await page.goto('http://127.0.0.1:4173/#custom-1789604650974');
+      await page.waitForTimeout(1000);
       await page.locator('#loginUserId').fill(editor ? 'edituser' : 'viewuser');
       await page.locator('#loginPassword').fill(editor ? 'edit!@#$' : 'view1234');
       await page.locator('#loginSubmitBtn').click();
@@ -80,21 +80,20 @@ async function clickPoint(page, branch, index) {
       await canvas.press('Escape');
       assert.equal(await page.locator('[data-segment-branch="1"]').count(), 2, role + ' creates a nested branch from a branch point');
 
-      const handle = page.locator('[data-node-handle="0"][data-branch-handle="1"]');
+      await clickPoint(page, 1, 0);
+      const handle = page.locator('[data-node-handle="2"][data-branch-handle="0"]');
       let box = await handle.boundingBox();
-      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
       const beforeX = Number(await page.locator('[data-field=x]').inputValue());
       box = await handle.boundingBox();
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
       await page.mouse.move(box.x + box.width / 2 + 28, box.y + box.height / 2 - 18, { steps: 8 });
       await page.mouse.up();
-      const movedBox = await handle.boundingBox();
       const afterX = Number(await page.locator('[data-field=x]').inputValue());
       assert.notEqual(afterX, beforeX, role + ' moves the shared branch point directly on canvas');
-      await clickPoint(page, 0, 1);
-      const parentJunctionBox = await page.locator('[data-node-handle="2"][data-branch-handle="0"]').boundingBox();
-      assert.ok(Math.abs(parentJunctionBox.x-movedBox.x)<1&&Math.abs(parentJunctionBox.y-movedBox.y)<1,role+' parent branch follows the moved shared point');
+      const [sourceX,sourceY]=await page.locator('[data-segment-hit="0"][data-segment-branch="1"]').evaluate(el=>['x1','y1'].map(name=>Number(el.getAttribute(name))));
+      const [handleX,handleY]=await handle.evaluate(el=>['cx','cy'].map(name=>Number(el.getAttribute(name))));
+      assert.ok(Math.abs(sourceX-handleX)<.01&&Math.abs(sourceY-handleY)<.01,role+' nested branch follows the moved shared point');
 
       await page.evaluate(() => { window.showSaveFilePicker = undefined; });
       const [download] = await Promise.all([
@@ -117,15 +116,20 @@ async function clickPoint(page, branch, index) {
       await page.locator('.fp-list [data-select=ST01]').click();
       assert.equal(await page.locator('[data-segment-branch="0"],[data-segment-branch="1"]').count(), 4, role + ' restores recursive branches from .gics');
 
+      assert.equal(await page.locator('[data-action=deleteBranch]').count(), 0, role + ' removes the whole-branch delete control');
       await clickPoint(page, 0, 1);
-      await page.locator('[data-action=deleteBranch]').click();
-      assert.equal(await page.locator('[data-segment-branch="0"],[data-segment-branch="1"]').count(), 0, role + ' deletes descendant branches with their parent');
+      await page.locator('[data-action=deleteNode]').click();
+      assert.equal(await page.locator('[data-segment-branch="0"],[data-segment-branch="1"]').count(), 3, role + ' deletes one branch point while preserving the branch');
+      await clickPoint(page, 0, 1);
+      await page.locator('[data-action=deleteNode]').click();
+      assert.equal(await page.locator('[data-segment-branch="0"],[data-segment-branch="1"]').count(), 0, role + ' deletes the empty branch and its descendants with its last point');
       await page.locator('[data-action=undo]').click();
-      assert.equal(await page.locator('[data-segment-branch="0"],[data-segment-branch="1"]').count(), 4, role + ' restores branches with undo');
+      await page.locator('[data-action=undo]').click();
+      assert.equal(await page.locator('[data-segment-branch="0"],[data-segment-branch="1"]').count(), 4, role + ' restores point and branch deletion with undo');
 
       fs.mkdirSync('output/floor-plan-recursive-branches', { recursive: true });
       await page.screenshot({ path: 'output/floor-plan-recursive-branches/' + role + '.png' });
-      console.log(role + ': PASS canvas-only branch creation, recursive numbering, shared-point drag, cascade delete/undo, and .gics roundtrip');
+      console.log(role + ': PASS canvas-only branch creation, recursive numbering, shared-point drag, point-only branch deletion/undo, and .gics roundtrip');
       await context.close();
     }
   } finally {
