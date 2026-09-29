@@ -338,9 +338,9 @@ function mount(panel,menu){
   let html=calculated('w','전체 가로 (m)')+calculated('h','전체 세로 (m)');
   if(t)html+=calculatedProperty('height','전체 높이 (m)',rackHeight(t))+field('margin','마진 (m)',o.margin||0);
   html+=count('bays','베이 수')+count('rows','랙열 수');
-  if(t)html+=property('bayWidth','셀 폭 (m)')+property('depth','셀 깊이 (m)')+property('levelHeight','단당 높이 (m)')+property('levels','단수');
-  html+=field('bayGap','셀 폭 간격 (m)',o.bayGap)+field('rowGap','셀 깊이 간격 (m)',o.rowGap);
-  if(t)html+=property('depthCount','셀 깊이 팔레트 수');
+  if(t)html+=property('bayWidth','베이 폭 (m)')+property('depth','베이 깊이 (m)')+property('levelHeight','단당 높이 (m)')+property('levels','단수');
+  html+=field('bayGap','베이 폭 간격 (m)',o.bayGap)+field('rowGap','베이 깊이 간격 (m)',o.rowGap);
+  if(t)html+=property('depthCount','베이 깊이 팔레트 수');
   return '<div class="fp-fields fp-rack-properties">'+html+'</div>';
  }
  function objectHeader(o){const name=esc(M.kinds[o.kind]);return `<div class="fp-rack-code fp-object-code"><label>${name} 코드<input data-field="id" type="text" value="${esc(o.id)}"></label><button type="button" data-action="toggleObjectLock" aria-pressed="${o.locked}" aria-label="${o.locked?name+' 잠금 해제':name+' 잠금'}" title="${o.locked?name+' 잠금 해제':name+' 잠금'}" ${creating()?'disabled':''}>${o.locked?'🔒':'🔓'}</button></div>`;}
