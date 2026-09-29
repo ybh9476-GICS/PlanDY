@@ -94,10 +94,18 @@ function read(value){
    if(o.snapAnchor!==undefined){if(!axisKeys.includes(o.snapAnchor))throw Error(id+': 축 설정을 확인하세요.');n.snapAnchor=o.snapAnchor;}
    Object.assign(n,{x:number(o.x,id+' X',-200),y:number(o.y,id+' Y',-200),w:number(o.w,id+' 가로/길이',.001),h:number(o.h,id+' 세로/폭',.001),angle:number(o.angle??0,id+' 방향',-360,360)});
    if(o.kind==='W'){n.rackTypeId=typeof o.rackTypeId==='string'?o.rackTypeId:'';if(n.rackTypeId&&!typeIds.has(n.rackTypeId))throw new Error(id+': 랙타입을 찾을 수 없습니다.');n.bayGap=number(o.bayGap??0,'셀 폭 간격');n.rowGap=number(o.rowGap??0,'셀 깊이 간격');if(o.margin!==undefined)n.margin=number(o.margin,'마진');if(o.rackPreset!==undefined){const reference=o.rackPreset;if(!reference||typeof reference!=='object')throw Error(id+': 기준정보 타입 참조를 확인하세요.');n.rackPreset={id:code(reference.id,'기준정보 랙타입 코드'),w:number(reference.w,'기준 배치 가로',.001),h:number(reference.h,'기준 배치 세로',.001),bayGap:number(reference.bayGap,'기준 베이 간격'),rowGap:number(reference.rowGap,'기준 랙열 간격')};}}
-   if(o.kind==='BT'){n.conveyorId=typeof o.conveyorId==='string'?o.conveyorId:'';n.offset=number(o.offset??0,'컨베이어 설치 거리',0,30000);}
+   if(o.kind==='BT'){
+    n.conveyorId=typeof o.conveyorId==='string'?o.conveyorId:'';
+    n.offset=number(o.offset??0,'컨베이어 설치 거리',0,30000);
+    if(o.placement!==undefined){const placement=o.placement;if(!placement||typeof placement.lineId!=='string'||!/^(?:main|B[1-9]\d*)$/.test(placement.lineId)||!Number.isInteger(placement.index)||placement.index<0)throw Error(id+': 연결된 컨베이어 구간을 확인하세요.');n.placement={lineId:placement.lineId,index:placement.index,position:number(placement.position,id+' 구간 내 위치',0,30000)};}
+   }
   }
   const b=bounds(n);if(b.x<-.001||b.y<-.001||b.x+b.w>v.width+.001||b.y+b.h>v.height+.001)throw new Error(id+': 도면 경계를 벗어납니다. 위치·폭·방향을 확인하세요.');return n;
  });
+ for(const tunnel of objects.filter(o=>o.kind==='BT'&&o.conveyorId&&!o.placement)){
+  const cv=objects.find(o=>o.kind==='CV'&&o.id===tunnel.conveyorId);
+  if(cv){const placement=inferTunnelPlacement(tunnel,cv);if(placement)tunnel.placement=placement;}
+ }
  return{format:v.format,version:2,name:v.name.trim(),width:v.width,height:v.height,grid:v.grid,rackTypes,objects};
 }
 function rectPolygon(o,w=o.w,h=o.h){const a=(o.angle||0)*Math.PI/180,c=Math.cos(a),s=Math.sin(a),cx=o.x+o.w/2,cy=o.y+o.h/2;return[{x:o.x,y:o.y},{x:o.x+w,y:o.y},{x:o.x+w,y:o.y+h},{x:o.x,y:o.y+h}].map(p=>({x:cx+(p.x-cx)*c-(p.y-cy)*s,y:cy+(p.x-cx)*s+(p.y-cy)*c}));}
@@ -116,6 +124,54 @@ function pathPointRef(o,lineId,index){
  return pathPointRef(o,branch.parent||'main',branch.from);
 }
 function pathSegments(o){return pathLines(o).flatMap(line=>line.points.slice(1).map((point,index)=>({lineId:line.id,index,a:line.points[index],b:point,aRef:line.refs[index],bRef:line.refs[index+1]})));}
+function angleDifference(a,b){return Math.abs(((a-b+540)%360)-180);}
+function tunnelFlowAngle(tunnel){return tunnel.angle+(tunnel.flowDirection==='reverse'?180:0);}
+function conveyorFlowAngle(cv,edge){return Math.atan2(edge.b.y-edge.a.y,edge.b.x-edge.a.x)*180/Math.PI+(segmentDirection(cv,edge.lineId,edge.index)==='reverse'?180:0);}
+function inferTunnelPlacement(tunnel,cv){
+ const center={x:tunnel.x+tunnel.w/2,y:tunnel.y+tunnel.h/2};let best=null;
+ for(const edge of pathSegments(cv)){
+  const dx=edge.b.x-edge.a.x,dy=edge.b.y-edge.a.y,length=Math.hypot(dx,dy);
+  if(length+1e-8<tunnel.w||angleDifference(tunnelFlowAngle(tunnel),conveyorFlowAngle(cv,edge))>.1)continue;
+  const position=((center.x-edge.a.x)*dx+(center.y-edge.a.y)*dy)/length;
+  if(position<tunnel.w/2-1e-8||position+tunnel.w/2>length+1e-8)continue;
+  const projected={x:edge.a.x+dx*position/length,y:edge.a.y+dy*position/length},gap=distance(center,projected);
+  if(gap>.003||best&&gap>=best.gap)continue;
+  best={gap,placement:{lineId:edge.lineId,index:edge.index,position:round(position)}};
+ }
+ return best?.placement;
+}
+function closestConveyorSegment(plan,location,{conveyorId='',maxDistance=Infinity,tunnelLength=0,fitOnly=false}={}){
+ let best=null;
+ for(const cv of plan.objects.filter(o=>o.kind==='CV'&&(!conveyorId||o.id===conveyorId)))for(const edge of pathSegments(cv)){
+  const dx=edge.b.x-edge.a.x,dy=edge.b.y-edge.a.y,length=Math.hypot(dx,dy);
+  if(!length||fitOnly&&length+1e-8<tunnelLength)continue;
+  const raw=((location.x-edge.a.x)*dx+(location.y-edge.a.y)*dy)/length;
+  const position=fitOnly?Math.max(tunnelLength/2,Math.min(length-tunnelLength/2,raw)):Math.max(0,Math.min(length,raw));
+  const projected={x:edge.a.x+dx*position/length,y:edge.a.y+dy*position/length},gap=distance(location,projected);
+  if(gap>maxDistance||best&&gap>=best.distance)continue;
+  best={cv,edge,length,position,distance:gap};
+ }
+ return best;
+}
+function placeTunnelOnSegment(tunnel,match){
+ if(!match)throw Error('배치할 컨베이어 구간을 찾을 수 없습니다.');
+ if(match.length+1e-8<tunnel.w)throw Error('터널 길이가 선택한 직선 구간보다 깁니다.');
+ const {cv,edge,length}=match,position=round(Math.max(tunnel.w/2,Math.min(length-tunnel.w/2,match.position))),dx=edge.b.x-edge.a.x,dy=edge.b.y-edge.a.y;
+ const center={x:edge.a.x+dx*position/length,y:edge.a.y+dy*position/length};
+ tunnel.x=round(center.x-tunnel.w/2);tunnel.y=round(center.y-tunnel.h/2);
+ tunnel.angle=round((Math.atan2(dy,dx)*180/Math.PI+360)%360);
+ tunnel.conveyorId=cv.id;tunnel.placement={lineId:edge.lineId,index:edge.index,position};
+ tunnel.flowDirection=segmentDirection(cv,edge.lineId,edge.index);
+ if(edge.lineId==='main')tunnel.offset=round(pathLines(cv)[0].points.slice(1,edge.index+1).reduce((total,p,i)=>total+distance(pathLines(cv)[0].points[i],p),0)+position);
+ return tunnel;
+}
+function followTunnelPlacement(tunnel,plan){
+ if(!tunnel.placement)return false;
+ const cv=plan.objects.find(o=>o.kind==='CV'&&o.id===tunnel.conveyorId),edge=cv&&pathSegments(cv).find(s=>s.lineId===tunnel.placement.lineId&&s.index===tunnel.placement.index);
+ if(!edge)return false;
+ const length=distance(edge.a,edge.b);if(length+1e-8<tunnel.w)return false;
+ placeTunnelOnSegment(tunnel,{cv,edge,length,position:tunnel.placement.position});return true;
+}
 function orientation(a,b,c){const value=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);return Math.abs(value)<1e-8?0:Math.sign(value);}
 function onSegment(a,b,p){return orientation(a,b,p)===0&&p.x>=Math.min(a.x,b.x)-1e-8&&p.x<=Math.max(a.x,b.x)+1e-8&&p.y>=Math.min(a.y,b.y)-1e-8&&p.y<=Math.max(a.y,b.y)+1e-8;}
 function segmentConflict(first,second){
@@ -152,7 +208,7 @@ function atDistance(o,offset){let remaining=offset,points=pathLines(o)[0].points
 function alignTunnel(o,plan){const cv=plan.objects.find(p=>p.id===o.conveyorId&&p.kind==='CV');if(!cv)throw new Error('연결할 컨베이어를 선택하세요.');const p=atDistance(cv,o.offset);o.x=round(p.x-o.w/2);o.y=round(p.y-o.h/2);o.angle=round(p.angle);}
 function validate(plan){const issues=[],geometry=plan.objects.map(polygons),boxes=plan.objects.map(bounds);for(let i=0;i<plan.objects.length;i++){const a=plan.objects[i];for(let j=0;j<i;j++){const b=plan.objects[j];if(a.kind===b.kind&&pathKinds.includes(a.kind))continue;if([a.kind,b.kind].includes('BT')&&[a.kind,b.kind].includes('CV'))continue;if(intersects(boxes[i],boxes[j])&&geometry[i].some(p=>geometry[j].some(q=>polygonsOverlap(p,q))))issues.push({id:a.id,level:'error',message:a.id+' · '+b.id+' 배치 공간이 겹칩니다.'});}
  if(a.kind==='W'){const l=rackLayout(a,plan);if(!l)issues.push({id:a.id,level:'warning',message:a.id+': 랙타입을 지정하세요. 기존 배치 공간은 보존됩니다.'});else if(!l.bays||!l.rows)issues.push({id:a.id,level:'warning',message:a.id+': 선택한 랙타입의 셀이 들어갈 공간이 부족합니다.'});}
- if(a.kind==='BT'){const cv=plan.objects.find(o=>o.id===a.conveyorId&&o.kind==='CV');if(!cv)issues.push({id:a.id,level:'warning',message:a.id+': 연결할 컨베이어를 지정하세요.'});else{if(a.h<cv.width)issues.push({id:a.id,level:'warning',message:a.id+': 터널 폭이 컨베이어 폭보다 작습니다.'});try{const p=atDistance(cv,a.offset),angleDiff=Math.abs(((a.angle-p.angle+540)%360)-180);if(distance({x:a.x+a.w/2,y:a.y+a.h/2},p)>.003||angleDiff>.1)issues.push({id:a.id,level:'warning',message:a.id+': 컨베이어 기준 위치·방향이 다릅니다. 설치 위치 맞춤을 사용하세요.'});if(a.offset<a.w/2||a.offset+a.w/2>pathLength(cv))issues.push({id:a.id,level:'warning',message:a.id+': 터널 길이가 컨베이어 끝을 벗어납니다.'});}catch(e){issues.push({id:a.id,level:'warning',message:a.id+': '+e.message});}}}
+ if(a.kind==='BT'){const cv=plan.objects.find(o=>o.id===a.conveyorId&&o.kind==='CV');if(!cv)issues.push({id:a.id,level:'warning',message:a.id+': 연결할 컨베이어를 지정하세요.'});else{if(a.h<cv.width)issues.push({id:a.id,level:'warning',message:a.id+': 터널 폭이 컨베이어 폭보다 작습니다.'});try{let p,length,position,flowAngle;if(a.placement){const edge=pathSegments(cv).find(s=>s.lineId===a.placement.lineId&&s.index===a.placement.index);if(!edge){issues.push({id:a.id,level:'warning',message:a.id+': 연결된 컨베이어 구간을 찾을 수 없습니다.'});continue;}length=distance(edge.a,edge.b);position=a.placement.position;p={x:edge.a.x+(edge.b.x-edge.a.x)*position/length,y:edge.a.y+(edge.b.y-edge.a.y)*position/length};flowAngle=conveyorFlowAngle(cv,edge);}else{p=atDistance(cv,a.offset);length=pathLength(cv);position=a.offset;flowAngle=p.angle+(segmentDirection(cv,'main',p.segment)==='reverse'?180:0);}const angleDiff=angleDifference(tunnelFlowAngle(a),flowAngle);if(distance({x:a.x+a.w/2,y:a.y+a.h/2},p)>.003||angleDiff>.1)issues.push({id:a.id,level:'warning',message:a.id+': 컨베이어 기준 위치·방향이 다릅니다. 설치 위치 맞춤을 사용하세요.'});if(position<a.w/2-1e-8||position+a.w/2>length+1e-8)issues.push({id:a.id,level:'warning',message:a.id+': 터널 길이가 컨베이어 끝을 벗어납니다.'});}catch(e){issues.push({id:a.id,level:'warning',message:a.id+': '+e.message});}}}
  }return issues;}
 function move(o,x,y,anchor='topLeft'){const b=bounds(o),old=anchor==='center'?{x:b.x+b.w/2,y:b.y+b.h/2}:b,dx=x-old.x,dy=y-old.y;if(o.points){o.points=o.points.map(p=>({x:round(p.x+dx),y:round(p.y+dy)}));if(o.branches)o.branches.forEach(branch=>branch.points=branch.points.map(p=>({x:round(p.x+dx),y:round(p.y+dy)})));}else{o.x=round(o.x+dx);o.y=round(o.y+dy);}}
 function rotate(o,delta=90){if(!o.points){o.angle=round((((o.angle||0)+delta)%360+360)%360);return;}const b=bounds(o),cx=b.x+b.w/2,cy=b.y+b.h/2,a=delta*Math.PI/180,cos=Math.cos(a),sin=Math.sin(a),turn=p=>({x:round(cx+(p.x-cx)*cos-(p.y-cy)*sin),y:round(cy+(p.x-cx)*sin+(p.y-cy)*cos)});o.points=o.points.map(turn);if(o.branches)o.branches.forEach(branch=>branch.points=branch.points.map(turn));}
@@ -161,5 +217,5 @@ function readFile(value){if(value?.format==='gics-floor-plan'){if(value.version!
 function serializeFile(plan){return JSON.stringify({format:'gics-floor-plan',version:1,plan:read(plan)},null,2);}
 function fileName(plan){return (plan.name.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').replace(/[. ]+$/g,'').trim()||'평면도')+'.gics';}
 class History{constructor(plan){this.plan=read(plan);this.past=[];this.future=[];}commit(plan){const next=read(plan);if(JSON.stringify(next)===JSON.stringify(this.plan))return false;this.past.push(clone(this.plan));if(this.past.length>80)this.past.shift();this.plan=next;this.future=[];return true;}undo(){if(!this.past.length)return false;this.future.push(this.plan);this.plan=this.past.pop();return true;}redo(){if(!this.future.length)return false;this.past.push(this.plan);this.plan=this.future.pop();return true;}}
-return{readFile,serializeFile,fileName,pathLines,pathSegments,pathPointRef,pointLabel,branchLabel,segmentDirection,totalPathLength,validatePathTopology,connectionCycleSize,axisKeys,axisPoint,moveAxis,roundMeters,formatMeters,presets:defaultTypes,validate,kinds,toolKinds,pathKinds,clone,round,snap,blank,sample,read,migrate,bounds,polygons,rectPolygon,polygonsOverlap,intersects,rackLayout,fitRack,pathLength,atDistance,alignTunnel,move,rotate,unique,History};
+return{readFile,serializeFile,fileName,pathLines,pathSegments,pathPointRef,pointLabel,branchLabel,segmentDirection,totalPathLength,validatePathTopology,connectionCycleSize,closestConveyorSegment,placeTunnelOnSegment,followTunnelPlacement,axisKeys,axisPoint,moveAxis,roundMeters,formatMeters,presets:defaultTypes,validate,kinds,toolKinds,pathKinds,clone,round,snap,blank,sample,read,migrate,bounds,polygons,rectPolygon,polygonsOverlap,intersects,rackLayout,fitRack,pathLength,atDistance,alignTunnel,move,rotate,unique,History};
 }));
