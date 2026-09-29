@@ -16,7 +16,7 @@ function branched(kind) {
   };
 }
 
-for (const kind of ['T', 'ST', 'CV']) {
+for (const kind of ['T', 'GR', 'CV', 'ST']) {
   const plan = M.blank();
   plan.objects = [branched(kind)];
   const read = M.read(plan);
@@ -115,4 +115,46 @@ const scan = branched('CV');
 assert.equal(M.pathLength(scan), 16, 'main path length remains the scan-tunnel distance reference');
 assert.equal(M.atDistance(scan, 15).x, 17, 'scan-tunnel offset still follows the main path');
 
-console.log('Floor-plan branches: T/ST/CV recursive geometry, hierarchical numbering, validation, transform, compatibility, and .gics roundtrip passed.');
+for (const kind of ['T', 'GR', 'CV']) {
+  const closedPlan = M.blank();
+  closedPlan.objects = [{
+    id: kind + 'CLOSED', kind, width: 1, cap: 'butt', locked: false, closed: true,
+    points: [{ x: 2, y: 2 }, { x: 8, y: 2 }, { x: 8, y: 8 }, { x: 2, y: 8 }]
+  }];
+  const closed = M.read(closedPlan).objects[0];
+  assert.equal(M.pathLines(closed)[0].points.length, 5, kind + ' adds the closing segment without duplicating stored points');
+  assert.deepEqual(M.pathLines(closed)[0].points.at(-1), closed.points[0]);
+  assert.equal(M.pathSegments(closed).length, 4);
+  assert.equal(M.totalPathLength(closed), 24);
+  assert.deepEqual(M.readFile(JSON.parse(M.serializeFile(M.read(closedPlan)))).objects[0], closed, kind + ' closed path survives .gics');
+}
+
+const connectedPlan = M.blank();
+connectedPlan.objects = [{
+  id: 'GRLINK', kind: 'GR', width: 1, cap: 'butt', locked: false,
+  points: [{ x: 2, y: 2 }, { x: 8, y: 2 }, { x: 8, y: 8 }],
+  branches: [{ id: 'B1', from: 0, points: [], target: { line: 'main', index: 2 } }]
+}];
+const connected = M.read(connectedPlan).objects[0];
+assert.equal(M.pathLines(connected).find(line => line.id === 'B1').points.length, 2, 'a direct connection reuses both existing points');
+assert.equal(M.connectionCycleSize({ ...connected, branches: [] }, { line: 'main', index: 0 }, { line: 'main', index: 2 }), 3, 'cycle size includes the existing route and new link');
+assert.deepEqual(M.readFile(JSON.parse(M.serializeFile(M.read(connectedPlan)))).objects[0], connected, 'connected branch survives .gics');
+const selfClosedPlan = M.blank();
+selfClosedPlan.objects = [{
+  id: 'CVLOOP', kind: 'CV', width: 1, cap: 'butt', locked: false,
+  points: [{ x: 2, y: 2 }, { x: 8, y: 2 }],
+  branches: [{ id: 'B1', from: 0, points: [{ x: 5, y: 6 }, { x: 8, y: 6 }], target: { line: 'main', index: 0 } }]
+}];
+const selfClosed = M.read(selfClosedPlan).objects[0];
+assert.equal(M.pathLines(selfClosed).find(line => line.id === 'B1').points.length, 4, 'a branch can close back to its own start after two new points');
+assert.equal(M.connectionCycleSize({ ...selfClosed, branches: [] }, { line: 'main', index: 0 }, { line: 'main', index: 0 }, 2), 3);
+
+const crossing = M.blank();
+crossing.objects = [{
+  id: 'TCROSS', kind: 'T', width: 1, cap: 'butt', locked: false, closed: true,
+  points: [{ x: 2, y: 2 }, { x: 8, y: 8 }, { x: 2, y: 8 }, { x: 8, y: 2 }]
+}];
+assert.throws(() => M.read(crossing), /겹치거나 교차/);
+assert.throws(() => M.read({ ...connectedPlan, objects: [{ ...connectedPlan.objects[0], branches: [{ id: 'B1', from: 0, points: [], target: { line: 'main', index: 1 } }] }] }), /세 지점|겹치거나 교차|연결/);
+
+console.log('Floor-plan branches: recursive and closed geometry, point connections, crossing guards, legacy ST compatibility, transform, and .gics roundtrip passed.');

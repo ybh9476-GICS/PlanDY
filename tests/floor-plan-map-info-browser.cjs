@@ -37,9 +37,10 @@ const meter=value=>Number(value).toFixed(2);
   }else{
    for(const id of ['W01','BT01','B01','D01','S01']){
     const object=plan.objects.find(item=>item.id===id);
-    assert.equal(await mapInfo(id).textContent(),`${id} : ${meter(object.w)} m x ${meter(object.h)} m , ${M.round(object.angle||0)}°`);
+    const layout=object.kind==='W'?M.rackLayout(object,plan):null,width=layout?.actualW??object.w,height=layout?.actualH??object.h;
+    assert.equal(await mapInfo(id).textContent(),`${id} : ${meter(width)} m x ${meter(height)} m , ${M.round(object.angle||0)}°`);
    }
-   for(const id of ['T01','ST01','CV01']){
+   for(const id of ['T01','GR01','CV01']){
     const object=plan.objects.find(item=>item.id===id);
     assert.equal(await mapInfo(id).textContent(),`${id} : 폭 ${meter(object.width)} m , 총 길이 ${meter(M.totalPathLength(object))} m`);
    }
@@ -48,8 +49,18 @@ const meter=value=>Number(value).toFixed(2);
    assert.equal(await rackInfo.getAttribute('text-anchor'),'start');
    assert.equal(Number(await rackInfo.getAttribute('x')),Number(await selection.getAttribute('x'))+3);
    assert.ok(Number(await rackInfo.getAttribute('y'))<Number(await selection.getAttribute('y')));
-   assert.equal(await fieldLabel('w'),'가로 길이 (m)');
-   assert.equal(await fieldLabel('h'),'세로 길이 (m)');
+   assert.equal(await fieldLabel('w'),'전체 가로 (m)');
+   assert.equal(await fieldLabel('h'),'전체 세로 (m)');
+   const rackPropertyLabel=name=>page.locator('[data-rack-property="'+name+'"]').locator('..').evaluate(el=>el.childNodes[0].textContent.trim());
+   assert.equal(await rackPropertyLabel('bayWidth'),'셀 폭 (m)');
+   assert.equal(await rackPropertyLabel('depth'),'셀 깊이 (m)');
+   assert.equal(await fieldLabel('bayGap'),'셀 폭 간격 (m)');
+   assert.equal(await fieldLabel('rowGap'),'셀 깊이 간격 (m)');
+   assert.equal(await rackPropertyLabel('depthCount'),'셀 깊이 팔레트 수');
+   const rightHandle=page.locator('[data-panel-resizer="right"]');
+   await rightHandle.focus();
+   await page.keyboard.press('Home');
+   assert.ok(await page.locator('.fp-inspector').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
    assert.ok(await page.locator('[data-field=w]').evaluate(el=>el.compareDocumentPosition(document.querySelector('[data-rack-property=bayWidth]'))&Node.DOCUMENT_POSITION_FOLLOWING));
    await select('BT01');
    assert.equal(await fieldLabel('w'),'가로 길이 (m)');
@@ -62,7 +73,7 @@ const meter=value=>Number(value).toFixed(2);
    assert.match(await detail.textContent(),/중심선 총 길이 7\.50 m/);
    assert.equal(await detail.locator('xpath=preceding-sibling::hr[1]').count(),1);
    assert.ok(await detail.evaluate(el=>el.compareDocumentPosition(document.querySelector('.fp-path-actions'))&Node.DOCUMENT_POSITION_FOLLOWING));
-   console.log((editor?'Editor':'Viewer')+': PASS combined map information for W/BT/B/D/S and T/ST/CV, renamed and reordered size fields, and relocated path total');
+   console.log((editor?'Editor':'Viewer')+': PASS combined map information for W/BT/B/D/S and T/GR/CV, renamed rack fields, and relocated path total');
   }
   await context.close();
  }finally{await browser.close();}

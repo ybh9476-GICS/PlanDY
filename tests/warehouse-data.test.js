@@ -101,7 +101,7 @@ assert.ok(warehouseRenderer.includes("const dockCodeMatch = /^D(\\d+)$/.exec(nor
 assert.ok(warehouseRenderer.includes("const bufferCodeMatch = /^B(\\d+)$/.exec(normalizedValue);"), 'Any B-prefixed numeric code must be parsed as a numbered handoff buffer coordinate.');
 assert.ok(warehouseRenderer.includes("const stationCodeMatch = /^S(\\d+)$/.exec(normalizedValue);"), 'Any S-prefixed numeric code must be parsed as a numbered inbound/outbound station.');
 assert.ok(warehouseRenderer.includes("if (normalizedValue === 'S' || stationCodeMatch) stationCells.push({"), 'The original unnumbered S station value must remain compatible.');
-assert.ok(warehouseRenderer.includes("if (normalizedValue === 'ST') shuttlePassageCells.push({ x, y });"), 'ST must be parsed as a shuttle-only passage coordinate.');
+assert.ok(warehouseRenderer.includes("if (normalizedValue === 'GR' || normalizedValue === 'ST') shuttlePassageCells.push({ x, y });"), 'GR must be parsed as a guide-rail coordinate while legacy ST remains compatible.');
 assert.ok(warehouseRenderer.includes("if (normalizedValue === 'CV') conveyorCells.push({ x, y });"), 'CV must be parsed as a conveyor-track coordinate.');
 assert.ok(warehouseRenderer.includes("shell.viewport.dataset.warehouseConveyorSource = 'floorPlan-CV';"), 'The viewport must expose the floor-plan source of conveyor cells.');
 assert.ok(warehouseRenderer.includes("shell.viewport.dataset.warehouseConveyorColor = '#facc15';"), 'CV lines must use the same yellow as T passage lines.');
@@ -116,7 +116,7 @@ assert.ok(warehouseRenderer.includes('shell.viewport.dataset.warehouseStationCel
 assert.ok(warehouseRenderer.includes("shuttleFrameGroup.name = 'WAREHOUSE-4WAY-SHUTTLE-FRAMES';"), 'ST cells must create an identifiable four-way shuttle frame layer.');
 assert.ok(warehouseRenderer.includes("coverage: 'full-cell-area'"), 'The shuttle frame must fill the ST cell footprint instead of rendering thin center rails.');
 assert.ok(warehouseRenderer.includes('shell.viewport.dataset.shuttlePassageCellCount'), 'The viewport must expose the ST cell count for browser verification.');
-assert.ok(warehouseRenderer.includes("shell.viewport.dataset.shuttleFrameCoverage = 'full-ST-area';"), 'The viewport must expose full ST-area frame coverage.');
+assert.ok(warehouseRenderer.includes("shell.viewport.dataset.shuttleFrameCoverage = 'full-GR-area';"), 'The viewport must expose full guide-rail-area frame coverage.');
 assert.ok(warehouseRenderer.includes('shell.viewport.dataset.shuttleFrameLevelCount'), 'The viewport must expose the repeated shuttle frame level count.');
 assert.ok(warehouseRenderer.includes('shell.viewport.dataset.shuttleFrameTileCount'), 'The viewport must expose the total multi-level shuttle frame tile count.');
 assert.ok(warehouseRenderer.includes("group.name = `WAREHOUSE-INOUT-STATION-${station.code}`;"), 'Connected S cells must create numbered inbound/outbound stations.');
@@ -1055,7 +1055,7 @@ const csv = (title, headers, values) => [title, '', '', headers.join(','), value
 const converted = converter({
     floorPlan: [
         '평면도', '', 'Y\\X,1,2,3,4,5,6',
-        '1,T,ST,S7,CV,B4,D27',
+        '1,T,GR,S7,CV,B4,D27',
         '2,F,W01,W01,W01,W01,W01',
         '3,F,W01,W01,W01,W01,W01',
         '4,F,W01,W01,W01,W01,W01'
@@ -1096,7 +1096,7 @@ assert.strictEqual(converted.meta.floorDepth, 2500, 'The five-row Y axis must cr
 assert.strictEqual(converted.meta.warehouseCellCount, 24, 'Every populated F, T, and rack cell must count as warehouse area.');
 assert.strictEqual(converted.meta.warehouseGapCount, 6, 'Blank cells inside the recognized axis range must remain valid unassigned floor cells.');
 assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.passageCells)), [{ x: 0, y: 0 }], 'T must be stored as a passage coordinate, not a rack.');
-assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.shuttlePassageCells)), [{ x: 500, y: 0 }], 'ST must be stored separately from the AMR passage coordinates.');
+assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.shuttlePassageCells)), [{ x: 500, y: 0 }], 'GR must be stored separately from the AMR passage coordinates.');
 assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.conveyorCells)), [{ x: 1500, y: 0 }], 'CV must be stored separately as a conveyor-track coordinate.');
 assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.bufferCells)), [{ x: 2000, y: 0, code: 'B04' }], 'A numbered B value must retain its normalized handoff buffer number and coordinate.');
 assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.truckSchedules)), [
@@ -1105,7 +1105,7 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.truckSchedules))
 ], 'Truck schedules must preserve dock, vehicle, company, item, and quantity information from the work-order sheet.');
 assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.stationCells)), [{ x: 1000, y: 0, code: 'S07' }], 'A numbered S value must retain its normalized station number and coordinate.');
 assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.dockCells)), [{ x: 2500, y: 0, code: 'D27' }], 'Any D-prefixed numeric code must retain its loading dock number and coordinate.');
-assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.unmappedFloorRackCodes)), [], 'F, T, ST, CV, numbered station, dock, and buffer codes must not be reported as unknown rack codes.');
+assert.deepStrictEqual(JSON.parse(JSON.stringify(converted.meta.unmappedFloorRackCodes)), [], 'F, T, GR, CV, numbered station, dock, and buffer codes must not be reported as unknown rack codes.');
 assert.strictEqual(converted.racks.length, 1, 'A rack removed from the floor plan must not be rendered.');
 assert.strictEqual(converted.meta.unplacedRackCodes[0], 'W02', 'A rack missing from the floor plan must be reported as unplaced.');
 assert.strictEqual(converted.locations.length, 1, 'Converted location master rows must remain available for empty slot rendering.');

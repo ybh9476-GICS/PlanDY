@@ -15,6 +15,12 @@ const before=process.argv.includes('--before'),viewer=process.argv.includes('--v
   await page.locator('#loginPassword').fill(viewer?'view1234':'edit!@#$');
   await page.locator('#loginSubmitBtn').click();
   await page.locator('.fp-editor').waitFor();
+  const guideRailTool=page.locator('[data-tool=GR]');
+  assert.equal(await guideRailTool.count(),1);
+  assert.equal(await guideRailTool.locator('.fp-tool-code').textContent(),'GR');
+  assert.equal(await guideRailTool.getAttribute('title'),'가이드 레일');
+  assert.equal(await guideRailTool.getAttribute('aria-label'),'가이드 레일');
+  assert.equal(await page.locator('[data-tool=ST]').count(),0,'legacy ST is accepted in saved data but is not offered as a new placement tool');
   await page.locator('.fp-list [data-select=T01]').click();
   if(before){
    assert.equal(await page.locator('.fp-prop-top h3').textContent(),'선택 대상 · AMR 통로');
@@ -27,7 +33,7 @@ const before=process.argv.includes('--before'),viewer=process.argv.includes('--v
    console.log('Reproduced current path inspector title, notice, generic code, start coordinates, full-path button and bottom checkbox lock');
    return;
   }
-  for(const [id,name] of [['T01','AMR 통로'],['ST01','셔틀 통로'],['CV01','컨베이어']]){
+  for(const [id,name] of [['T01','AMR 통로'],['GR01','가이드 레일'],['CV01','컨베이어']]){
    await page.locator('.fp-list [data-select="'+id+'"]').click();
    assert.equal(await page.locator('.fp-prop-top h3').textContent(),name+' 정보');
    assert.equal(await page.locator('.fp-pending').count(),0);

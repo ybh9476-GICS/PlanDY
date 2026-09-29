@@ -26,7 +26,7 @@
             const created = !script;
             if (created) {
                 script = document.createElement('script');
-                script.src = 'js/warehouse-3d.js?v=warehouse-kpi-split-v125-transport-cartons';
+                script.src = 'js/warehouse-3d.js?v=warehouse-kpi-split-v126-guide-rail';
                 script.dataset.wmsWarehouse3d = 'true';
             }
             const cleanup = () => {

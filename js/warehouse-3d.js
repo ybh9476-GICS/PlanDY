@@ -164,7 +164,7 @@
                 floorPlanCells.push({ x, y, value: cellValue });
                 const normalizedValue = cellValue.toUpperCase();
                 if (normalizedValue === 'T') passageCells.push({ x, y });
-                if (normalizedValue === 'ST') shuttlePassageCells.push({ x, y });
+                if (normalizedValue === 'GR' || normalizedValue === 'ST') shuttlePassageCells.push({ x, y });
                 if (normalizedValue === 'CV') conveyorCells.push({ x, y });
                 if (normalizedValue === 'BT') {
                     conveyorCells.push({ x, y });
@@ -184,7 +184,7 @@
                     y,
                     code: `B${bufferCodeMatch[1].padStart(2, '0')}`
                 });
-                if (normalizedValue === 'F' || normalizedValue === 'T' || normalizedValue === 'ST' || normalizedValue === 'CV' || normalizedValue === 'BT'
+                if (normalizedValue === 'F' || normalizedValue === 'T' || normalizedValue === 'GR' || normalizedValue === 'ST' || normalizedValue === 'CV' || normalizedValue === 'BT'
                     || normalizedValue === 'S' || stationCodeMatch || dockCodeMatch || bufferCodeMatch) return;
                 const rackCode = rackCodesFromMaster.has(cellValue) ? cellValue : '';
                 if (!rackCode) {
@@ -3980,11 +3980,11 @@
         );
         const shuttleFrameGroup = new THREE.Group();
         shuttleFrameGroup.name = 'WAREHOUSE-4WAY-SHUTTLE-FRAMES';
-        shuttleFrameGroup.userData = { kind: 'shuttle-frames', source: 'floorPlan-ST', coverage: 'full-cell-area' };
+        shuttleFrameGroup.userData = { kind: 'shuttle-frames', source: 'floorPlan-GR', coverage: 'full-cell-area' };
         if (shuttleFrameLayout.tiles.length) {
             const decks = new THREE.InstancedMesh(shuttleDeckGeometry, shuttleDeckMaterial, shuttleFrameLayout.tiles.length);
             decks.name = 'WAREHOUSE-4WAY-SHUTTLE-DECKS';
-            decks.userData = { kind: 'shuttle-frame-decks', source: 'floorPlan-ST' };
+            decks.userData = { kind: 'shuttle-frame-decks', source: 'floorPlan-GR' };
             const matrix = new THREE.Matrix4();
             const position = new THREE.Vector3();
             const rotation = new THREE.Quaternion();
@@ -4011,7 +4011,7 @@
                 shuttleFrameLayout.boundaries.length
             );
             frameEdges.name = 'WAREHOUSE-4WAY-SHUTTLE-FRAME-EDGES';
-            frameEdges.userData = { kind: 'shuttle-frame-edges', source: 'floorPlan-ST' };
+            frameEdges.userData = { kind: 'shuttle-frame-edges', source: 'floorPlan-GR' };
             const matrix = new THREE.Matrix4();
             const position = new THREE.Vector3();
             const rotation = new THREE.Quaternion();
@@ -4034,7 +4034,7 @@
         });
         const stationFrameConnectors = [];
         scene.add(shuttleFrameGroup);
-        shell.viewport.dataset.shuttleFrameCoverage = 'full-ST-area';
+        shell.viewport.dataset.shuttleFrameCoverage = 'full-GR-area';
         shell.viewport.dataset.shuttleFrameLevelCount = String(shuttleFrameLayout.levels.length);
         shell.viewport.dataset.shuttleFrameTileCount = String(shuttleFrameLayout.tiles.length);
         shell.viewport.dataset.shuttleFrameBoundaryCount = String(shuttleFrameLayout.boundaries.length);

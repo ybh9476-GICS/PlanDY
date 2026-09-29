@@ -22,7 +22,7 @@ async function clickPoint(page, branch, index) {
 (async()=>{
  const browser=await chromium.launch({headless:true,channel:'msedge'});
  try{
-  const plan=M.sample(),track=plan.objects.find(o=>o.id==='ST01');
+  const plan=M.sample(),track=plan.objects.find(o=>o.id==='GR01');
   track.points=[{x:2,y:7},{x:10,y:7},{x:19.5,y:7}];
   track.branches=[
    {id:'B1',from:1,points:[{x:16,y:10},{x:14,y:14}]},
@@ -38,7 +38,7 @@ async function clickPoint(page, branch, index) {
    await page.locator('#loginPassword').fill(editor?'edit!@#$':'view1234');
    await page.locator('#loginSubmitBtn').click();
    await page.locator('.fp-editor').waitFor();
-   await page.locator('.fp-list [data-select=ST01]').click();
+   await page.locator('.fp-list [data-select=GR01]').click();
    assert.equal(await page.locator('[data-branch-select],[data-node]').count(),0,'inspector selector lists are removed');
    const branchSegment=page.locator('[data-segment-hit="0"][data-segment-branch="0"]');
    const [x1,y1,x2,y2]=await branchSegment.evaluate(el=>['x1','y1','x2','y2'].map(name=>Number(el.getAttribute(name))));

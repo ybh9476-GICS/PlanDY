@@ -12,12 +12,12 @@ function centerOf(line){
  const browser=await chromium.launch({headless:true,channel:'msedge'});
  try{
   const plan=M.sample();
-  for(const id of ['T01','ST01','CV01']){
+  for(const id of ['T01','GR01','CV01']){
    const track=plan.objects.find(o=>o.id===id);
    track.points=[{x:2,y:3},{x:6,y:5},{x:10,y:9}];
    track.segmentDirections={main:['forward','forward']};
   }
-  const shuttle=plan.objects.find(o=>o.id==='ST01');
+  const shuttle=plan.objects.find(o=>o.id==='GR01');
   shuttle.branches=[{id:'B1',from:1,points:[{x:2,y:12},{x:3,y:16}]}];
   shuttle.segmentDirections.B1=['forward','forward'];
   for(const editor of [false,true]){
@@ -29,7 +29,7 @@ function centerOf(line){
    await page.locator('#loginPassword').fill(editor?'edit!@#$':'view1234');
    await page.locator('#loginSubmitBtn').click();
    await page.locator('.fp-editor').waitFor();
-   for(const id of ['T01','ST01','CV01']){
+   for(const id of ['T01','GR01','CV01']){
     await page.locator('.fp-list [data-select="'+id+'"]').click();
     assert.equal(await page.locator('.fp-handle + text').count(),0,id+' point numbers are hidden');
     const line=page.locator('[data-segment-hit="1"][data-segment-branch="-1"]');
@@ -51,7 +51,7 @@ function centerOf(line){
      assert.ok(Math.abs(Math.atan2(geometry.y2-geometry.y1,geometry.x2-geometry.x1)-oldAngle)<0.002,'length edit preserves the selected segment angle');
     }
    }
-   await page.locator('.fp-list [data-select=ST01]').click();
+   await page.locator('.fp-list [data-select=GR01]').click();
    const branchLine=page.locator('[data-segment-hit="1"][data-segment-branch="0"]');
    await page.mouse.click(...Object.values(await centerOf(branchLine)));
     assert.equal(await branchLine.getAttribute('class'),'fp-segment-hit is-selected','branch segment selects its branch');
