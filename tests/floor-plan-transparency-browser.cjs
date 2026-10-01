@@ -34,6 +34,24 @@ const baseUrl=process.env.PLANDY_TEST_URL||'http://127.0.0.1:4173';
     const actual=rgb(source[kind]).map(value=>Math.round(value*.5+255*.5));
     assert.ok(actual.every((value,index)=>Math.abs(value-rgb(expected[kind])[index])<=1),kind+' visible color matches the expected translucent color');
    }
+   const initialSizes={};
+   for(const kind of ['B','S','D']){
+    const initial=page.locator('[data-map] .fp-map-object[data-kind="'+kind+'"] .fp-object-initial').first();
+    assert.equal(await initial.textContent(),kind,kind+' shows its initial');
+    const appearance=await initial.evaluate(element=>{const shape=element.parentElement.querySelector('.fp-object-fill').getBBox(),style=getComputedStyle(element),canvas=document.createElement('canvas'),context=canvas.getContext('2d');context.font=style.font;context.textAlign='center';const ink=context.measureText(element.textContent),x=Number(element.getAttribute('x')),y=Number(element.getAttribute('y'));return{shape:{x:shape.x,y:shape.y,w:shape.width,h:shape.height},inkWidth:ink.actualBoundingBoxLeft+ink.actualBoundingBoxRight,inkHeight:ink.actualBoundingBoxAscent+ink.actualBoundingBoxDescent,inkCenterX:x+(ink.actualBoundingBoxRight-ink.actualBoundingBoxLeft)/2,inkCenterY:y+(ink.actualBoundingBoxDescent-ink.actualBoundingBoxAscent)/2,baseline:element.getAttribute('dominant-baseline'),opacity:style.fillOpacity,pointerEvents:style.pointerEvents,fontSize:parseFloat(style.fontSize)};});
+    assert.equal(appearance.opacity,'0.3',kind+' initial is 70% transparent');
+    assert.equal(appearance.pointerEvents,'none',kind+' initial does not block selection');
+    assert.equal(appearance.baseline,'alphabetic',kind+' uses glyph-based vertical alignment');
+    assert.ok(appearance.inkWidth<=appearance.shape.w+2&&Math.abs(appearance.inkCenterX-(appearance.shape.x+appearance.shape.w/2))<1,kind+' initial fits horizontally');
+    assert.ok(appearance.inkHeight<=appearance.shape.h+2&&Math.abs(appearance.inkCenterY-(appearance.shape.y+appearance.shape.h/2))<1,kind+' initial fits vertically');
+    initialSizes[kind]=appearance.fontSize;
+   }
+   assert.ok(initialSizes.B>initialSizes.D&&initialSizes.D>initialSizes.S,'initial size follows shape dimensions');
+   const initialBox=await page.locator('[data-map] .fp-map-object[data-kind=B] .fp-object-initial').first().boundingBox();
+   await page.mouse.click(initialBox.x+initialBox.width/2,initialBox.y+initialBox.height/2);
+   assert.equal(await page.locator('[data-map] .fp-map-object[data-kind=B]').first().getAttribute('data-selected'),'true','clicking the initial selects its shape');
+   await page.locator('[data-action=objectClockwise]').click();
+   assert.match(await page.locator('[data-map] .fp-map-object[data-kind=B] .fp-object-initial').first().getAttribute('transform'),/^rotate\(90 /,'initial follows object rotation');
    assert.equal(await page.locator('[data-map] .fp-map-object[data-kind="W"] .fp-cells rect').first().getAttribute('fill-opacity'),'.5','rack cells use the same 50% opacity');
    if(editor){fs.mkdirSync('output/floor-plan-transparency',{recursive:true});await page.screenshot({path:'output/floor-plan-transparency/editor.png',fullPage:true});}
    console.log((editor?'Editor':'Viewer')+': PASS translucent placement tools, visible Grid and compensated colors');

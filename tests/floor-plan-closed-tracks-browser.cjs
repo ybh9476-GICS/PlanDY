@@ -10,18 +10,23 @@ async function clickPoint(page, branch, index) {
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 }
 
+async function placePoint(page, point) {
+  const floor = await page.evaluate(() => { const rect = document.querySelector('[data-floor]').getBoundingClientRect(); return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }; });
+  const plan = M.blank();
+  await page.mouse.click(floor.x + floor.width * point.x / plan.width, floor.y + floor.height * point.y / plan.height);
+}
+
 async function createClosed(page, label, id, positions, testMinimum = false) {
-  const canvas = page.locator('.fp-canvas');
   await page.getByRole('button', { name: label, exact: true }).click();
-  await canvas.click({ position: positions[0] });
-  await canvas.click({ position: positions[1] });
+  await placePoint(page, positions[0]);
+  await placePoint(page, positions[1]);
   if (testMinimum) {
-    await canvas.click({ position: positions[0] });
+    await placePoint(page, positions[0]);
     assert.match(await page.locator('.fp-notice').innerText(), /세 포인트 이상/);
     assert.equal(await page.locator(`.fp-list [data-select="${id}"]`).count(), 0, `${id} stays uncreated with two points`);
   }
-  for (const position of positions.slice(2)) await canvas.click({ position });
-  await canvas.click({ position: positions[0] });
+  for (const position of positions.slice(2)) await placePoint(page, position);
+  await placePoint(page, positions[0]);
   await page.locator(`.fp-list [data-select="${id}"]`).waitFor();
   assert.equal(await page.locator('[data-segment-hit]').count(), positions.length, `${id} renders its closing segment`);
 }
@@ -31,6 +36,7 @@ async function createClosed(page, label, id, positions, testMinimum = false) {
   try {
     for (const editor of [false, true]) {
       const role = editor ? 'Editor' : 'Viewer';
+      console.log('Checking closed tracks as '+role);
       const context = await browser.newContext({ viewport: { width: 1540, height: 1100 }, acceptDownloads: true });
       await context.route('**/api/local-content/save', route => route.fulfill({ contentType: 'application/json', body: '{"saved":true}' }));
       const page = await context.newPage();
@@ -46,13 +52,13 @@ async function createClosed(page, label, id, positions, testMinimum = false) {
       await page.locator('[data-action=new]').click();
 
       await createClosed(page, '가이드 레일', 'GR01', [
-        { x: 340, y: 260 }, { x: 500, y: 260 }, { x: 500, y: 420 }, { x: 340, y: 420 }
+        { x: 3, y: 3 }, { x: 9, y: 3 }, { x: 9, y: 9 }, { x: 3, y: 9 }
       ], true);
       await createClosed(page, 'AMR 통로', 'T01', [
-        { x: 610, y: 260 }, { x: 760, y: 260 }, { x: 760, y: 410 }, { x: 610, y: 410 }
+        { x: 13, y: 3 }, { x: 19, y: 3 }, { x: 19, y: 9 }, { x: 13, y: 9 }
       ]);
       await createClosed(page, '컨베이어', 'CV01', [
-        { x: 420, y: 560 }, { x: 580, y: 560 }, { x: 580, y: 720 }, { x: 420, y: 720 }
+        { x: 5, y: 13 }, { x: 11, y: 13 }, { x: 11, y: 19 }, { x: 5, y: 19 }
       ]);
 
       await page.locator('.fp-list [data-select=GR01]').click();
