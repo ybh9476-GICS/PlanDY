@@ -93,7 +93,7 @@ function read(value){
   }else{
    if(o.snapAnchor!==undefined){if(!axisKeys.includes(o.snapAnchor))throw Error(id+': 축 설정을 확인하세요.');n.snapAnchor=o.snapAnchor;}
    Object.assign(n,{x:number(o.x,id+' X',-200),y:number(o.y,id+' Y',-200),w:number(o.w,id+' 가로/길이',.001),h:number(o.h,id+' 세로/폭',.001),angle:number(o.angle??0,id+' 방향',-360,360)});
-   if(o.kind==='W'){n.rackTypeId=typeof o.rackTypeId==='string'?o.rackTypeId:'';if(n.rackTypeId&&!typeIds.has(n.rackTypeId))throw new Error(id+': 랙타입을 찾을 수 없습니다.');n.bayGap=number(o.bayGap??0,'셀 폭 간격');n.rowGap=number(o.rowGap??0,'셀 깊이 간격');if(o.margin!==undefined)n.margin=number(o.margin,'마진');if(o.rackPreset!==undefined){const reference=o.rackPreset;if(!reference||typeof reference!=='object')throw Error(id+': 기준정보 타입 참조를 확인하세요.');n.rackPreset={id:code(reference.id,'기준정보 랙타입 코드'),w:number(reference.w,'기준 배치 가로',.001),h:number(reference.h,'기준 배치 세로',.001),bayGap:number(reference.bayGap,'기준 베이 간격'),rowGap:number(reference.rowGap,'기준 랙열 간격')};}}
+    if(o.kind==='W'){n.rackTypeId=typeof o.rackTypeId==='string'?o.rackTypeId:'';if(n.rackTypeId&&!typeIds.has(n.rackTypeId))throw new Error(id+': 랙타입을 찾을 수 없습니다.');n.bayGap=number(o.bayGap??0,'셀 폭 간격');n.rowGap=number(o.rowGap??0,'셀 깊이 간격');if(o.margin!==undefined)n.margin=number(o.margin,'마진');if(o.rackPreset!==undefined){const reference=o.rackPreset;if(!reference||typeof reference!=='object')throw Error(id+': 기준정보 타입 참조를 확인하세요.');n.rackPreset={id:code(reference.id,'기준정보 랙타입 코드'),w:number(reference.w,'기준 배치 가로',.001),h:number(reference.h,'기준 배치 세로',.001),bayGap:number(reference.bayGap,'기준 베이 간격'),rowGap:number(reference.rowGap,'기준 랙열 간격')};}if(o.locationPlan!==undefined)n.locationPlan=readRackLocations(o.locationPlan,id);}
    if(o.kind==='BT'){
     n.conveyorId=typeof o.conveyorId==='string'?o.conveyorId:'';
     n.offset=number(o.offset??0,'컨베이어 설치 거리',0,30000);
@@ -102,7 +102,8 @@ function read(value){
   }
   const b=bounds(n);if(b.x<-.001||b.y<-.001||b.x+b.w>v.width+.001||b.y+b.h>v.height+.001)throw new Error(id+': 도면 경계를 벗어납니다. 위치·폭·방향을 확인하세요.');return n;
  });
- for(const tunnel of objects.filter(o=>o.kind==='BT'&&o.conveyorId&&!o.placement)){
+  const locationCodes=new Set();for(const rack of objects.filter(o=>o.kind==='W'&&o.locationPlan))for(const cell of rack.locationPlan.cells){if(locationCodes.has(cell.code))throw Error('로케이션 코드가 중복됩니다: '+cell.code);locationCodes.add(cell.code);}
+  for(const tunnel of objects.filter(o=>o.kind==='BT'&&o.conveyorId&&!o.placement)){
   const cv=objects.find(o=>o.kind==='CV'&&o.id===tunnel.conveyorId);
   if(cv){const placement=inferTunnelPlacement(tunnel,cv);if(placement)tunnel.placement=placement;}
  }
@@ -201,13 +202,65 @@ function bounds(o){const pts=polygons(o).flat(),x=Math.min(...pts.map(p=>p.x)),y
 function polygonsOverlap(a,b){for(const poly of[a,b])for(let i=0;i<poly.length;i++){const p=poly[i],q=poly[(i+1)%poly.length],nx=q.y-p.y,ny=p.x-q.x,pa=a.map(v=>v.x*nx+v.y*ny),pb=b.map(v=>v.x*nx+v.y*ny);if(Math.max(...pa)<=Math.min(...pb)+1e-8||Math.max(...pb)<=Math.min(...pa)+1e-8)return false;}return true;}
 const intersects=(a,b)=>a.x<b.x+b.w-1e-8&&a.x+a.w>b.x+1e-8&&a.y<b.y+b.h-1e-8&&a.y+a.h>b.y+1e-8;
 function rackLayout(o,plan){const type=plan.rackTypes.find(t=>t.id===o.rackTypeId);if(!type)return null;const margin=o.margin||0,contentW=Math.max(0,o.w-margin),contentH=Math.max(0,o.h-margin),bays=Math.max(0,Math.floor((contentW+(o.bayGap||0)+1e-8)/(type.bayWidth+(o.bayGap||0)))),rows=Math.max(0,Math.floor((contentH+(o.rowGap||0)+1e-8)/(type.depth+(o.rowGap||0)))),actualW=bays?bays*type.bayWidth+(bays-1)*(o.bayGap||0):0,actualH=rows?rows*type.depth+(rows-1)*(o.rowGap||0):0;return{type,bays,rows,margin,actualW:round(actualW),actualH:round(actualH),remainingW:round(o.w-actualW),remainingH:round(o.h-actualH),floorCells:bays*rows*type.depthCount,totalCells:bays*rows*type.depthCount*type.levels};}
+const locationCorners=['topLeft','topRight','bottomLeft','bottomRight'];
+function locationPrefixes(rule,id){
+ const value=rule.prefixes||{};
+ if(!value||typeof value!=='object'||Array.isArray(value))throw Error('로케이션 코드 이니셜을 확인하세요.');
+ const defaults={warehouse:'',rack:id.match(/^[A-Z]+/)?.[0]||'W',level:'L',bay:'B',cell:'R'};
+ const prefixes={};
+ for(const key of Object.keys(defaults)){
+  const prefix=value[key]??defaults[key];
+  if(typeof prefix!=='string'||!(key==='warehouse'&&prefix===''||/^[A-Z]{1,4}$/.test(prefix)))throw Error('로케이션 코드 이니셜은 영문 대문자 1~4자로 입력하세요.');
+  prefixes[key]=prefix;
+ }
+ return prefixes;
+}
+function locationLayout(layout){return{bays:layout.bays,rows:layout.rows,levels:layout.type.levels,depthCount:layout.type.depthCount};}
+function sameLocationLayout(a,b){return a&&b&&['bays','rows','levels','depthCount'].every(key=>a[key]===b[key]);}
+function generateRackLocations(o,plan,rule={}){
+ const layout=rackLayout(o,plan);if(!layout||!layout.totalCells)throw Error(o.id+': 로케이션을 생성할 랙 규격이 없습니다.');
+ if(layout.totalCells>10000)throw Error(o.id+': 로케이션은 랙당 10,000개까지 생성할 수 있습니다.');
+ const startCorner=rule.startCorner||'topLeft',firstAxis=rule.firstAxis||'bay',levelOrder=rule.levelOrder||'ascending';
+ if(!locationCorners.includes(startCorner)||!['bay','row'].includes(firstAxis)||!['ascending','descending'].includes(levelOrder))throw Error('로케이션 생성 순서를 확인하세요.');
+ const prefixes=locationPrefixes(rule,o.id),rackParts=o.id.match(/^([A-Z]+)(\d+)$/);
+ if(prefixes.rack!==(rackParts?.[1]||o.id.match(/^[A-Z]+/)?.[0])&&!rackParts)throw Error('이 랙 코드는 번호가 없어 랙 이니셜을 변경할 수 없습니다.');
+ const rackCode=rackParts?prefixes.rack+rackParts[2]:o.id;
+ const reverseX=startCorner.endsWith('Right'),reverseY=startCorner.startsWith('bottom'),cells=[];
+ for(let outer=0;outer<(firstAxis==='bay'?layout.rows:layout.bays);outer++)for(let inner=0;inner<(firstAxis==='bay'?layout.bays:layout.rows);inner++){
+  const bay=firstAxis==='bay'?inner+1:outer+1,row=firstAxis==='bay'?outer+1:inner+1,x=reverseX?layout.bays-bay:bay-1,y=reverseY?layout.rows-row:row-1;
+  const cellNumber=outer*(firstAxis==='bay'?layout.bays:layout.rows)+inner+1;
+  for(let levelStep=0;levelStep<layout.type.levels;levelStep++)for(let depth=1;depth<=layout.type.depthCount;depth++){
+   const level=levelOrder==='ascending'?levelStep+1:layout.type.levels-levelStep;
+   const code=(prefixes.warehouse?prefixes.warehouse+'-':'')+rackCode+'-'+prefixes.level+String(level).padStart(2,'0')+'-'+prefixes.bay+String(bay).padStart(2,'0')+'-'+prefixes.cell+String(cellNumber).padStart(2,'0')+(layout.type.depthCount>1?'-D'+String(depth).padStart(2,'0'):'');
+   cells.push({x,y,level,depth,code});
+  }
+ }
+ return{rule:{startCorner,firstAxis,levelOrder,prefixes},layout:locationLayout(layout),cells};
+}
+function readRackLocations(value,id){
+ if(!value||typeof value!=='object'||Array.isArray(value))throw Error(id+': 로케이션 정보를 확인하세요.');
+ const {rule,layout,cells}=value;
+ if(!rule||!locationCorners.includes(rule.startCorner)||!['bay','row'].includes(rule.firstAxis)||!['ascending','descending'].includes(rule.levelOrder))throw Error(id+': 로케이션 규칙을 확인하세요.');
+ if(!layout||['bays','rows','levels','depthCount'].some(k=>!Number.isInteger(layout[k])||layout[k]<1||layout[k]>10000))throw Error(id+': 로케이션 규격을 확인하세요.');
+ const count=layout.bays*layout.rows*layout.levels*layout.depthCount;
+ if(count>10000||!Array.isArray(cells)||cells.length!==count)throw Error(id+': 로케이션 개수를 확인하세요.');
+ const used=new Set(),positions=new Set(),normalized=cells.map(cell=>{
+  if(!cell||!Number.isInteger(cell.x)||cell.x<0||cell.x>=layout.bays||!Number.isInteger(cell.y)||cell.y<0||cell.y>=layout.rows||!Number.isInteger(cell.level)||cell.level<1||cell.level>layout.levels||!Number.isInteger(cell.depth)||cell.depth<1||cell.depth>layout.depthCount||typeof cell.code!=='string'||! /^[A-Z][A-Z0-9_-]{0,79}$/.test(cell.code))throw Error(id+': 로케이션 셀을 확인하세요.');
+  const position=[cell.x,cell.y,cell.level,cell.depth].join(':'),key=cell.code;
+  if(used.has(key)||positions.has(position))throw Error(id+': 로케이션 코드 또는 셀이 중복됩니다.');
+  used.add(key);positions.add(position);return{x:cell.x,y:cell.y,level:cell.level,depth:cell.depth,code:key};
+ });
+ const normalizedRule={startCorner:rule.startCorner,firstAxis:rule.firstAxis,levelOrder:rule.levelOrder};
+ if(rule.prefixes!==undefined)normalizedRule.prefixes=locationPrefixes(rule,id);
+ return{rule:normalizedRule,layout:{bays:layout.bays,rows:layout.rows,levels:layout.levels,depthCount:layout.depthCount},cells:normalized};
+}
 function fitRack(o,plan,bays,rows,preserveCenter=true){const type=plan.rackTypes.find(t=>t.id===o.rackTypeId);if(!type)throw Error('랙타입을 지정하세요.');if(!Number.isInteger(bays)||bays<1||!Number.isInteger(rows)||rows<1)throw Error('랙의 베이·랙열 수를 확인하세요.');const margin=number(o.margin??0,'마진'),w=round(bays*type.bayWidth+(bays-1)*(o.bayGap||0)+margin),h=round(rows*type.depth+(rows-1)*(o.rowGap||0)+margin);if(preserveCenter){o.x=round(o.x+(o.w-w)/2);o.y=round(o.y+(o.h-h)/2);}o.margin=margin;o.w=w;o.h=h;return o;}
 function pathLength(o){const points=pathLines(o)[0].points;return points.slice(1).reduce((sum,p,i)=>sum+distance(p,points[i]),0);}
 function totalPathLength(o){return pathLines(o).reduce((total,line)=>total+line.points.slice(1).reduce((sum,p,i)=>sum+distance(p,line.points[i]),0),0);}
 function atDistance(o,offset){let remaining=offset,points=pathLines(o)[0].points;for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i],length=distance(a,b);if(remaining<=length+1e-8){const t=Math.max(0,Math.min(1,remaining/length));return{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,angle:Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI,segment:i-1};}remaining-=length;}throw new Error('설치 거리가 컨베이어 전체 길이보다 큽니다.');}
 function alignTunnel(o,plan){const cv=plan.objects.find(p=>p.id===o.conveyorId&&p.kind==='CV');if(!cv)throw new Error('연결할 컨베이어를 선택하세요.');const p=atDistance(cv,o.offset);o.x=round(p.x-o.w/2);o.y=round(p.y-o.h/2);o.angle=round(p.angle);}
 function validate(plan){const issues=[],geometry=plan.objects.map(polygons),boxes=plan.objects.map(bounds);for(let i=0;i<plan.objects.length;i++){const a=plan.objects[i];for(let j=0;j<i;j++){const b=plan.objects[j];if(a.kind===b.kind&&pathKinds.includes(a.kind))continue;if([a.kind,b.kind].includes('BT')&&[a.kind,b.kind].includes('CV'))continue;if(intersects(boxes[i],boxes[j])&&geometry[i].some(p=>geometry[j].some(q=>polygonsOverlap(p,q))))issues.push({id:a.id,level:'error',message:a.id+' · '+b.id+' 배치 공간이 겹칩니다.'});}
- if(a.kind==='W'){const l=rackLayout(a,plan);if(!l)issues.push({id:a.id,level:'warning',message:a.id+': 랙타입을 지정하세요. 기존 배치 공간은 보존됩니다.'});else if(!l.bays||!l.rows)issues.push({id:a.id,level:'warning',message:a.id+': 선택한 랙타입의 셀이 들어갈 공간이 부족합니다.'});}
+  if(a.kind==='W'){const l=rackLayout(a,plan);if(!l)issues.push({id:a.id,level:'warning',message:a.id+': 랙타입을 지정하세요. 기존 배치 공간은 보존됩니다.'});else if(!l.bays||!l.rows)issues.push({id:a.id,level:'warning',message:a.id+': 선택한 랙타입의 셀이 들어갈 공간이 부족합니다.'});if(a.locationPlan&&(!l||!sameLocationLayout(a.locationPlan.layout,locationLayout(l))))issues.push({id:a.id,level:'warning',message:a.id+': 랙 규격이 저장된 로케이션과 다릅니다. 로케이션 설정에서 확인 후 다시 생성하세요.'});}
  if(a.kind==='BT'){const cv=plan.objects.find(o=>o.id===a.conveyorId&&o.kind==='CV');if(!cv)issues.push({id:a.id,level:'warning',message:a.id+': 연결할 컨베이어를 지정하세요.'});else{if(a.h<cv.width)issues.push({id:a.id,level:'warning',message:a.id+': 터널 폭이 컨베이어 폭보다 작습니다.'});try{let p,length,position,flowAngle;if(a.placement){const edge=pathSegments(cv).find(s=>s.lineId===a.placement.lineId&&s.index===a.placement.index);if(!edge){issues.push({id:a.id,level:'warning',message:a.id+': 연결된 컨베이어 구간을 찾을 수 없습니다.'});continue;}length=distance(edge.a,edge.b);position=a.placement.position;p={x:edge.a.x+(edge.b.x-edge.a.x)*position/length,y:edge.a.y+(edge.b.y-edge.a.y)*position/length};flowAngle=conveyorFlowAngle(cv,edge);}else{p=atDistance(cv,a.offset);length=pathLength(cv);position=a.offset;flowAngle=p.angle+(segmentDirection(cv,'main',p.segment)==='reverse'?180:0);}const angleDiff=angleDifference(tunnelFlowAngle(a),flowAngle);if(distance({x:a.x+a.w/2,y:a.y+a.h/2},p)>.003||angleDiff>.1)issues.push({id:a.id,level:'warning',message:a.id+': 컨베이어 기준 위치·방향이 다릅니다. 설치 위치 맞춤을 사용하세요.'});if(position<a.w/2-1e-8||position+a.w/2>length+1e-8)issues.push({id:a.id,level:'warning',message:a.id+': 터널 길이가 컨베이어 끝을 벗어납니다.'});}catch(e){issues.push({id:a.id,level:'warning',message:a.id+': '+e.message});}}}
  }return issues;}
 function move(o,x,y,anchor='topLeft'){const b=bounds(o),old=anchor==='center'?{x:b.x+b.w/2,y:b.y+b.h/2}:b,dx=x-old.x,dy=y-old.y;if(o.points){o.points=o.points.map(p=>({x:round(p.x+dx),y:round(p.y+dy)}));if(o.branches)o.branches.forEach(branch=>branch.points=branch.points.map(p=>({x:round(p.x+dx),y:round(p.y+dy)})));}else{o.x=round(o.x+dx);o.y=round(o.y+dy);}}
@@ -217,5 +270,5 @@ function readFile(value){if(value?.format==='gics-floor-plan'){if(value.version!
 function serializeFile(plan){return JSON.stringify({format:'gics-floor-plan',version:1,plan:read(plan)},null,2);}
 function fileName(plan){return (plan.name.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').replace(/[. ]+$/g,'').trim()||'평면도')+'.gics';}
 class History{constructor(plan){this.plan=read(plan);this.past=[];this.future=[];}commit(plan){const next=read(plan);if(JSON.stringify(next)===JSON.stringify(this.plan))return false;this.past.push(clone(this.plan));if(this.past.length>80)this.past.shift();this.plan=next;this.future=[];return true;}undo(){if(!this.past.length)return false;this.future.push(this.plan);this.plan=this.past.pop();return true;}redo(){if(!this.future.length)return false;this.past.push(this.plan);this.plan=this.future.pop();return true;}}
-return{readFile,serializeFile,fileName,pathLines,pathSegments,pathPointRef,pointLabel,branchLabel,segmentDirection,totalPathLength,validatePathTopology,connectionCycleSize,closestConveyorSegment,placeTunnelOnSegment,followTunnelPlacement,axisKeys,axisPoint,moveAxis,roundMeters,formatMeters,presets:defaultTypes,validate,kinds,toolKinds,pathKinds,clone,round,snap,blank,sample,read,migrate,bounds,polygons,rectPolygon,polygonsOverlap,intersects,rackLayout,fitRack,pathLength,atDistance,alignTunnel,move,rotate,unique,History};
+ return{readFile,serializeFile,fileName,pathLines,pathSegments,pathPointRef,pointLabel,branchLabel,segmentDirection,totalPathLength,validatePathTopology,connectionCycleSize,closestConveyorSegment,placeTunnelOnSegment,followTunnelPlacement,axisKeys,axisPoint,moveAxis,roundMeters,formatMeters,presets:defaultTypes,validate,kinds,toolKinds,pathKinds,clone,round,snap,blank,sample,read,migrate,bounds,polygons,rectPolygon,polygonsOverlap,intersects,rackLayout,locationLayout,sameLocationLayout,generateRackLocations,fitRack,pathLength,atDistance,alignTunnel,move,rotate,unique,History};
 }));
