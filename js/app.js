@@ -205,7 +205,7 @@ function loadMenus() {
             .filter(menu => !deletedBuiltinIds.includes(menu.id))
             .map(menu => ({ ...menu, ...(savedById.get(menu.id) || {}), builtin: true }));
         const customs = saved.menus.filter(menu => !menu.builtin && typeof menu.id === 'string' && typeof menu.label === 'string')
-            .map(menu => ({ ...menu, viewType: window.wmsFloorPlanEditor.isMenu(menu) ? 'floorPlanEditor' : window.wmsWarehousePage.getViewType(menu) }));
+            .map(menu => ({ ...menu, ...(menu.id === 'custom-1789604650974' ? { label: 'WMS by Gics', tooltip: 'WMS by Gics' } : {}), viewType: window.wmsFloorPlanEditor.isMenu(menu) ? 'floorPlanEditor' : window.wmsWarehousePage.getViewType(menu) }));
         return window.WmsMenuTreeModel.normalizeMenus([...builtins, ...customs]);
     } catch (_) { return window.WmsMenuTreeModel.normalizeMenus(defaultMenus); }
 }

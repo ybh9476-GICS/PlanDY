@@ -12,7 +12,7 @@
     "test:warehouse": "node tests/warehouse-data.test.js && node tests/warehouse-operations.test.js && node tests/warehouse-barcode-tunnel.test.js",
     "test:warehouse-page": "node tests/warehouse-page.test.js",
     "test": "npm run test:structure && npm run test:attachments && npm run test:content-save && npm run test:file-content && npm run test:warehouse && npm run test:warehouse-page && npm run test:floor-plan",
-    "test:floor-plan": "node tests/floor-plan-model.test.js && node tests/floor-plan-gics.test.cjs && node tests/floor-plan-branches.test.cjs && node tests/floor-plan-rack-master.test.cjs && node tests/floor-plan-tunnel-placement.test.cjs && node tests/floor-plan-locations.test.cjs && node tests/floor-plan-equipment.test.cjs"
+    "test:floor-plan": "node tests/floor-plan-model.test.js && node tests/floor-plan-gics.test.cjs && node tests/floor-plan-branches.test.cjs && node tests/floor-plan-rack-master.test.cjs && node tests/floor-plan-reference-model.test.cjs && node tests/floor-plan-reference-file.test.cjs && node tests/floor-plan-tunnel-placement.test.cjs && node tests/floor-plan-locations.test.cjs && node tests/floor-plan-equipment.test.cjs"
   },
   "dependencies": {
     "pdfjs-dist": "^6.2.108"

@@ -86,3 +86,56 @@
 .fp-editor .fp-target-category .fp-list-group h5{margin:0 0 4px;font-size:11px;font-weight:600;color:#506986}
 .fp-editor .fp-target-category .fp-list-items{display:flex;flex-wrap:wrap;gap:4px}
 .fp-editor .fp-target-category .fp-list-items button{font-size:11px;padding:4px 6px}
+
+/* Reference sheets are a separate workspace. Drawing panes remain mounted and untouched. */
+.fp-editor[data-workspace=reference]>.fp-main,.fp-editor[data-workspace=reference]>.fp-validation{display:none}
+.fp-editor[data-workspace=reference] .fp-toolbar>:not(.fp-toolbar-shortcuts):not([data-action=import]):not([data-action=export]):not([data-action=excelImport]):not([data-action=excelExport]){display:none}
+.fp-editor:not([data-workspace=reference]) .fp-toolbar>[data-action=excelImport],.fp-editor:not([data-workspace=reference]) .fp-toolbar>[data-action=excelExport]{display:none}
+.fp-editor .fp-reference-workspace{display:grid;grid-template-columns:230px minmax(0,1fr);flex:1;min-height:0;min-width:0;background:#edf2f8}
+.fp-editor .fp-reference-table-area{display:flex;flex-direction:column;min-width:0;min-height:0;padding:12px;gap:8px}
+.fp-editor .fp-toolbar-shortcuts button[aria-pressed=true]{color:var(--fp-blue);background:#eaf1ff;border-color:var(--fp-blue)}
+.fp-editor .fp-reference-edit-controls{display:flex;align-items:center;flex-wrap:wrap;gap:6px;background:#fff;border:1px solid var(--fp-line);padding:8px 10px}
+.fp-editor .fp-reference-edit-controls .fp-reference-name{display:flex;align-items:center;gap:7px;min-width:0;max-width:280px;margin-right:auto;padding:4px 6px;border:0;background:transparent;font-size:15px;font-weight:700;text-align:left}
+.fp-editor .fp-reference-name [data-reference-name]{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fp-editor .fp-reference-name [aria-hidden]{font-size:13px;color:var(--fp-muted)}
+.fp-editor .fp-reference-structure-controls{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-left:auto}
+.fp-editor .fp-reference-edit-controls button:disabled{opacity:.5;cursor:not-allowed}
+.fp-editor .fp-reference-grid{flex:1;min-height:0;min-width:0;overflow:auto;border:1px solid var(--fp-line);background:#fff}
+.fp-editor .fp-reference-grid table{border-collapse:separate;border-spacing:0;white-space:nowrap;font-size:12px}
+.fp-editor .fp-reference-grid th,.fp-editor .fp-reference-grid td{min-width:96px;max-width:340px;border-right:1px solid #e1e7ef;border-bottom:1px solid #e1e7ef;padding:6px 8px;text-align:left;overflow:hidden;text-overflow:ellipsis;height:30px}
+.fp-editor .fp-reference-grid table.fp-reference-sized{table-layout:fixed}
+.fp-editor .fp-reference-grid table.fp-reference-sized th:not(:first-child),.fp-editor .fp-reference-grid table.fp-reference-sized td{box-sizing:border-box;min-width:0;max-width:none}
+.fp-editor .fp-reference-grid thead th{position:sticky;top:0;z-index:2;background:#eaf0f8;font-weight:600}
+.fp-editor .fp-reference-grid th:first-child{position:sticky;left:0;z-index:1;min-width:46px;background:#f2f5fa;text-align:right}
+.fp-editor .fp-reference-grid thead th:first-child{z-index:3}
+.fp-editor .fp-reference-resize-column,.fp-editor .fp-reference-resize-row{position:absolute;z-index:4;display:block;touch-action:none}
+.fp-editor .fp-reference-resize-column{top:0;right:0;width:8px;height:100%;cursor:col-resize}
+.fp-editor .fp-reference-resize-row{bottom:0;left:0;width:100%;height:8px;cursor:row-resize}
+.fp-editor .fp-reference-resize-column:hover,.fp-editor .fp-reference-resize-column:focus-visible{background:var(--fp-blue)}
+.fp-editor .fp-reference-resize-row:hover,.fp-editor .fp-reference-resize-row:focus-visible{background:var(--fp-blue)}
+html.fp-reference-resizing-column,html.fp-reference-resizing-column *,html.fp-reference-resizing-row,html.fp-reference-resizing-row *{user-select:none!important}
+html.fp-reference-resizing-column,html.fp-reference-resizing-column *{cursor:col-resize!important}
+html.fp-reference-resizing-row,html.fp-reference-resizing-row *{cursor:row-resize!important}
+.fp-editor .fp-reference-grid tbody tr:hover td{background:#f4f8ff}
+.fp-editor .fp-reference-grid td{cursor:text}
+.fp-editor .fp-reference-grid td.fp-reference-editing{position:relative;padding:0;overflow:visible;background:#fff}
+.fp-editor .fp-reference-cell-input{display:block;box-sizing:border-box;width:100%;min-width:96px;min-height:29px;max-height:180px;margin:0;padding:4px 6px;border:2px solid var(--fp-blue);border-radius:0;outline:none;resize:vertical;background:#fff;color:inherit;font:inherit;line-height:18px;white-space:pre-wrap}
+.fp-editor .fp-reference-grid .fp-reference-select{display:block;width:100%;min-width:0;height:100%;border:0;background:transparent;text-align:inherit;padding:0;color:inherit;font:inherit;cursor:pointer}
+.fp-editor .fp-reference-grid .fp-reference-select[aria-pressed=true]{background:#cfe0ff;color:#194ea8;font-weight:700}
+.fp-editor .fp-reference-grid th:has(.fp-reference-select[aria-pressed=true]){background:#cfe0ff}
+.fp-editor .fp-reference-grid td:focus-visible{position:relative;outline:2px solid var(--fp-blue);outline-offset:-2px;background:#eaf1ff}
+.fp-editor .fp-reference-status{margin:0;min-height:20px;color:var(--fp-muted);font-size:11px}
+.fp-editor .fp-reference-status[data-error=true]{color:#9b2f29}
+.fp-editor .fp-reference-sidebar{overflow:auto;min-height:0;padding:16px 12px;background:#fff;border-right:1px solid var(--fp-line)}
+.fp-editor .fp-reference-sidebar h3{font-size:13px;margin:0 0 12px}
+.fp-editor .fp-reference-tabs{display:flex;flex-direction:column;gap:4px}
+.fp-editor .fp-reference-tab-item{position:relative;display:flex;min-width:0}
+.fp-editor .fp-reference-tabs [data-reference-tab]{width:100%;min-width:0;text-align:left;padding:8px 38px 8px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fp-editor .fp-reference-tabs .fp-reference-delete{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:26px;height:26px;padding:0;border:0;border-radius:4px;background:transparent;color:#9b2f29;font-size:22px;line-height:1;opacity:0;pointer-events:none}
+.fp-editor .fp-reference-tab-item:hover .fp-reference-delete,.fp-editor .fp-reference-tab-item:focus-within .fp-reference-delete,.fp-editor .fp-reference-delete:focus-visible{opacity:1;pointer-events:auto}
+.fp-editor .fp-reference-tabs .fp-reference-delete:hover{background:#feeceb;color:#b42318}
+.fp-editor .fp-reference-tabs .fp-reference-delete:disabled{color:#9ba5b5;cursor:not-allowed}
+.fp-editor .fp-reference-tabs button[aria-selected=true]{border-color:var(--fp-blue);color:var(--fp-blue);background:#eaf1ff;font-weight:600}
+@media(hover:none){.fp-editor .fp-reference-tabs .fp-reference-delete{opacity:1;pointer-events:auto}}
+@media(max-width:900px){.fp-editor .fp-reference-workspace{grid-template-columns:190px minmax(0,1fr)}}
+@media(max-width:560px){.fp-editor .fp-reference-workspace{display:flex;flex-direction:column}.fp-editor .fp-reference-sidebar{max-height:140px;border-right:0;border-bottom:1px solid var(--fp-line)}.fp-editor .fp-reference-tabs{flex-direction:row;overflow:auto}.fp-editor .fp-reference-tabs button{white-space:nowrap}.fp-editor .fp-reference-table-area{min-height:430px}}
