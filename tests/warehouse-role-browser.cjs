@@ -16,6 +16,16 @@ const assert = require('assert/strict');
 
             const expectedRole = editor ? 'editor' : 'viewer';
             assert.equal(await page.evaluate(() => window.wmsPermissions.getRole()), expectedRole);
+            assert.equal(await page.locator('.warehouse-3d-brand').count(), 0, 'The temporary top-left title must be absent.');
+            assert.equal(await page.locator('.warehouse-3d-kpi-card').count(), 9);
+            for (const width of [1500, 1920]) {
+                await page.setViewportSize({ width, height: 1000 });
+                const kpi = await page.locator('.warehouse-3d-kpi-list').boundingBox();
+                const actions = await page.locator('.warehouse-3d-toolbar-actions').boundingBox();
+                assert.ok(kpi && actions, 'The toolbar KPI cards and actions must remain visible.');
+                assert.ok(kpi.y >= actions.y + actions.height || kpi.x + kpi.width <= actions.x,
+                    `The toolbar KPI cards and actions must not overlap at ${width}px.`);
+            }
             assert.equal(await page.locator('.warehouse-3d-viewport').count(), 1);
             assert.equal(await page.locator('.warehouse-3d-object-search').isEnabled(), true);
             assert.equal(await page.locator('.warehouse-3d-reload').isVisible(), true);

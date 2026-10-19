@@ -299,8 +299,8 @@
         const heading = document.createElement('span'); heading.textContent = '물류 흐름 · 모의 운행';
         const pause = document.createElement('button'); pause.type = 'button'; pause.textContent = '일시정지';
         pause.addEventListener('click', () => { simulation.paused = !simulation.paused; pause.textContent = simulation.paused ? '운행 재개' : '일시정지'; }, { signal });
-        controls.append(heading, pause); panel.append(controls);
-        const statusList = document.createElement('div'); statusList.className = 'warehouse-operation-list'; panel.append(statusList);
+        const statusList = document.createElement('div'); statusList.className = 'warehouse-operation-list';
+        controls.append(heading, pause, statusList); panel.append(controls);
         const rows = routes.map(route => {
             const row = document.createElement('div'); row.className = 'warehouse-operation-row';
             row.dataset.operationRoute = route.code; statusList.append(row); return { route, row };

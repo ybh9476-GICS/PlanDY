@@ -264,13 +264,10 @@ assert.ok(warehouseRenderer.includes("mode: event.button === 2 ? 'rotate' : 'pan
 assert.ok(warehouseRenderer.includes("addEventListener('contextmenu'"), 'The 3D canvas must suppress the right-click menu.');
 assert.ok(warehouseRenderer.includes('container.requestFullscreen'), 'The warehouse card must support entering fullscreen.');
 assert.ok(warehouseRenderer.includes('document.exitFullscreen'), 'The warehouse card must support leaving fullscreen.');
-assert.ok(cardRenderer.includes('warehouse-kpi-split-v57'), 'The shared renderer must load the current warehouse renderer.');
-assert.ok(warehouseRenderer.includes('class="warehouse-3d-brand" aria-label="TEST, WMS Test Monitoring"'), 'The top-left toolbar must contain an accessible warehouse brand.');
-assert.ok(warehouseRenderer.includes('class="warehouse-3d-brand-symbol"'), 'The temporary warehouse brand symbol must be rendered as a square element.');
-assert.ok(warehouseRenderer.includes('<strong>TEST</strong>'), 'The warehouse brand must display TEST.');
-assert.ok(warehouseRenderer.includes('<small>WMS Test Monitoring</small>'), 'The warehouse brand must display its description.');
-assert.ok(warehouseStyles.includes('.warehouse-3d-brand-symbol'), 'The temporary square symbol must have a dedicated style.');
-assert.ok(warehouseStyles.includes('flex: 0 0 26px; width: 26px; height: 26px;'), 'The temporary symbol must retain its compact square dimensions.');
+assert.ok(cardRenderer.includes('warehouse-kpi-split-v59'), 'The shared renderer must load the current warehouse renderer.');
+assert.ok(!warehouseRenderer.includes('class="warehouse-3d-brand"'), 'The top-left temporary warehouse title must not render.');
+assert.ok(!warehouseRenderer.includes('WMS Test Monitoring'), 'The temporary warehouse subtitle must not render.');
+assert.ok(warehouseStyles.includes('grid-column: 2; justify-self: center;'), 'The KPI cards must remain centered after the title is removed.');
 assert.ok(warehouseRenderer.includes('class="warehouse-3d-kpi-list" role="list" aria-label="창고 운영 현황"'), 'The centered toolbar must contain an accessible KPI card list.');
 ['전체 적재율', '가용 셀', '입고 진행', '입고 완료', '입고 배정/요청', '출고 진행', '출고 완료', '출고 배정/요청', '미처리 알람'].forEach((label) => {
     assert.ok(warehouseRenderer.includes(label), `The toolbar KPI list must include ${label}.`);

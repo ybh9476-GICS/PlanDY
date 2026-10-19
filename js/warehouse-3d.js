@@ -10,7 +10,7 @@
     }
     function loadOperations() {
         if (!operationsModulePromise) operationsModulePromise = import('./warehouse-operations.js?v=10-shuttle-routes')
-            .then(() => import('./warehouse-operation-scene.js?v=14-transport-cartons'));
+            .then(() => import('./warehouse-operation-scene.js?v=15-compact-status'));
         return operationsModulePromise;
     }
     const worldUiResolutionScale = 2;
@@ -671,13 +671,6 @@
         container.className = 'warehouse-3d-shell';
         container.innerHTML = `
             <div class="warehouse-3d-toolbar">
-                <div class="warehouse-3d-brand" aria-label="TEST, WMS Test Monitoring">
-                    <span class="warehouse-3d-brand-symbol" aria-hidden="true"></span>
-                    <span class="warehouse-3d-brand-copy">
-                        <strong>TEST</strong>
-                        <small>WMS Test Monitoring</small>
-                    </span>
-                </div>
                 <div class="warehouse-3d-kpi-list" role="list" aria-label="창고 운영 현황">
                     <div class="warehouse-3d-kpi-card is-cyan" role="listitem" data-warehouse-kpi="utilization">
                         <span class="warehouse-3d-kpi-icon" aria-hidden="true">
